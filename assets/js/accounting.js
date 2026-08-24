@@ -200,15 +200,16 @@ let ledgerRowsForExport = [];
 
 async function loadAll() {
   // fetchAllRows กัน sales/expenses ตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
-  const [{ data: lots, error: lotsErr }, { data: expenses, error: expErr }, { data: sales, error: salesErr }] =
+  const [{ data: lots, error: lotsErr }, { data: expenses, error: expErr }, { data: sales, error: salesErr }, { data: items, error: itemsErr }] =
     await Promise.all([
       fetchAllRows(() => supabaseClient.from("lots").select("*")),
       fetchAllRows(() => supabaseClient.from("expenses").select("*")),
       fetchAllRows(() => supabaseClient.from("sales").select("*, items(item_name)")),
+      fetchAllRows(() => supabaseClient.from("items").select("id,lot_id")),
     ]);
 
-  if (lotsErr || expErr || salesErr) {
-    console.error(lotsErr || expErr || salesErr);
+  if (lotsErr || expErr || salesErr || itemsErr) {
+    console.error(lotsErr || expErr || salesErr || itemsErr);
     showToast("โหลดข้อมูลไม่สำเร็จ");
     return;
   }
@@ -243,7 +244,56 @@ async function loadAll() {
   cashflowEl.classList.remove("profit", "loss");
   cashflowEl.classList.add(cashflow >= 0 ? "profit" : "loss");
 
+  renderLotAccounting(lots, items, sales);
   renderLedger(lots, expenses, sales);
+}
+
+// สรุปทุน/ยอดขาย/กำไรของแต่ละ Lot สำหรับหน้าบัญชี
+// ใช้ต้นทุนจาก sales.cost_price เพื่อเก็บ snapshot ของต้นทุนตอนขาย และไม่ทำให้กำไรย้อนหลังเปลี่ยน
+function renderLotAccounting(lots, items, sales) {
+  const itemMap = Object.fromEntries(items.map(i => [i.id, i]));
+  const byLot = Object.fromEntries(lots.map(lot => [lot.id, {
+    lot,
+    totalItems: Number(lot.total_items || 0),
+    sold: 0,
+    revenue: 0,
+    costSold: 0,
+    remaining: Number(lot.total_items || 0),
+    remainingCapital: Number(lot.total_cost || 0),
+    profit: 0,
+    recoveryPct: 0,
+  }]));
+
+  sales.forEach(sale => {
+    const item = itemMap[sale.item_id];
+    const row = item && byLot[item.lot_id];
+    if (!row) return;
+    row.sold += 1;
+    row.revenue += Number(sale.sale_price || 0);
+    row.costSold += Number(sale.cost_price || 0);
+  });
+
+  Object.values(byLot).forEach(row => {
+    row.remaining = Math.max(0, row.totalItems - row.sold);
+    row.remainingCapital = Math.max(0, Number(row.lot.total_cost || 0) - row.costSold);
+    row.profit = row.revenue - row.costSold;
+    row.recoveryPct = row.lot.total_cost ? (row.revenue / Number(row.lot.total_cost)) * 100 : 0;
+  });
+
+  const rows = Object.values(byLot).filter(row => row.totalItems > 0 || row.sold > 0).sort((a, b) => b.revenue - a.revenue);
+  document.getElementById("accLotBreakdown").innerHTML = rows.length ? rows.map(row => `
+    <tr>
+      <td><b>${escapeHtml(row.lot.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(row.lot.purchase_date)}</small></td>
+      <td style="text-align:right">${formatBaht(row.lot.total_cost)}</td>
+      <td style="text-align:right">${row.totalItems}</td>
+      <td style="text-align:right">${row.sold}</td>
+      <td style="text-align:right">${row.remaining}</td>
+      <td style="text-align:right">${formatBaht(row.revenue)}</td>
+      <td style="text-align:right">${formatBaht(row.costSold)}</td>
+      <td style="text-align:right">${formatBaht(row.remainingCapital)}</td>
+      <td style="text-align:right" class="${row.profit >= 0 ? "profit" : "loss"}">${formatBaht(row.profit)}</td>
+      <td style="text-align:right">${row.recoveryPct.toFixed(1)}%</td>
+    </tr>`).join("") : `<tr><td colspan="10" class="empty-state">ยังไม่มีข้อมูล Lot</td></tr>`;
 }
 
 function renderLedger(lots, expenses, sales) {
@@ -351,5 +401,5 @@ loadBucketSettings();
 
 // Realtime: บัญชีสะท้อนค่าใช้จ่าย/ยอดขาย/Lot ที่เปลี่ยนจาก Device อื่น
 window.addEventListener('vims:realtime', (event) => {
-  if (event.detail?.table === 'page_refresh' || ['expenses', 'sales', 'lots'].includes(event.detail?.table)) loadAll();
+  if (event.detail?.table === 'page_refresh' || ['expenses', 'sales', 'lots', 'items'].includes(event.detail?.table)) loadAll();
 });

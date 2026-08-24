@@ -42,6 +42,64 @@ async function fetchDashboardData() {
   return { lots: lotsR.data || [], groups: groupsR.data || [], items: itemsR.data || [], sales: salesR.data || [], expenses: expensesR.data || [] };
 }
 
+// สร้างตัวเลขการเงินของแต่ละ Lot จาก Item -> Lot และ Sale -> Item
+// สูตรหลัก:
+// - ต้นทุนที่ขาย = SUM(sales.cost_price) ของสินค้าที่มาจาก Lot
+// - ทุนคงเหลือ = Lot.total_cost - ต้นทุนที่ขาย
+// - กำไร = ยอดขายสะสม - ต้นทุนที่ขาย
+// - คืนทุน = ยอดขายสะสม / ต้นทุน Lot * 100
+function buildLotPerformance(lots, items, sales) {
+  const itemById = Object.fromEntries(items.map(i => [i.id, i]));
+  const stats = {};
+  lots.forEach(lot => {
+    stats[lot.id] = {
+      lot,
+      totalItems: Number(lot.total_items || 0),
+      sold: 0,
+      remaining: Number(lot.total_items || 0),
+      revenue: 0,
+      costSold: 0,
+      remainingCapital: Number(lot.total_cost || 0),
+      profit: 0,
+      recoveryPct: 0,
+    };
+  });
+
+  sales.forEach(sale => {
+    const item = itemById[sale.item_id];
+    const row = item && stats[item.lot_id];
+    if (!row) return;
+    row.sold += 1;
+    row.revenue += Number(sale.sale_price || 0);
+    row.costSold += Number(sale.cost_price || 0);
+  });
+
+  Object.values(stats).forEach(row => {
+    row.remaining = Math.max(0, row.totalItems - row.sold);
+    row.remainingCapital = Math.max(0, Number(row.lot.total_cost || 0) - row.costSold);
+    row.profit = row.revenue - row.costSold;
+    row.recoveryPct = percent(row.revenue, Number(row.lot.total_cost || 0));
+  });
+
+  return stats;
+}
+
+function renderLotPerformanceRow(x) {
+  const roi = percent(x.profit, Number(x.lot.total_cost || 0));
+  return `<tr>
+    <td><b>${escapeHtml(x.lot.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(x.lot.purchase_date)}</small></td>
+    <td style="text-align:right">${formatBaht(x.lot.total_cost)}</td>
+    <td style="text-align:right">${x.totalItems}</td>
+    <td style="text-align:right">${x.sold}</td>
+    <td style="text-align:right">${x.remaining}</td>
+    <td style="text-align:right">${formatBaht(x.revenue)}</td>
+    <td style="text-align:right">${formatBaht(x.costSold)}</td>
+    <td style="text-align:right">${formatBaht(x.remainingCapital)}</td>
+    <td style="text-align:right" class="${x.profit >= 0 ? 'profit' : 'loss'}">${formatBaht(x.profit)}</td>
+    <td style="text-align:right">${x.recoveryPct.toFixed(1)}%</td>
+  </tr>`;
+}
+
 function renderDashboard(data, range) {
   const { lots, groups, items, sales, expenses } = data;
   const periodSales = sales.filter(s => inRange(s.sale_date, range));
@@ -88,11 +146,11 @@ function renderDashboard(data, range) {
   const maxAge = Math.max(1,...agingBuckets.map(x=>x.count));
   $("agingList").innerHTML = agingBuckets.map(b => `<div class="aging-row"><span>${b.label}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(b.count/maxAge*100)}%"></div></div><b>${b.count}</b></div>`).join("");
 
-  const lotStats = {};
-  lots.forEach(l => lotStats[l.id] = { lot:l, sold:0, revenue:0, profit:0 });
-  periodSales.forEach(s => { const i=itemById[s.item_id]; const st=i && lotStats[i.lot_id]; if (!st) return; st.sold++; st.revenue+=Number(s.sale_price||0); st.profit+=Number(s.sale_price||0)-Number(s.cost_price||0); });
-  const rows = Object.values(lotStats).filter(x=>x.sold>0).sort((a,b)=>b.profit-a.profit);
-  $("lotBreakdown").innerHTML = rows.length ? rows.map(x => { const roi=percent(x.profit,x.lot.total_cost); return `<tr><td><b>${escapeHtml(x.lot.lot_name)}</b><small class="table-sub">${x.lot.total_items} ชิ้น · ซื้อ ${formatDate(x.lot.purchase_date)}</small></td><td style="text-align:right">${formatBaht(x.lot.total_cost)}</td><td style="text-align:right">${x.sold}</td><td style="text-align:right">${formatBaht(x.revenue)}</td><td style="text-align:right" class="${x.profit>=0?'profit':'loss'}">${formatBaht(x.profit)}</td><td style="text-align:right">${roi.toFixed(1)}%</td></tr>`; }).join("") : `<tr><td colspan="6">ยังไม่มีการขายในช่วงที่เลือก</td></tr>`;
+  // Lot Performance: ใช้ยอดขายสะสมตลอดอายุ Lot เพื่อให้เห็นภาพเงินจริงของแต่ละกระสอบ
+  // ไม่ผูกกับ periodSales เพราะนายต้องการรู้ว่า Lot นี้คืนทุนไปถึงไหนแล้ว แม้จะเปลี่ยนตัวกรองช่วงเวลา
+  const lotStats = buildLotPerformance(lots, items, sales);
+  const rows = Object.values(lotStats).filter(x => x.sold > 0 || x.totalItems > 0).sort((a,b) => b.revenue - a.revenue);
+  $("lotBreakdown").innerHTML = rows.length ? rows.map(renderLotPerformanceRow).join("") : `<tr><td colspan="10">ยังไม่มีข้อมูล Lot</td></tr>`;
 
   $("stockCount").innerHTML = `<div><b>${items.length}</b><span>สินค้าทั้งหมด</span></div><div><b>${available.length}</b><span>พร้อมขาย</span></div><div><b>${sold.length}</b><span>ขายแล้ว</span></div><div><b>${damaged.length}</b><span>เสีย</span></div><div><b>${formatBaht(stockCost)}</b><span>ต้นทุนคงเหลือ</span></div><div><b>${formatBaht(stockRetail)}</b><span>ราคาขายคงเหลือ</span></div>`;
 
@@ -117,11 +175,10 @@ function renderDashboard(data, range) {
   const topProfit = Object.values(itemSales).sort((a,b)=>b.profit-a.profit).slice(0,10);
   $("topProfitItems").innerHTML = topProfit.length ? topProfit.map((x,i)=>`<div class="rank-item"><span class="rank-no">${i+1}</span><div><b>${escapeHtml(x.item.item_name)}</b><small>${escapeHtml(x.item.size||"-")} · ${x.item.condition} · ${x.item.tier==='head'?"งานหัว":"ปกติ"}</small></div><div class="rank-value">${formatBaht(x.profit)}<small>${x.count} ชิ้น</small></div></div>`).join("") : `<div class="empty-state">ยังไม่มีข้อมูลการขาย</div>`;
 
-  // Lot recovery: รายได้สะสมในช่วงที่เลือกเทียบกับต้นทุน Lot ทั้งก้อน
-  const lotRecovery = {}; lots.forEach(l => lotRecovery[l.id] = {lot:l,revenue:0,profit:0});
-  periodSales.forEach(s => { const item=itemById[s.item_id]; const row=item && lotRecovery[item.lot_id]; if(!row)return; row.revenue += Number(s.sale_price||0); row.profit += Number(s.sale_price||0)-Number(s.cost_price||0); });
-  const recoveryRows = Object.values(lotRecovery).filter(x=>x.revenue>0).sort((a,b)=>b.revenue-a.revenue).slice(0,12);
-  $("lotRecovery").innerHTML = recoveryRows.length ? recoveryRows.map(x=>{ const pct=percent(x.revenue,x.lot.total_cost); return `<div class="lot-recovery-row"><div class="lot-meta"><b>${escapeHtml(x.lot.lot_name)}</b><small>ต้นทุน ${formatBaht(x.lot.total_cost)} · กำไร ${formatBaht(x.profit)}</small></div><div class="recovery-track"><div class="recovery-fill" style="width:${Math.min(100,pct).toFixed(1)}%"></div></div><div class="recovery-value">${pct.toFixed(0)}%<small>คืนทุน</small></div></div>`; }).join("") : `<div class="empty-state">ยังไม่มี Lot ที่มีการขายในช่วงนี้</div>`;
+  // Lot recovery ใช้ยอดสะสมตลอดอายุ Lot เช่นเดียวกับตารางด้านบน
+  // จึงตอบได้ทันทีว่า “กระสอบนี้คืนทุนแล้วกี่ %” โดยไม่ขึ้นกับช่วงเวลาของ Dashboard
+  const recoveryRows = Object.values(lotStats).filter(x => x.revenue > 0).sort((a,b) => b.revenue - a.revenue).slice(0,12);
+  $("lotRecovery").innerHTML = recoveryRows.length ? recoveryRows.map(x=>{ const pct=percent(x.revenue,x.lot.total_cost); return `<div class="lot-recovery-row"><div class="lot-meta"><b>${escapeHtml(x.lot.lot_name)}</b><small>ทุน ${formatBaht(x.lot.total_cost)} · ยอดขาย ${formatBaht(x.revenue)} · กำไร ${formatBaht(x.profit)} · ทุนคงเหลือ ${formatBaht(x.remainingCapital)}</small></div><div class="recovery-track"><div class="recovery-fill" style="width:${Math.min(100,pct).toFixed(1)}%"></div></div><div class="recovery-value">${pct.toFixed(0)}%<small>คืนทุน</small></div></div>`; }).join("") : `<div class="empty-state">ยังไม่มี Lot ที่มีการขาย</div>`;
 }
 
 

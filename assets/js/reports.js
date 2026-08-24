@@ -48,15 +48,17 @@ async function loadReport() {
   try {
     /* Query ครั้งเดียวแล้วคำนวณหลายมุมใน browser เพื่อให้หน้า report ตอบสนองเร็ว */
     // fetchAllRows กัน items/sales ตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
+    // ดึง Sales ทั้งหมด 1 ครั้ง เพราะ Performance ตาม Lot ต้องใช้ยอดสะสมตลอดอายุ Lot
+    // ส่วนการ์ดสรุป/รายการขายด้านบนยังกรองตามช่วงเวลาที่ผู้ใช้เลือก
     const [salesR, expensesR, itemsR, lotsR] = await Promise.all([
-      fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method,note,items(item_name,size,condition,tier)").gte("sale_date",start.toISOString()).lt("sale_date",end.toISOString()).order("sale_date",{ascending:false})),
+      fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method,note,items(item_name,size,condition,tier)").order("sale_date",{ascending:false})),
       fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,amount,category,note").gte("expense_date",start.toISOString().slice(0,10)).lte("expense_date",new Date(end.getTime()-86400000).toISOString().slice(0,10))),
       fetchAllRows(() => supabaseClient.from("items").select("id,item_name,size,condition,tier,lot_id")),
       fetchAllRows(() => supabaseClient.from("lots").select("id,lot_name,total_cost,total_items,purchase_date"))
     ]);
     const err=salesR.error||expensesR.error||itemsR.error||lotsR.error; if(err) throw err;
-    const sales=salesR.data||[], expenses=expensesR.data||[], items=itemsR.data||[], lots=lotsR.data||[];
-    renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales,items); renderLotBreakdown(sales,items,lots); renderWeekendBreakdown(sales); renderSaleList(sales); await renderTrend(start,end);
+    const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[], items=itemsR.data||[], lots=lotsR.data||[];
+    renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales,items); renderLotBreakdown(allSales,items,lots); renderWeekendBreakdown(sales); renderSaleList(sales); await renderTrend(start,end);
   } catch(err) { console.error(err); showToast("โหลดรายงานไม่สำเร็จ: "+(err.message||err)); }
 }
 
@@ -79,10 +81,26 @@ function renderTierBreakdown(sales,items) {
   sales.forEach(s=>{const k=map[s.item_id]?.tier==="head"?"head":"normal";by[k].count++;by[k].revenue+=Number(s.sale_price||0);by[k].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
   document.getElementById("repTierBreakdown").innerHTML=Object.entries(by).map(([k,v])=>`<tr><td>${TIER_LABELS[k]}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.revenue)}</td><td style="text-align:right" class="${v.profit>=0?'profit':'loss'}">${formatBaht(v.profit)}</td></tr>`).join("");
 }
+// Performance ตาม Lot เป็นยอดสะสมตลอดอายุ Lot เพื่อไม่ให้การเปลี่ยนช่วงรายงานทำให้ตัวเลขทุนของกระสอบดูสับสน
 function renderLotBreakdown(sales,items,lots) {
-  const map=Object.fromEntries(items.map(i=>[i.id,i])); const by=Object.fromEntries(lots.map(l=>[l.id,{lot:l,sold:0,revenue:0,profit:0}]));
-  sales.forEach(s=>{const i=map[s.item_id],r=i&&by[i.lot_id];if(!r)return;r.sold++;r.revenue+=Number(s.sale_price||0);r.profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
-  const rows=Object.values(by).filter(x=>x.sold).sort((a,b)=>b.profit-a.profit); document.getElementById("repLotBreakdown").innerHTML=rows.length?rows.map(x=>`<tr><td><b>${escapeHtml(x.lot.lot_name)}</b><small class="table-sub">${x.lot.total_items} ชิ้น · ${x.sold} ขาย</small></td><td style="text-align:right">${formatBaht(x.lot.total_cost)}</td><td style="text-align:right">${x.sold}</td><td style="text-align:right">${formatBaht(x.revenue)}</td><td style="text-align:right" class="${x.profit>=0?'profit':'loss'}">${formatBaht(x.profit)}</td><td style="text-align:right">${percent(x.profit,x.lot.total_cost).toFixed(1)}%</td></tr>`).join(""):"<tr><td colspan=6 class=empty-state>ไม่มีรายการขาย</td></tr>";
+  // ตารางนี้เป็นยอดสะสมตลอดอายุ Lot เพื่อใช้ติดตามทุน/กำไรของกระสอบโดยตรง
+  const map=Object.fromEntries(items.map(i=>[i.id,i]));
+  const by=Object.fromEntries(lots.map(l=>[l.id,{lot:l,totalItems:Number(l.total_items||0),sold:0,revenue:0,costSold:0,remaining:0,remainingCapital:Number(l.total_cost||0),profit:0,recoveryPct:0}]));
+  sales.forEach(s=>{const i=map[s.item_id],r=i&&by[i.lot_id];if(!r)return;r.sold++;r.revenue+=Number(s.sale_price||0);r.costSold+=Number(s.cost_price||0);});
+  Object.values(by).forEach(r=>{r.remaining=Math.max(0,r.totalItems-r.sold);r.remainingCapital=Math.max(0,Number(r.lot.total_cost||0)-r.costSold);r.profit=r.revenue-r.costSold;r.recoveryPct=percent(r.revenue,Number(r.lot.total_cost||0));});
+  const rows=Object.values(by).filter(x=>x.totalItems>0||x.sold>0).sort((a,b)=>b.revenue-a.revenue);
+  document.getElementById("repLotBreakdown").innerHTML=rows.length?rows.map(x=>`<tr>
+    <td><b>${escapeHtml(x.lot.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(x.lot.purchase_date)}</small></td>
+    <td style="text-align:right">${formatBaht(x.lot.total_cost)}</td>
+    <td style="text-align:right">${x.totalItems}</td>
+    <td style="text-align:right">${x.sold}</td>
+    <td style="text-align:right">${x.remaining}</td>
+    <td style="text-align:right">${formatBaht(x.revenue)}</td>
+    <td style="text-align:right">${formatBaht(x.costSold)}</td>
+    <td style="text-align:right">${formatBaht(x.remainingCapital)}</td>
+    <td style="text-align:right" class="${x.profit>=0?'profit':'loss'}">${formatBaht(x.profit)}</td>
+    <td style="text-align:right">${x.recoveryPct.toFixed(1)}%</td>
+  </tr>`).join(""):"<tr><td colspan=10 class=empty-state>ยังไม่มีข้อมูล Lot</td></tr>";
 }
 function renderWeekendBreakdown(sales) {
   const by={6:{label:"เสาร์",count:0,revenue:0,profit:0},0:{label:"อาทิตย์",count:0,revenue:0,profit:0}};

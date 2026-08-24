@@ -160,6 +160,19 @@
   <h2 style="margin-top:24px;">รายการค่าใช้จ่ายทั้งหมด</h2>
   <div id="expenseList"><div class="empty-state">กำลังโหลด...</div></div>
 
+  <div class="tag-card">
+    <h2>ทุนและกำไรตาม Lot</h2>
+    <p class="muted">ดูยอดสะสมของแต่ละ Lot: ยอดขาย ต้นทุนที่ขาย ทุนคงเหลือ กำไร และเปอร์เซ็นต์คืนทุน</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr>
+          <th>Lot</th><th style="text-align:right">ทุนทั้งหมด</th><th style="text-align:right">ทั้งหมด</th><th style="text-align:right">ขายแล้ว</th><th style="text-align:right">เหลือ</th><th style="text-align:right">ยอดขายสะสม</th><th style="text-align:right">ต้นทุนที่ขาย</th><th style="text-align:right">ทุนคงเหลือ</th><th style="text-align:right">กำไร</th><th style="text-align:right">คืนทุน</th>
+        </tr></thead>
+        <tbody id="accLotBreakdown"><tr><td colspan="10">กำลังโหลด...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="ledger-header">
     <h2 style="margin:0;">สมุดบัญชี (เงินเข้า-ออกทั้งหมด)</h2>
     <button id="exportCsvBtn" class="btn btn-ghost btn-sm">⬇ ส่งออก CSV</button>
