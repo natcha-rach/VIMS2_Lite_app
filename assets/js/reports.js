@@ -110,6 +110,18 @@ function renderWeekendBreakdown(sales) {
 function renderSaleList(sales) {
   document.getElementById("repSaleList").innerHTML=sales.length?sales.map(s=>`<div class="sale-row"><div><div class="sale-name">${escapeHtml(s.items?.item_name||"สินค้า")}</div><div class="sale-meta">${formatDate(s.sale_date)} · ${PAYMENT_LABELS[s.payment_method]||s.payment_method} · ${CHANNEL_LABELS[s.channel]||s.channel||"-"}</div></div><div class="sale-price">${formatBaht(s.sale_price)}</div></div>`).join(""):"<div class=empty-state>ไม่มีรายการขายในช่วงนี้</div>";
 }
+let reportTrendChart = null;
+function renderReportTrendChart(rows){
+  if(typeof Chart==='undefined') return;
+  const canvas=document.getElementById('reportTrendChart'); if(!canvas) return;
+  try{reportTrendChart?.destroy();}catch(_){ }
+  const ordered=[...rows].reverse();
+  reportTrendChart=new Chart(canvas,{type:'line',data:{labels:ordered.map(r=>r.label),datasets:[
+    {label:'ยอดขาย',data:ordered.map(r=>r.revenue),borderColor:'#4a5cf0',backgroundColor:'rgba(74,92,240,.10)',fill:true,tension:.38,pointRadius:3},
+    {label:'กำไร',data:ordered.map(r=>r.profit),borderColor:'#0ea5e9',backgroundColor:'transparent',tension:.38,pointRadius:3}
+  ]},options:{responsive:true,maintainAspectRatio:false,interaction:{mode:'index',intersect:false},plugins:{legend:{position:'bottom',labels:{color:'#5c6480',font:{family:'Prompt',size:11},usePointStyle:true,padding:16}},tooltip:{backgroundColor:'#1a1d29',borderColor:'#2c3146',borderWidth:1,callbacks:{label:c=>`${c.dataset.label}: ${formatBaht(c.raw)}`}}},scales:{x:{grid:{display:false},ticks:{color:'#98a0b6',font:{family:'Inter',size:10}}},y:{grid:{color:'#eceef7'},ticks:{color:'#98a0b6',font:{family:'Inter',size:10},callback:v=>formatBaht(v).replace('฿','')}}}}});
+}
+
 async function renderTrend(start,end) {
   const title=document.getElementById("repTrendTitle"),col=document.getElementById("repTrendCol1"); let trendStart=new Date(start),trendEnd=new Date(end),labelFn;
   if(currentPeriod==="day"){title.textContent="แนวโน้ม 7 วันล่าสุด";col.textContent="วันที่";trendStart.setDate(trendStart.getDate()-6);labelFn=d=>formatDate(d).split(" ").slice(0,2).join(" ");}
@@ -117,7 +129,9 @@ async function renderTrend(start,end) {
   else {title.textContent="แนวโน้มรายเดือนในปีนี้";col.textContent="เดือน";labelFn=d=>new Intl.DateTimeFormat("th-TH",{month:"short"}).format(d);}
   const {data,error}=await supabaseClient.from("sales").select("sale_date,sale_price,cost_price").gte("sale_date",trendStart.toISOString()).lt("sale_date",trendEnd.toISOString()); if(error){console.error(error);return;}
   const buckets={}; data.forEach(s=>{const d=new Date(s.sale_date);const key=currentPeriod==="year"?`${d.getFullYear()}-${d.getMonth()}`:d.toDateString();buckets[key] ||= {count:0,revenue:0,profit:0,label:labelFn(d)};buckets[key].count++;buckets[key].revenue+=Number(s.sale_price||0);buckets[key].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
-  const rows=Object.values(buckets); document.getElementById("repTrendBody").innerHTML=rows.length?rows.sort((a,b)=>a.label<b.label?1:-1).map(r=>`<tr><td>${r.label}</td><td style="text-align:right">${r.count}</td><td style="text-align:right">${formatBaht(r.revenue)}</td><td style="text-align:right" class="${r.profit>=0?'profit':'loss'}">${formatBaht(r.profit)}</td></tr>`).join(""):"<tr><td colspan=4 class=empty-state>ยังไม่มีรายการขาย</td></tr>";
+  const rows=Object.values(buckets);
+  renderReportTrendChart(rows);
+  document.getElementById("repTrendBody").innerHTML=rows.length?rows.sort((a,b)=>a.label<b.label?1:-1).map(r=>`<tr><td>${r.label}</td><td style="text-align:right">${r.count}</td><td style="text-align:right">${formatBaht(r.revenue)}</td><td style="text-align:right" class="${r.profit>=0?'profit':'loss'}">${formatBaht(r.profit)}</td></tr>`).join(""):"<tr><td colspan=4 class=empty-state>ยังไม่มีรายการขาย</td></tr>";
 }
 
 loadReport();

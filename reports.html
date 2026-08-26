@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>รายงาน | ระบบร้านเสื้อมือสอง</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Kanit:wght@300;400;500;600&display=swap"
-      rel="stylesheet"
-    />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
     <link rel="stylesheet" href="assets/css/reports.css" />
-  </head>
+    <link rel="stylesheet" href="assets/css/design-v12.css" />
+</head>
   <body>
     <nav id="sidebar" class="sidebar">
       <div class="sidebar-header">
@@ -47,6 +45,10 @@
         <a href="accounting.html" title="บัญชี"
           ><span class="icon">🧾</span><span class="label">บัญชี</span></a
         >
+            </div>
+      <div class="sidebar-footer">
+        <div class="footer-avatar">BG</div>
+        <div class="footer-meta"><b>Bubbles Gumps</b><span>ร้านเสื้อมือสอง</span></div>
       </div>
     </nav>
 
@@ -147,8 +149,13 @@
           <div id="repWeekendBreakdown" class="weekend-report-grid"></div>
         </div>
 
+        <div class="tag-card v11-chart-card">
+          <div class="v11-chart-header"><div><h2 id="repTrendTitle">แนวโน้ม</h2><p>กราฟช่วยให้เห็นจังหวะขายและกำไรได้เร็วกว่าอ่านตาราง</p></div></div>
+          <div class="v11-chart-wrap"><canvas id="reportTrendChart"></canvas></div>
+        </div>
+
         <div class="tag-card">
-          <h2 id="repTrendTitle">แนวโน้ม</h2>
+          <h2 id="repTrendTitleTable">รายละเอียดแนวโน้ม</h2>
           <div class="table-scroll">
             <table>
               <thead>
@@ -182,6 +189,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
     <script src="assets/js/nav.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="assets/js/reports.js"></script>
     <script src="assets/js/realtime.js"></script>
   </body>

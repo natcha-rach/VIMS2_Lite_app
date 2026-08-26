@@ -5,13 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Dashboard | ระบบร้านเสื้อมือสอง</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Kanit:wght@300;400;500;600&display=swap"
-      rel="stylesheet"
-    />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
     <link rel="stylesheet" href="assets/css/dashboard.css" />
-  </head>
+    <link rel="stylesheet" href="assets/css/design-v12.css" />
+</head>
   <body>
     <nav id="sidebar" class="sidebar">
       <div class="sidebar-header">
@@ -37,6 +35,10 @@
         ><a href="accounting.html" title="บัญชี"
           ><span class="icon">🧾</span><span class="label">บัญชี</span></a
         >
+      </div>
+      <div class="sidebar-footer">
+        <div class="footer-avatar">BG</div>
+        <div class="footer-meta"><b>Bubbles Gumps</b><span>ร้านเสื้อมือสอง</span></div>
       </div>
     </nav>
 
@@ -71,28 +73,127 @@
           </div>
         </div>
 
+        <section class="v11-today-pulse" aria-label="ภาพรวมวันนี้">
+          <div class="pulse-heading">
+            <div>
+              <span class="eyebrow">TODAY PULSE</span>
+              <h2>ร้านวันนี้เป็นอย่างไร?</h2>
+              <p>ตัวเลขสำคัญสำหรับตัดสินใจใน 30 วินาที โดยไม่ขึ้นกับตัวกรองช่วงเวลา</p>
+            </div>
+            <div class="pulse-date" id="pulseDate">วันนี้</div>
+          </div>
+          <div class="pulse-grid" id="todayPulse">
+            <div class="pulse-card"><span>ยอดขายวันนี้</span><b>กำลังโหลด...</b></div>
+            <div class="pulse-card"><span>กำไรขั้นต้นวันนี้</span><b>กำลังโหลด...</b></div>
+            <div class="pulse-card"><span>ขายแล้ววันนี้</span><b>กำลังโหลด...</b></div>
+            <div class="pulse-card"><span>เงินสดรับวันนี้</span><b>กำลังโหลด...</b></div>
+            <div class="pulse-card"><span>พร้อมขายตอนนี้</span><b>กำลังโหลด...</b></div>
+          </div>
+        </section>
+
+        <section class="v11-action-row">
+          <div class="tag-card action-center-card">
+            <div class="v11-section-head">
+              <div><span class="eyebrow">ACTION CENTER</span><h2>วันนี้ควรทำอะไร?</h2><p>ระบบคัดสิ่งที่ควรให้ความสนใจจากข้อมูลสต็อกและยอดขาย</p></div>
+              <span class="action-count" id="actionCount">0 เรื่อง</span>
+            </div>
+            <div id="actionCenter" class="action-list"></div>
+          </div>
+          <div class="tag-card quick-action-card">
+            <div class="v11-section-head"><div><span class="eyebrow">QUICK ACTIONS</span><h2>ทำงานเร็ว</h2><p>ทางลัดสำหรับงานที่ทำบ่อย</p></div></div>
+            <div class="quick-action-grid">
+              <a href="sell.html" class="quick-action"><span>＋</span><b>ขายสินค้า</b><small>เปิด POS</small></a>
+              <a href="items.html" class="quick-action"><span>👕</span><b>เพิ่มสินค้า</b><small>จัดการ Stock</small></a>
+              <a href="lots.html" class="quick-action"><span>📦</span><b>รับ Lot</b><small>เพิ่มกระสอบใหม่</small></a>
+              <a href="reports.html" class="quick-action"><span>↗</span><b>ดูรายงาน</b><small>วิเคราะห์ยอด</small></a>
+            </div>
+          </div>
+        </section>
+
         <section class="dashboard-kpi-grid dashboard-main-kpis">
           <div class="stat-card">
-            <div class="label">ยอดขาย</div>
+            <div class="label">💰 ยอดขาย</div>
             <div class="value" id="statRevenue">-</div>
             <small id="statRevenueMeta"></small>
+            <div class="stat-spark"><canvas id="statRevenueSpark"></canvas></div>
           </div>
           <div class="stat-card">
-            <div class="label">กำไรขั้นต้น</div>
+            <div class="label">📈 กำไรขั้นต้น</div>
             <div class="value" id="statGrossProfit">-</div>
             <small id="statMargin"></small>
+            <div class="stat-spark"><canvas id="statGrossProfitSpark"></canvas></div>
           </div>
           <div class="stat-card">
-            <div class="label">ค่าใช้จ่าย</div>
+            <div class="label">🧾 ค่าใช้จ่าย</div>
             <div class="value" id="statExpenses">-</div>
             <small>ค่าใช้จ่ายที่บันทึกในช่วงนี้</small>
           </div>
           <div class="stat-card">
-            <div class="label">กำไรสุทธิ</div>
+            <div class="label">✅ กำไรสุทธิ</div>
             <div class="value" id="statNetProfit">-</div>
             <small>กำไรขั้นต้น - ค่าใช้จ่าย</small>
           </div>
         </section>
+
+        <section class="v112-intelligence" aria-label="Business Intelligence">
+          <div class="tag-card intelligence-hero">
+            <div class="v11-section-head">
+              <div>
+                <span class="eyebrow">BUSINESS INTELLIGENCE</span>
+                <h2>ร้านควรโฟกัสอะไรต่อ?</h2>
+                <p>ระบบอ่านยอดขาย สต็อก Margin และเงินทุน แล้วสรุปเป็นสัญญาณที่นำไปใช้ตัดสินใจได้ทันที</p>
+              </div>
+              <span class="insight-status" id="insightStatus">กำลังวิเคราะห์</span>
+            </div>
+            <div class="insight-grid" id="insightGrid"></div>
+          </div>
+          <div class="tag-card forecast-card">
+            <div class="v11-section-head">
+              <div>
+                <span class="eyebrow">RUN RATE</span>
+                <h2>ถ้ารักษาจังหวะนี้ต่อไป</h2>
+                <p>เป็นค่าประมาณจากยอดขายเฉลี่ยต่อวันของช่วงที่เลือก ไม่ใช่การพยากรณ์รับประกัน</p>
+              </div>
+            </div>
+            <div class="forecast-main" id="forecastMain"></div>
+            <div class="forecast-meta" id="forecastMeta"></div>
+          </div>
+        </section>
+
+        <section class="v11-analytics-grid">
+          <div class="tag-card v11-chart-card">
+            <div class="v11-chart-header">
+              <div>
+                <h2>Revenue & Profit Trend</h2>
+                <p>ดูยอดขาย ต้นทุน และกำไรของช่วงเวลาที่เลือก</p>
+              </div>
+              <div class="v11-legend"><span class="revenue">Revenue</span><span class="profit">Gross Profit</span><span class="cost">COGS</span></div>
+            </div>
+            <div class="v11-chart-wrap"><canvas id="revenueTrendChart"></canvas></div>
+            <div class="v11-chart-note">
+              <div><span>ยอดขาย</span><b id="chartRevenueTotal">-</b></div>
+              <div><span>กำไรขั้นต้น</span><b id="chartProfitTotal">-</b></div>
+              <div><span>Margin</span><b id="chartMarginTotal">-</b></div>
+            </div>
+          </div>
+          <div class="tag-card v11-chart-card">
+            <div class="v11-chart-header">
+              <div><h2>Payment Mix</h2><p>สัดส่วนเงินรับตามวิธีจ่าย</p></div>
+            </div>
+            <div class="v11-donut-wrap"><canvas id="paymentMixChart"></canvas><div class="v11-donut-center"><b id="paymentMixTotal">-</b><span>ยอดรับทั้งหมด</span></div></div>
+          </div>
+        </section>
+
+        <div class="dashboard-two-col">
+          <div class="tag-card v11-chart-card">
+            <div class="v11-chart-header"><div><h2>Inventory Health</h2><p>สุขภาพสต็อกปัจจุบัน</p></div></div>
+            <div class="v11-donut-wrap"><canvas id="inventoryHealthChart"></canvas></div>
+          </div>
+          <div class="tag-card">
+            <div class="card-title-row"><div><h2>Sales Channels</h2><p class="muted">ช่องทางที่ทำยอดขายให้ร้านมากที่สุด</p></div></div>
+            <div class="channel-grid" id="channelGrid"></div>
+          </div>
+        </div>
 
         <div class="dashboard-two-col">
           <div class="tag-card">
@@ -103,16 +204,6 @@
             <h2>การรับเงินในช่วงที่เลือก</h2>
             <div class="payment-cards" id="paymentCards"></div>
           </div>
-        </div>
-
-        <div class="tag-card">
-          <div class="card-title-row">
-            <div>
-              <h2>ยอดขายตามช่องทาง</h2>
-              <p class="muted">ดูว่าร้านขายผ่านช่องทางไหนมากที่สุด</p>
-            </div>
-          </div>
-          <div class="channel-grid" id="channelGrid"></div>
         </div>
 
         <div class="dashboard-two-col">
@@ -252,6 +343,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
     <script src="assets/js/nav.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="assets/js/dashboard.js"></script>
     <script src="assets/js/realtime.js"></script>
   </body>

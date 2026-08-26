@@ -84,6 +84,41 @@ function buildLotPerformance(lots, items, sales) {
   return stats;
 }
 
+function renderManagerPulse(items, sales) {
+  const range = rangeFromPreset("today");
+  const todaySales = sales.filter(s => inRange(s.sale_date, range));
+  const revenue = sum(todaySales, s => s.sale_price);
+  const profit = sum(todaySales, s => Number(s.sale_price || 0) - Number(s.cost_price || 0));
+  const cash = sum(todaySales.filter(s => s.payment_method === "cash"), s => s.sale_price);
+  const available = items.filter(i => i.status === "available");
+  const pulse = $("todayPulse");
+  if (!pulse) return;
+  $("pulseDate").textContent = new Intl.DateTimeFormat("th-TH", { weekday:"short", day:"numeric", month:"short", year:"numeric" }).format(new Date());
+  pulse.innerHTML = [
+    ["ยอดขายวันนี้", formatBaht(revenue), `${todaySales.length} รายการขาย`],
+    ["กำไรขั้นต้นวันนี้", formatBaht(profit), `Margin ${percent(profit,revenue).toFixed(1)}%`],
+    ["ขายแล้ววันนี้", `${todaySales.length} ชิ้น`, revenue ? `เฉลี่ย ${formatBaht(revenue/todaySales.length)}/ชิ้น` : "ยังไม่มีการขาย"],
+    ["เงินสดรับวันนี้", formatBaht(cash), "เฉพาะรายการที่จ่ายเงินสด"],
+    ["พร้อมขายตอนนี้", `${available.length} ชิ้น`, `มูลค่าทุน ${formatBaht(sum(available,i=>i.cost_price))}`]
+  ].map(([label,value,meta]) => `<div class="pulse-card"><span>${label}</span><b>${value}</b><small>${meta}</small></div>`).join("");
+
+  const now = new Date();
+  const aging = available.map(i => ({...i, days: Math.max(0, Math.floor((now-new Date(i.created_at))/86400000))}));
+  const stale = aging.filter(i => i.days >= 60).sort((a,b)=>b.days-a.days);
+  const damaged = items.filter(i => i.status === "damaged");
+  const lowMarginSales = todaySales.filter(s => Number(s.sale_price||0) > 0 && percent(Number(s.sale_price||0)-Number(s.cost_price||0), Number(s.sale_price||0)) < 20);
+  const lotStats = buildLotPerformance(window.__dashboardLots || [], items, sales);
+  const unrecovered = Object.values(lotStats).filter(x => x.totalItems > 0 && x.recoveryPct < 100).sort((a,b)=>a.recoveryPct-b.recoveryPct);
+  const actions = [];
+  if (stale.length) actions.push({kind:"warn",icon:"⏳",title:`มี ${stale.length} ชิ้นค้าง 60+ วัน`,detail:`ชิ้นที่เก่าสุด ${stale[0].days} วัน · ควรพิจารณาโปร/ลดราคา`,link:"items.html",text:"เปิด Stock"});
+  if (damaged.length) actions.push({kind:"danger",icon:"⚠",title:`มีสินค้าเสีย ${damaged.length} ชิ้น`,detail:"ตรวจสภาพและบันทึกการจัดการเพื่อไม่ให้ต้นทุนค้าง",link:"items.html",text:"ตรวจสินค้า"});
+  if (unrecovered.length) actions.push({kind:"",icon:"📦",title:`Lot ที่ยังไม่คืนทุน ${unrecovered.length} Lot`,detail:`Lot ที่คืนทุนต่ำสุด ${escapeHtml(unrecovered[0].lot.lot_name)} · ${unrecovered[0].recoveryPct.toFixed(0)}%`,link:"lots.html",text:"ดู Lot"});
+  if (lowMarginSales.length) actions.push({kind:"",icon:"↘",title:`มี ${lowMarginSales.length} รายการที่ Margin ต่ำกว่า 20%`,detail:"ใช้ตรวจสอบว่าสินค้าบางตัวถูกขายต่ำเกินไปหรือไม่",link:"reports.html",text:"วิเคราะห์"});
+  if (!actions.length) actions.push({kind:"",icon:"✓",title:"วันนี้ยังไม่มีเรื่องเร่งด่วน",detail:"Stock และยอดขายอยู่ในสถานะที่ระบบตรวจพบว่าปกติ",link:"reports.html",text:"ดูภาพรวม"});
+  $("actionCenter").innerHTML = actions.slice(0,4).map(a=>`<div class="action-item ${a.kind}"><span class="action-icon">${a.icon}</span><div><b>${a.title}</b><small>${a.detail}</small></div><a class="action-link" href="${a.link}">${a.text} →</a></div>`).join("");
+  $("actionCount").textContent = `${actions.length === 1 && actions[0].title.startsWith("วันนี้") ? 0 : actions.length} เรื่อง`;
+}
+
 function renderLotPerformanceRow(x) {
   const roi = percent(x.profit, Number(x.lot.total_cost || 0));
   return `<tr>
@@ -100,9 +135,213 @@ function renderLotPerformanceRow(x) {
   </tr>`;
 }
 
+
+let v11RevenueChart = null;
+let v11PaymentChart = null;
+let v11InventoryChart = null;
+
+function v11ChartDefaults() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#1a1d29',
+        borderColor: '#2c3146',
+        borderWidth: 1,
+        titleColor: '#fff',
+        bodyColor: '#d6d9e8',
+        padding: 10,
+        callbacks: { label: ctx => `${ctx.dataset.label}: ${formatBaht(ctx.parsed.y ?? ctx.parsed)}` }
+      }
+    },
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#98a0b6', font: { family: 'Inter', size: 10 } } },
+      y: { grid: { color: '#eceef7' }, ticks: { color: '#98a0b6', font: { family: 'Inter', size: 10 }, callback: v => formatBaht(v).replace('฿','') } }
+    }
+  };
+}
+
+function v11DestroyChart(chart) { try { chart?.destroy(); } catch (_) {} }
+
+// ---------- Sparklines: mini trend line inside KPI cards (คล้าย stat card ใน template ตัวอย่าง) ----------
+const v11Sparklines = {};
+function renderSparkline(canvasId, values, color) {
+  const el = document.getElementById(canvasId);
+  if (!el || typeof Chart === 'undefined') return;
+  v11DestroyChart(v11Sparklines[canvasId]);
+  if (!values || values.length < 2) { values = [0, 0]; }
+  v11Sparklines[canvasId] = new Chart(el, {
+    type: 'line',
+    data: {
+      labels: values.map((_, i) => i),
+      datasets: [{
+        data: values,
+        borderColor: color,
+        backgroundColor: color + '1f',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        borderWidth: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { display: false }, tooltip: { enabled: false } },
+      scales: { x: { display: false }, y: { display: false } },
+      elements: { line: { capBezierPoints: true } },
+    }
+  });
+}
+
+function v11BuildTrend(periodSales, range) {
+  const spanDays = Math.max(1, Math.ceil((range.end - range.start) / 86400000));
+  const useDay = spanDays <= 45;
+  const buckets = {};
+  const keyFor = d => useDay
+    ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+    : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  const labelFor = d => useDay
+    ? new Intl.DateTimeFormat('th-TH',{day:'numeric',month:'short'}).format(d)
+    : new Intl.DateTimeFormat('th-TH',{month:'short',year:'2-digit'}).format(d);
+  periodSales.forEach(s => {
+    const d = new Date(s.sale_date), key = keyFor(d);
+    buckets[key] ||= { label: labelFor(d), revenue: 0, cost: 0, profit: 0 };
+    buckets[key].revenue += Number(s.sale_price || 0);
+    buckets[key].cost += Number(s.cost_price || 0);
+    buckets[key].profit += Number(s.sale_price || 0) - Number(s.cost_price || 0);
+  });
+  const rows = Object.entries(buckets).sort(([a],[b]) => a.localeCompare(b)).map(([,v])=>v);
+  return { labels: rows.map(x=>x.label), revenue: rows.map(x=>x.revenue), cost: rows.map(x=>x.cost), profit: rows.map(x=>x.profit) };
+}
+
+function renderV11Charts(periodSales, items, range, revenue, grossProfit, margin) {
+  if (typeof Chart === 'undefined') return;
+  const trend = v11BuildTrend(periodSales, range);
+  const ctx = document.getElementById('revenueTrendChart');
+  if (ctx) {
+    v11DestroyChart(v11RevenueChart);
+    v11RevenueChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: trend.labels,
+        datasets: [
+          { label:'Revenue', data:trend.revenue, borderColor:'#4a5cf0', backgroundColor:'rgba(74,92,240,.10)', fill:true, tension:.38, pointRadius:2.5, pointHoverRadius:5 },
+          { label:'Gross Profit', data:trend.profit, borderColor:'#0ea5e9', backgroundColor:'transparent', fill:false, tension:.38, pointRadius:2.5, pointHoverRadius:5 },
+          { label:'COGS', data:trend.cost, borderColor:'#b2b8cf', backgroundColor:'transparent', fill:false, borderDash:[5,5], tension:.3, pointRadius:0 }
+        ]
+      },
+      options: v11ChartDefaults()
+    });
+  }
+  const setText=(id,val)=>{const el=document.getElementById(id);if(el)el.textContent=val;};
+  setText('chartRevenueTotal', formatBaht(revenue));
+  setText('chartProfitTotal', formatBaht(grossProfit));
+  setText('chartMarginTotal', `${margin.toFixed(1)}%`);
+
+  // KPI card sparklines ใช้ข้อมูล trend ชุดเดียวกับกราฟหลัก ไม่ query ซ้ำ
+  renderSparkline('statRevenueSpark', trend.revenue, '#4a5cf0');
+  renderSparkline('statGrossProfitSpark', trend.profit, '#17b26a');
+
+  const pay = { cash:0, transfer:0, government:0 };
+  periodSales.forEach(s => pay[s.payment_method]=(pay[s.payment_method]||0)+Number(s.sale_price||0));
+  const pctx=document.getElementById('paymentMixChart');
+  if(pctx){
+    v11DestroyChart(v11PaymentChart);
+    v11PaymentChart=new Chart(pctx,{type:'doughnut',data:{labels:['เงินสด','โอน','โครงการรัฐ'],datasets:[{data:[pay.cash,pay.transfer,pay.government],backgroundColor:['#4a5cf0','#0ea5e9','#17b26a'],borderColor:'#fff',borderWidth:4,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'72%',plugins:{legend:{position:'bottom',labels:{color:'#5c6480',font:{family:'Prompt',size:11},usePointStyle:true,pointStyle:'circle',padding:18}},tooltip:{backgroundColor:'#1a1d29',borderColor:'#2c3146',borderWidth:1,callbacks:{label:c=>`${c.label}: ${formatBaht(c.raw)}`}}}}});
+  }
+  setText('paymentMixTotal', formatBaht(revenue));
+
+  const inv={available:0,sold:0,damaged:0};
+  items.forEach(i=>inv[i.status]=(inv[i.status]||0)+1);
+  const ictx=document.getElementById('inventoryHealthChart');
+  if(ictx){
+    v11DestroyChart(v11InventoryChart);
+    v11InventoryChart=new Chart(ictx,{type:'doughnut',data:{labels:['พร้อมขาย','ขายแล้ว','เสีย'],datasets:[{data:[inv.available,inv.sold,inv.damaged],backgroundColor:['#17b26a','#0ea5e9','#f04438'],borderColor:'#fff',borderWidth:4,hoverOffset:6}]},options:{responsive:true,maintainAspectRatio:false,cutout:'68%',plugins:{legend:{position:'bottom',labels:{color:'#5c6480',font:{family:'Prompt',size:11},usePointStyle:true,pointStyle:'circle',padding:18}},tooltip:{backgroundColor:'#1a1d29',borderColor:'#2c3146',borderWidth:1}}}});
+  }
+}
+
+
+function renderBusinessIntelligence(data, range, periodSales, items, lots) {
+  const grid = $("insightGrid"), forecast = $("forecastMain"), meta = $("forecastMeta"), status = $("insightStatus");
+  if (!grid || !forecast || !meta) return;
+  const revenue = sum(periodSales, s => s.sale_price);
+  const cogs = sum(periodSales, s => s.cost_price);
+  const profit = revenue - cogs;
+  const margin = percent(profit, revenue);
+  const available = items.filter(i => i.status === "available");
+  const now = new Date();
+  const daysInRange = Math.max(1, Math.ceil((range.end - range.start) / 86400000));
+  const elapsedDays = Math.max(1, Math.min(daysInRange, Math.ceil((Math.min(now, range.end) - range.start) / 86400000)));
+  const dailyRevenue = revenue / elapsedDays;
+  const remainingStockCost = sum(available, i => i.cost_price);
+  const remainingStockRetail = sum(available, i => i.current_price);
+  const stockPotential = remainingStockRetail - remainingStockCost;
+  const lotStats = buildLotPerformance(lots, items, data.sales);
+  const unrecovered = Object.values(lotStats).filter(x => x.totalItems > 0 && x.recoveryPct < 100);
+  const unrecoveredCapital = sum(unrecovered, x => x.remainingCapital);
+
+  // Sales velocity: compare sold units in the selected period with the stock currently available.
+  const unitsSold = periodSales.length;
+  const velocity = available.length ? unitsSold / available.length * 100 : 0;
+
+  // Realized pricing: compare actual selling price against the current listed price when that value exists.
+  const itemById = Object.fromEntries(items.map(i => [i.id, i]));
+  let realized = 0, listed = 0, realizedCount = 0;
+  periodSales.forEach(s => {
+    const item = itemById[s.item_id];
+    const cp = Number(item?.current_price || 0);
+    if (cp > 0) { realized += Number(s.sale_price || 0); listed += cp; realizedCount++; }
+  });
+  const realization = listed ? percent(realized, listed) : null;
+
+  // Best weekday signal.
+  const weekday = Array.from({length:7}, (_,day)=>({day,revenue:0,count:0}));
+  periodSales.forEach(s => { const d = new Date(s.sale_date).getDay(); weekday[d].revenue += Number(s.sale_price||0); weekday[d].count++; });
+  const bestDay = weekday.reduce((a,b)=>b.revenue>a.revenue?b:a, weekday[0]);
+  const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัสบดี','ศุกร์','เสาร์'];
+
+  const insights = [];
+  if (margin < 20 && revenue > 0) insights.push({kind:'danger',icon:'↘',title:'Margin ต่ำกว่าระดับปลอดภัย',body:`ช่วงนี้ Margin อยู่ที่ ${margin.toFixed(1)}% — ควรตรวจสินค้าที่ขายต่ำกว่าทุนหรือกำหนดราคาไว้ต่ำเกินไป`,meta:`Gross Profit ${formatBaht(profit)}`});
+  else if (margin >= 35) insights.push({kind:'good',icon:'↗',title:'Margin แข็งแรง',body:`ทำ Gross Margin ได้ ${margin.toFixed(1)}% ถือว่าเป็นสัญญาณที่ดีสำหรับการรักษาระดับราคา`,meta:`ยอดขาย ${formatBaht(revenue)}`});
+  else insights.push({kind:'',icon:'◎',title:'Margin อยู่ในโซนกลาง',body:`Gross Margin ${margin.toFixed(1)}% — ใช้ข้อมูลรายสินค้าเพื่อหาโอกาสเพิ่มกำไรต่อชิ้น`,meta:`ต้นทุนขาย ${formatBaht(cogs)}`});
+
+  if (unrecoveredCapital > 0) insights.push({kind:'warn',icon:'📦',title:'เงินทุนยังผูกอยู่กับ Lot',body:`มีเงินทุนประมาณ ${formatBaht(unrecoveredCapital)} ที่ยังอยู่ใน Lot ซึ่งยังไม่คืนทุน`,meta:`${unrecovered.length} Lot ยังไม่ถึง 100% Recovery`});
+  else insights.push({kind:'good',icon:'✓',title:'ทุก Lot คืนทุนแล้ว',body:'ยอดขายสะสมของทุก Lot ครบหรือเกินต้นทุนซื้อแล้ว',meta:'Capital recovery 100%+'});
+
+  if (realization !== null && realizedCount) {
+    const kind = realization < 85 ? 'warn' : realization > 100 ? 'good' : '';
+    insights.push({kind,icon:'฿',title:'ราคาขายจริงเทียบราคาตั้ง',body:`ขายจริงเฉลี่ยคิดเป็น ${realization.toFixed(1)}% ของราคาปัจจุบันที่ตั้งไว้ — ${realization < 85 ? 'อาจมีการลดราคามากเกินไป' : realization > 100 ? 'มี Upside จากการตั้งราคาปัจจุบัน' : 'ระดับ Discount ยังอยู่ในช่วงที่ควบคุมได้'}`,meta:`เทียบจาก ${realizedCount} รายการ`});
+  } else {
+    insights.push({kind:'',icon:'฿',title:'ยังประเมิน Price Realization ไม่ได้',body:'สินค้าที่ขายในช่วงนี้ยังไม่มีราคาปัจจุบันให้ใช้เทียบเพียงพอ',meta:'ระบบจะแสดงอัตโนมัติเมื่อมีข้อมูล'});
+  }
+
+  if (bestDay.count) insights.push({kind:'',icon:'★',title:`วันที่ทำยอดดีที่สุดคือ ${dayNames[bestDay.day]}`,body:`ทำยอด ${formatBaht(bestDay.revenue)} จาก ${bestDay.count} ชิ้นในช่วงที่เลือก`,meta:'ใช้เป็นสัญญาณวาง Stock / เวลาออกขาย'});
+  else insights.push({kind:'',icon:'★',title:'ยังไม่มีข้อมูลพอสำหรับหา Best Day',body:'เพิ่มรายการขายแล้วระบบจะเริ่มวิเคราะห์วันที่ทำยอดดีที่สุดให้',meta:'ต้องมีอย่างน้อย 1 รายการขาย'});
+
+  grid.innerHTML = insights.slice(0,4).map(x=>`<div class="insight-card ${x.kind}"><div class="insight-top"><span class="insight-icon">${x.icon}</span><span class="eyebrow">SIGNAL</span></div><b>${x.title}</b><p>${x.body}</p><small>${x.meta}</small></div>`).join('');
+  status.textContent = insights.some(x=>x.kind==='danger') ? 'ต้องจับตา' : insights.some(x=>x.kind==='warn') ? 'มีโอกาสปรับปรุง' : 'สถานะดี';
+  status.className = `insight-status ${insights.some(x=>x.kind==='danger') ? 'danger' : insights.some(x=>x.kind==='warn') ? 'warn' : 'good'}`;
+
+  // Run-rate estimate: project to the end of the current month only when the selected range touches today.
+  const end = range.end < now ? range.end : now;
+  const sameMonth = end.getMonth() === now.getMonth() && end.getFullYear() === now.getFullYear();
+  const daysLeft = sameMonth ? Math.max(0, new Date(now.getFullYear(), now.getMonth()+1, 0).getDate() - now.getDate()) : 0;
+  const projected = dailyRevenue * (daysLeft + 1);
+  forecast.innerHTML = `<span>ยอดขายประมาณการสิ้นเดือน</span><strong>${formatBaht(projected)}</strong><em>${dailyRevenue > 0 ? `Run-rate ${formatBaht(dailyRevenue)}/วัน` : 'ยังไม่มีฐานข้อมูลยอดขาย'}</em>`;
+  meta.innerHTML = `<div><span>ยอดขายช่วงนี้</span><b>${formatBaht(revenue)}</b></div><div><span>ทุน Stock คงเหลือ</span><b>${formatBaht(remainingStockCost)}</b></div><div><span>มูลค่าขายตามราคาปัจจุบัน</span><b>${formatBaht(remainingStockRetail)}</b></div><div><span>Upside จาก Stock</span><b>${formatBaht(stockPotential)}</b></div>`;
+}
+
 function renderDashboard(data, range) {
   const { lots, groups, items, sales, expenses } = data;
+  window.__dashboardLots = lots;
+  renderManagerPulse(items, sales);
   const periodSales = sales.filter(s => inRange(s.sale_date, range));
+  renderBusinessIntelligence(data, range, periodSales, items, lots);
   const periodExpenses = expenses.filter(e => inRange(`${e.expense_date}T23:59:59`, range));
   const revenue = sum(periodSales, s => s.sale_price);
   const cogs = sum(periodSales, s => s.cost_price);
@@ -110,6 +349,7 @@ function renderDashboard(data, range) {
   const expensesTotal = sum(periodExpenses, e => e.amount);
   const netProfit = grossProfit - expensesTotal;
   const margin = percent(grossProfit, revenue);
+  renderV11Charts(periodSales, items, range, revenue, grossProfit, margin);
   $("statRevenue").textContent = formatBaht(revenue);
   $("statRevenueMeta").textContent = `${periodSales.length} รายการขาย`;
   $("statGrossProfit").textContent = formatBaht(grossProfit);
@@ -193,7 +433,7 @@ function setPeriod(preset) {
   activeRange = preset; document.querySelectorAll(".period-btn").forEach(b=>b.classList.toggle("active",b.dataset.period===preset)); loadDashboard(rangeFromPreset(preset));
 }
 document.querySelectorAll(".period-btn").forEach(btn=>btn.addEventListener("click",()=>setPeriod(btn.dataset.period)));
-$("applyCustom").addEventListener("click",()=>{ const range=rangeFromCustom(); if(!range)return showToast("กรุณาเลือกช่วงวันที่ให้ถูกต้อง"); document.querySelectorAll(".period-btn").forEach(b=>b.classList.remove("active")); loadDashboard(range); });
+$("applyCustom").addEventListener("click",()=>{ const range=rangeFromCustom(); if(!range)return showToast("กรุณาเลือกช่วงวันที่ให้ถูกต้อง"); activeRange = "custom"; document.querySelectorAll(".period-btn").forEach(b=>b.classList.remove("active")); loadDashboard(range); });
 function showToast(m){const t=$("toast");if(!t)return;t.textContent=m;t.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove("show"),2600)}
 
 // Realtime: Dashboard ต้องดึงข้อมูลใหม่เมื่อ Lot / Item / Sale / Expense เปลี่ยนจาก Device อื่น

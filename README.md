@@ -302,3 +302,7 @@ reports.html
 
 ## V10.1
 See `CODE_MAP.md`, `CHANGELOG_V10.1.md`, and `sql/migration_v10_1_realtime.sql`. Run the migration only after confirming the existing V10 tables.
+
+
+## V11.2 Business Intelligence
+Dashboard now includes decision-support signals and a month-end run-rate estimate. See `CHANGELOG_V11.2.md`.

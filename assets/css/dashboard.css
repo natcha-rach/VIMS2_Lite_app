@@ -1,5 +1,193 @@
-.dashboard-page{max-width:1200px}.muted{color:var(--color-ink-soft);font-size:13px;margin:3px 0 0}.dashboard-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;margin-bottom:14px}.period-control{display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:flex-end}.period-btn{border:1px solid var(--color-line);background:#fff;border-radius:8px;padding:8px 10px;font:600 12px var(--font-body);cursor:pointer}.period-btn.active{background:var(--color-tan);border-color:var(--color-tan);color:#fff}.custom-period{display:flex;gap:6px;align-items:center;margin-left:4px}.custom-period input{border:1px solid var(--color-line);border-radius:8px;padding:8px;font:12px var(--font-body)}.dashboard-main-kpis{grid-template-columns:repeat(4,1fr);margin-bottom:14px}.dashboard-main-kpis .stat-card small{display:block;color:var(--color-ink-soft);font-size:11px;margin-top:5px}.dashboard-two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}.finance-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.finance-grid>div{padding:12px;background:#fafafa;border-radius:10px}.finance-grid b{display:block;font-size:19px}.finance-grid span{font-size:11px;color:var(--color-ink-soft)}.card-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}.payment-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.payment-cards>div{padding:14px;border-radius:12px;background:#fafafa;border:1px solid var(--color-line)}.payment-cards span{display:block;color:var(--color-ink-soft);font-size:12px}.payment-cards b{display:block;font-size:20px;margin-top:4px}.channel-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.channel-card{border:1px solid var(--color-line);border-radius:10px;padding:12px}.channel-card .channel-top{display:flex;justify-content:space-between;gap:10px}.channel-card b{font-size:18px}.channel-card small{display:block;color:var(--color-ink-soft)}.bar-track{height:7px;background:#eee7da;border-radius:99px;overflow:hidden;margin:10px 0 6px}.bar-fill{height:100%;background:var(--color-tan);border-radius:99px}.aging-list{display:grid;gap:8px}.aging-row{display:grid;grid-template-columns:75px 1fr 55px;gap:10px;align-items:center}.aging-row span{font-size:12px}.aging-row b{text-align:right;font-size:13px}.aging-row .bar-fill{background:var(--color-denim)}.dashboard-mini-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.dashboard-mini-grid>div{padding:12px;background:#fafafa;border-radius:10px}.dashboard-mini-grid b{display:block;font-size:18px}.dashboard-mini-grid span{font-size:12px;color:var(--color-ink-soft)}.markdown-list{display:grid;gap:8px}.markdown-item{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--color-line);border-radius:10px}.markdown-item b{display:block}.markdown-item small{display:block;color:var(--color-ink-soft)}.profit{color:var(--color-profit)}.loss{color:var(--color-loss)}.positive{color:var(--color-profit)}.negative{color:var(--color-loss)}
-@media(max-width:980px){.dashboard-main-kpis{grid-template-columns:repeat(2,1fr)}.dashboard-two-col{grid-template-columns:1fr}.dashboard-head{align-items:stretch;flex-direction:column}.period-control{justify-content:flex-start}.custom-period{margin-left:0}.channel-grid{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){.dashboard-main-kpis,.channel-grid{grid-template-columns:1fr}.payment-cards{grid-template-columns:1fr}.custom-period{flex-wrap:wrap}.custom-period input{flex:1;min-width:120px}}
+/* ==========================================================
+   DASHBOARD — เฉพาะหน้า index.html (ภาพรวมร้าน)
+   ทุก class ในไฟล์นี้ถูกอ้างอิงจาก assets/js/dashboard.js (innerHTML)
+   ห้ามเปลี่ยนชื่อ class โดยไม่แก้ dashboard.js คู่กัน
 
-.weekend-summary{display:grid;grid-template-columns:1fr 1fr;gap:10px}.weekend-card{padding:14px;border:1px solid var(--color-line);border-radius:12px;background:#fafafa}.weekend-card b{display:block;font-size:22px}.weekend-card span,.weekend-card small{display:block;color:var(--color-ink-soft);font-size:12px}.rank-list{display:grid;gap:7px}.rank-item{display:grid;grid-template-columns:28px 1fr auto;gap:9px;align-items:center;padding:9px 10px;border-bottom:1px solid var(--color-line)}.rank-no{font-weight:700;color:var(--color-tan-dark)}.rank-item b{display:block}.rank-item small{display:block;color:var(--color-ink-soft)}.rank-value{text-align:right;font-weight:700}.lot-recovery-list{display:grid;gap:10px}.lot-recovery-row{display:grid;grid-template-columns:180px 1fr 90px;gap:12px;align-items:center}.lot-recovery-row .lot-meta b{display:block}.lot-recovery-row .lot-meta small{color:var(--color-ink-soft)}.recovery-track{height:10px;background:#eee7da;border-radius:99px;overflow:hidden}.recovery-fill{height:100%;background:var(--color-denim);border-radius:99px}.recovery-value{text-align:right;font-weight:700}.recovery-value small{display:block;color:var(--color-ink-soft);font-weight:400}@media(max-width:620px){.weekend-summary{grid-template-columns:1fr}.lot-recovery-row{grid-template-columns:1fr}.recovery-value{text-align:left}}
+   โครงสร้าง responsive: เขียนแบบ Mobile-first (min-width) ล้วน
+   ช่วงของแต่ละ breakpoint ไม่ทับกัน เพื่อกัน bug cascade ที่กฎ
+   max-width กว้างกว่าไปทับกฎ max-width แคบกว่าโดยไม่ตั้งใจ
+   ========================================================== */
+
+.dashboard-page { max-width: 1240px; }
+
+.muted { color: var(--color-ink-soft); font-size: 13px; margin: 3px 0 0; }
+
+.dashboard-head {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+/* ---------- Period selector ---------- */
+.period-control {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-start;
+}
+.period-btn {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink-soft);
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: 600 12px var(--font-body);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.period-btn:hover { border-color: var(--color-ink-faint); color: var(--color-ink); }
+.period-btn.active { background: var(--color-tan); border-color: var(--color-tan); color: #06251c; }
+.custom-period { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-left: 0; }
+.custom-period input {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface-2);
+  color: var(--color-ink);
+  border-radius: 8px;
+  padding: 8px;
+  font: 12px var(--font-body);
+  color-scheme: dark;
+  min-width: 0;
+  flex: 1 1 130px;
+}
+
+/* ---------- KPI row (เทียบกับการ์ด "Today's Sales" ใน template) ----------
+   หมายเหตุ: บั๊กเดิม — คลาสนี้เคยมีแค่ grid-template-columns โดยไม่มี display:grid
+   (สืบทอดมาจากไฟล์ต้นฉบับ) ทำให้การ์ดเรียงเป็นแท่งยาวแนวตั้งแทนที่จะเป็นกริด */
+.dashboard-main-kpis {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 16px;
+  align-items: stretch;
+}
+.dashboard-main-kpis .stat-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 100px;
+}
+.dashboard-main-kpis .stat-card .label { display: flex; align-items: center; gap: 6px; }
+.dashboard-main-kpis .stat-card small { display: block; color: var(--color-ink-soft); font-size: 11.5px; margin-top: 6px; }
+
+.dashboard-two-col { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
+
+/* ---------- กล่องย่อยในการ์ด (แทน #fafafa เดิม) ---------- */
+.finance-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.finance-grid > div { padding: 13px; background: var(--color-surface-2); border-radius: 12px; }
+.finance-grid b { display: block; font-size: 19px; font-family: var(--font-display); font-weight: 400; }
+.finance-grid span { font-size: 11px; color: var(--color-ink-soft); }
+
+.card-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+
+.payment-cards { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.payment-cards > div { padding: 14px; border-radius: 12px; background: var(--color-surface-2); border: 1px solid var(--color-line); }
+.payment-cards span { display: block; color: var(--color-ink-soft); font-size: 12px; }
+.payment-cards b { display: block; font-size: 20px; margin-top: 4px; font-family: var(--font-display); font-weight: 400; }
+
+/* ---------- ยอดขายตามช่องทาง ---------- */
+.channel-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.channel-card { border: 1px solid var(--color-line); background: var(--color-surface-2); border-radius: 12px; padding: 13px; }
+.channel-card .channel-top { display: flex; justify-content: space-between; gap: 10px; }
+.channel-card b { font-size: 18px; }
+.channel-card small { display: block; color: var(--color-ink-soft); }
+.bar-track { height: 7px; background: var(--color-line-soft); border-radius: 99px; overflow: hidden; margin: 10px 0 6px; }
+.bar-fill { height: 100%; background: var(--color-tan); border-radius: 99px; }
+
+/* ---------- Stock aging ---------- */
+.aging-list { display: grid; gap: 9px; }
+.aging-row { display: grid; grid-template-columns: 75px 1fr 55px; gap: 10px; align-items: center; }
+.aging-row span { font-size: 12px; color: var(--color-ink-soft); }
+.aging-row b { text-align: right; font-size: 13px; }
+.aging-row .bar-fill { background: var(--color-denim); }
+
+/* ---------- สต็อกคงเหลือ ---------- */
+.dashboard-mini-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+.dashboard-mini-grid > div { padding: 13px; background: var(--color-surface-2); border-radius: 12px; }
+.dashboard-mini-grid b { display: block; font-size: 18px; font-family: var(--font-display); font-weight: 400; }
+.dashboard-mini-grid span { font-size: 12px; color: var(--color-ink-soft); }
+
+/* ---------- ควรจับตา / อาจลดราคา ---------- */
+.markdown-list { display: grid; gap: 8px; }
+.markdown-item {
+  display: flex; justify-content: space-between; gap: 12px; align-items: center;
+  padding: 11px 13px; border: 1px solid var(--color-line); background: var(--color-surface-2);
+  border-radius: 12px;
+}
+.markdown-item b { display: block; }
+.markdown-item small { display: block; color: var(--color-ink-soft); }
+
+.profit { color: var(--color-profit); }
+.loss { color: var(--color-loss); }
+.positive { color: var(--color-profit); }
+.negative { color: var(--color-loss); }
+
+/* ---------- เสาร์ vs อาทิตย์ ---------- */
+.weekend-summary { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.weekend-card { padding: 14px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface-2); }
+.weekend-card b { display: block; font-size: 22px; font-family: var(--font-display); font-weight: 400; }
+.weekend-card span, .weekend-card small { display: block; color: var(--color-ink-soft); font-size: 12px; }
+
+/* ---------- ตัวทำกำไรสูงสุด (เทียบกับ "Top Products" ใน template) ---------- */
+.rank-list { display: grid; gap: 7px; }
+.rank-item {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 9px; align-items: center;
+  padding: 10px 10px; border-bottom: 1px solid var(--color-line-soft);
+}
+.rank-no {
+  font-weight: 700; color: var(--color-tan);
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: var(--color-tan-soft); border-radius: 8px; font-size: 12px;
+}
+.rank-item b { display: block; }
+.rank-item small { display: block; color: var(--color-ink-soft); }
+.rank-value { text-align: right; font-weight: 700; }
+
+/* ---------- คืนทุนตาม Lot ---------- */
+.lot-recovery-list { display: grid; gap: 10px; }
+.lot-recovery-row { display: grid; grid-template-columns: 1fr; gap: 8px; align-items: start; }
+.lot-recovery-row .lot-meta b { display: block; }
+.lot-recovery-row .lot-meta small { color: var(--color-ink-soft); }
+.recovery-track { height: 10px; background: var(--color-line-soft); border-radius: 99px; overflow: hidden; }
+.recovery-fill { height: 100%; background: var(--color-denim); border-radius: 99px; }
+.recovery-value { text-align: left; font-weight: 700; }
+.recovery-value small { display: block; color: var(--color-ink-soft); font-weight: 400; }
+
+/* ==========================================================
+   Responsive — Mobile-first, ช่วงไม่ทับกัน
+   iPhone (default, <640px) → iPad (640–1099px) → Desktop (≥1100px)
+   ========================================================== */
+
+/* ---------- ≥480px: จอมือถือแนวนอน/มือถือจอใหญ่ — เริ่มจับคู่ 2 คอลัมน์ ---------- */
+@media (min-width: 480px) {
+  .dashboard-main-kpis { grid-template-columns: repeat(2, 1fr); }
+  .payment-cards { grid-template-columns: repeat(3, 1fr); }
+  .weekend-summary { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- ≥640px: iPad แนวตั้ง / จอกลาง ---------- */
+@media (min-width: 640px) {
+  .dashboard-head { flex-direction: row; align-items: flex-end; justify-content: space-between; }
+  .period-control { justify-content: flex-end; }
+  .channel-grid { grid-template-columns: repeat(2, 1fr); }
+  .lot-recovery-row { grid-template-columns: 180px 1fr 90px; gap: 12px; align-items: center; }
+  .recovery-value { text-align: right; }
+}
+
+/* ---------- ≥860px: sidebar ถาวรเริ่มทำงาน (คู่กับ base.css) ---------- */
+@media (min-width: 860px) {
+  .dashboard-two-col { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- ≥980px: iPad Pro แนวนอน / เดสก์ท็อปเล็ก — KPI ครบ 4 คอลัมน์ ---------- */
+@media (min-width: 980px) {
+  .dashboard-main-kpis { grid-template-columns: repeat(4, 1fr); }
+  .channel-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ---------- ≥1400px: เดสก์ท็อปจอกว้าง — ขยายพื้นที่ใช้งาน ---------- */
+@media (min-width: 1400px) {
+  .dashboard-page { max-width: 1360px; }
+}
