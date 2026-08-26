@@ -70,7 +70,33 @@
   min-height: 100px;
 }
 .dashboard-main-kpis .stat-card .label { display: flex; align-items: center; gap: 6px; }
+.dashboard-main-kpis .stat-card .label-icon { display: inline-flex; width: 15px; height: 15px; color: var(--color-ink-soft); flex-shrink: 0; }
+.dashboard-main-kpis .stat-card .label-icon svg { width: 100%; height: 100%; display: block; }
 .dashboard-main-kpis .stat-card small { display: block; color: var(--color-ink-soft); font-size: 11.5px; margin-top: 6px; }
+.stat-meta-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.stat-meta-row small { margin-top: 0 !important; }
+.stat-delta { display: inline-flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; white-space: nowrap; }
+.stat-delta:empty { display: none; }
+.stat-delta-icon { display: inline-flex; width: 10px; height: 10px; }
+.stat-delta-icon svg { width: 100%; height: 100%; display: block; }
+.stat-delta.up { color: var(--color-profit, #1a8a4c); background: rgba(26,138,76,.1); }
+.stat-delta.down { color: var(--color-loss, #d0453e); background: rgba(208,69,62,.1); }
+
+/* ---------- Download button (มุมขวาบน เหมือน Template) ---------- */
+.dashboard-download-btn { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.dashboard-download-btn svg { width: 15px; height: 15px; }
+
+/* ---------- เป้ายอดขายรายเดือน (Goal tracking) ---------- */
+.goal-card { margin-bottom: 16px; }
+.goal-body { margin-top: 6px; }
+.goal-numbers { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.goal-numbers b { font-size: 24px; font-family: var(--font-display); font-weight: 400; }
+.goal-numbers span { color: var(--color-ink-soft); font-size: 13px; }
+.goal-target { color: var(--color-ink-soft); font-size: 16px !important; font-family: var(--font-display); font-weight: 400; }
+.goal-track { height: 10px; border-radius: 999px; background: var(--color-surface-2); overflow: hidden; }
+.goal-fill { height: 100%; border-radius: 999px; background: var(--v11-purple, #7b6ef6); transition: width .4s ease; }
+.goal-fill.goal-fill-done { background: var(--color-profit, #1a8a4c); }
+.goal-card small { display: block; margin-top: 8px; }
 
 .dashboard-two-col { display: grid; grid-template-columns: 1fr; gap: 14px; align-items: start; }
 
@@ -123,27 +149,6 @@
 .loss { color: var(--color-loss); }
 .positive { color: var(--color-profit); }
 .negative { color: var(--color-loss); }
-
-/* ---------- เสาร์ vs อาทิตย์ ---------- */
-.weekend-summary { display: grid; grid-template-columns: 1fr; gap: 10px; }
-.weekend-card { padding: 14px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-surface-2); }
-.weekend-card b { display: block; font-size: 22px; font-family: var(--font-display); font-weight: 400; }
-.weekend-card span, .weekend-card small { display: block; color: var(--color-ink-soft); font-size: 12px; }
-
-/* ---------- ตัวทำกำไรสูงสุด (เทียบกับ "Top Products" ใน template) ---------- */
-.rank-list { display: grid; gap: 7px; }
-.rank-item {
-  display: grid; grid-template-columns: 28px 1fr auto; gap: 9px; align-items: center;
-  padding: 10px 10px; border-bottom: 1px solid var(--color-line-soft);
-}
-.rank-no {
-  font-weight: 700; color: var(--color-tan);
-  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-  background: var(--color-tan-soft); border-radius: 8px; font-size: 12px;
-}
-.rank-item b { display: block; }
-.rank-item small { display: block; color: var(--color-ink-soft); }
-.rank-value { text-align: right; font-weight: 700; }
 
 /* ---------- คืนทุนตาม Lot ---------- */
 .lot-recovery-list { display: grid; gap: 10px; }

@@ -13,14 +13,14 @@
 </head>
 <body>
 <nav id="sidebar" class="sidebar">
-  <div class="sidebar-header"><div class="brand"><span class="brand-mark">👕</span><span class="brand-text">Bubbles <span>Gumps</span></span></div><button id="navCollapse" class="nav-collapse">‹</button></div>
+  <div class="sidebar-header"><div class="brand"><span class="brand-mark"></span><span class="brand-text">Bubbles <span>Gumps</span></span></div><button id="navCollapse" class="nav-collapse">‹</button></div>
   <div class="sidebar-links">
-    <a href="index.html"><span class="icon">📊</span><span class="label">ภาพรวม</span></a>
-    <a href="lots.html"><span class="icon">📦</span><span class="label">ล็อต</span></a>
-    <a href="items.html"><span class="icon">👕</span><span class="label">สินค้า</span></a>
-    <a href="sell.html"><span class="icon">💰</span><span class="label">ขายของ</span></a>
-    <a href="reports.html"><span class="icon">📅</span><span class="label">รายงาน</span></a>
-    <a href="accounting.html"><span class="icon">🧾</span><span class="label">บัญชี</span></a>
+    <a href="index.html"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg></span><span class="label">ภาพรวม</span></a>
+    <a href="lots.html"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span><span class="label">ล็อต</span></a>
+    <a href="items.html"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg></span><span class="label">สินค้า</span><span class="nav-badge" id="navStockBadge" hidden>0</span></a>
+    <a href="sell.html"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg></span><span class="label">ขายของ</span></a>
+    <a href="reports.html"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="9.5" x2="21" y2="9.5"/></svg></span><span class="label">รายงาน</span></a>
+    <a href="accounting.html"><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2V2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/></svg></span><span class="label">บัญชี</span></a>
         </div>
       <div class="sidebar-footer">
         <div class="footer-avatar">BG</div>
@@ -32,7 +32,7 @@
   <main class="page">
     <div class="page-head">
       <div><h1>สินค้า</h1><p>เพิ่มของ 2–3 ตัวทีละชิ้น หรือลงทั้งกระสอบหลักร้อยชิ้นทีเดียว</p></div>
-      <div class="head-actions"><button class="btn btn-ghost" id="openBulk">📦 ลงสินค้าหลายชิ้น</button><button class="btn btn-primary" id="focusSingle">＋ เพิ่มสินค้า</button></div>
+      <div class="head-actions"><button class="btn btn-ghost" id="openBulk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg>ลงสินค้าหลายชิ้น</button><button class="btn btn-primary" id="focusSingle">＋ เพิ่มสินค้า</button></div>
     </div>
 
     <section class="quick-stats" id="quickStats"></section>
@@ -59,9 +59,9 @@
       <div class="field-row"><div class="field"><label>Lot</label><select id="bulkLot"></select></div><div class="field"><label>จำนวนที่ต้องลง</label><input id="groupCount" type="number" min="1" max="200" value="1" /></div></div>
       <div class="group-create"><div class="field"><label>ชื่อกลุ่ม</label><input id="newGroupName" placeholder="เช่น ฿100+ / งานหัว / Vintage" /></div><div class="field"><label>ราคาตั้งต้น</label><input id="newGroupPrice" type="number" min="0" value="199" /></div><div class="field"><label>Tier</label><select id="newGroupTier"><option value="normal">ปกติ</option><option value="head">งานหัว</option></select></div><button class="btn btn-ghost" id="createGroup">＋ เพิ่มกลุ่ม</button></div>
       <div id="groupList" class="group-list"></div>
-      <div class="callout">⚡ <b>กระสอบใหญ่ (หลักร้อยชิ้น):</b> กด "ถ่ายรูปแล้วลงทั้งกอง" → เลือกรูปทั้งหมดของกองรวดเดียว (iPhone จับให้เอง ไม่ต้อง rename) → ได้ตารางแบบ Excel มาพิมพ์ชื่อ/ไซซ์/ราคาต่อกันรัวๆ (Enter = แถวถัดไป, วางจาก Excel/Google Sheets ได้เลย) → กดบันทึกครั้งเดียวจบทั้งกอง</div>
-      <div class="callout">🐢 <b>ของทีละ 2–3 ชิ้น:</b> ใช้ "ลงทีละชิ้น" ถ่ายรูป+กรอกทีละตัวได้เหมือนเดิม เหมาะกับตอนรับของมาไม่กี่ตัว</div>
-      <div class="field"><label>กลุ่มสำหรับ Import</label><select id="importGroupSelect"></select></div><div class="excel-tools"><button class="btn btn-ghost btn-sm" id="downloadTemplate">📊 ดาวน์โหลด Excel Template</button><label class="btn btn-ghost btn-sm file-btn">Import Excel <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label><label class="btn btn-ghost btn-sm file-btn">รูปตาม Excel <input id="excelImages" type="file" accept="image/*" multiple hidden></label><button class="btn btn-primary btn-sm" id="importExcelBtn">นำเข้า</button></div><div class="callout">💡 Excel ใช้คอลัมน์ <b>item_name, size, condition, tier, price, photo_count</b> โดย photo_count = 1 หรือ 2 แล้วเลือกไฟล์รูปทั้งหมดตามลำดับ IMG_... ของ iPhone ระบบจะจับรูปตาม photo_count ให้เอง มี Excel รายชื่ออยู่แล้ว? ข้ามการถ่ายรูปทีละใบ ใช้ปุ่ม Import นี้แทนได้เลย</div>
+      <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><polygon points="13 2 4 14 11 14 10 22 20 10 13 10 13 2"/></svg><b>กระสอบใหญ่ (หลักร้อยชิ้น):</b> กด "ถ่ายรูปแล้วลงทั้งกอง" → เลือกรูปทั้งหมดของกองรวดเดียว (iPhone จับให้เอง ไม่ต้อง rename) → ได้ตารางแบบ Excel มาพิมพ์ชื่อ/ไซซ์/ราคาต่อกันรัวๆ (Enter = แถวถัดไป, วางจาก Excel/Google Sheets ได้เลย) → กดบันทึกครั้งเดียวจบทั้งกอง</div>
+      <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 12l2 2 4-4"/></svg><b>ของทีละ 2–3 ชิ้น:</b> ใช้ "ลงทีละชิ้น" ถ่ายรูป+กรอกทีละตัวได้เหมือนเดิม เหมาะกับตอนรับของมาไม่กี่ตัว</div>
+      <div class="field"><label>กลุ่มสำหรับ Import</label><select id="importGroupSelect"></select></div><div class="excel-tools"><button class="btn btn-ghost btn-sm" id="downloadTemplate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><rect x="4" y="3" width="16" height="18" rx="1.5"/><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="14" x2="20" y2="14"/><line x1="9.5" y1="9" x2="9.5" y2="21"/><line x1="14.5" y1="9" x2="14.5" y2="21"/></svg>ดาวน์โหลด Excel Template</button><label class="btn btn-ghost btn-sm file-btn">Import Excel <input id="excelInput" type="file" accept=".xlsx,.xls,.csv" hidden></label><label class="btn btn-ghost btn-sm file-btn">รูปตาม Excel <input id="excelImages" type="file" accept="image/*" multiple hidden></label><button class="btn btn-primary btn-sm" id="importExcelBtn">นำเข้า</button></div><div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/></svg>Excel ใช้คอลัมน์ <b>item_name, size, condition, tier, price, photo_count</b> โดย photo_count = 1 หรือ 2 แล้วเลือกไฟล์รูปทั้งหมดตามลำดับ IMG_... ของ iPhone ระบบจะจับรูปตาม photo_count ให้เอง มี Excel รายชื่ออยู่แล้ว? ข้ามการถ่ายรูปทีละใบ ใช้ปุ่ม Import นี้แทนได้เลย</div>
     </div>
     <div id="bulkStep2" class="hidden">
       <!-- Bulk Table: จุดตรวจสอบกลางก่อนเขียน Items ลง Supabase -->
@@ -102,7 +102,7 @@
       <div id="quickEntryPanel">
       <div class="bulk-progress"><div><b id="progressTitle">กลุ่ม</b><span id="progressMeta"></span></div><div class="progress-track"><div id="progressBar"></div></div></div>
       <form id="quickEntryForm" class="quick-entry">
-        <div class="photo-box"><div id="photoPreview" class="photo-preview"><span>📷</span><small>เลือก 1–2 รูป</small></div><input id="bulkImages" type="file" accept="image/*" multiple /></div>
+        <div class="photo-box"><div id="photoPreview" class="photo-preview"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><small>เลือก 1–2 รูป</small></div><input id="bulkImages" type="file" accept="image/*" multiple /></div>
         <div class="entry-fields"><div class="field"><label>ชื่อสินค้า</label><input id="bulkName" required autofocus /></div><div class="field-row"><div class="field"><label>ไซซ์</label><input id="bulkSize" /></div><div class="field"><label>สภาพ</label><select id="bulkCondition"><option value="A">A</option><option value="B">B</option></select></div></div><div class="field-row"><div class="field"><label>Tier</label><select id="bulkTier"><option value="normal">ปกติ</option><option value="head">งานหัว</option></select></div><div class="field"><label>ราคาขาย</label><input id="bulkPrice" type="number" min="0" required /></div></div><div class="field"><label>ต้นทุน/ชิ้น</label><input id="bulkCost" type="number" min="0" step="0.01" required /></div><div class="entry-actions"><button type="button" class="btn btn-ghost" id="backToGroups">← กลับ</button><button type="submit" class="btn btn-primary">บันทึก & ตัวถัดไป →</button></div></div>
       </form>
       </div>
@@ -113,7 +113,7 @@
     <div id="photoQueuePanel" class="photo-queue-panel hidden">
       <div class="modal-head">
         <div>
-          <h2>📷 Photo Queue</h2>
+          <h2><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:3px"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg>Photo Queue</h2>
           <p>เลือกรูปทั้งหมดของกองนี้ แล้วกำหนดว่ารูปไหนเป็นรูปหลัก/รูปที่ 2 ของสินค้า</p>
         </div>
         <button class="icon-btn" id="closePhotoQueue">×</button>
@@ -125,8 +125,8 @@
         <div class="field"><label>เลือกรูป</label><label class="btn btn-ghost file-btn">เลือกรูปจาก iPhone <input id="photoQueueInput" type="file" accept="image/*" multiple hidden /></label></div>
         <div class="field"><label>รูปทั้งหมด</label><b id="photoQueueCount">0</b></div>
       </div>
-      <div class="callout">💡 วิธีเร็วที่สุด: ถ้ามี 50 ตัวและถ่ายตัวละ 1 รูป ให้เลือก “1 รูป/สินค้า” → เลือกรูปทั้งหมด → ระบบจับ IMG_... ตามลำดับเอง ไม่ต้อง Rename</div>
-      <div class="callout">💡 ถ้าถ่ายตัวละ 2 รูป ให้เลือก “2 รูป/สินค้า” → ระบบจับเป็น 1-2, 3-4, 5-6 ... ให้อัตโนมัติ ส่วนงานที่มีทั้ง 1 และ 2 รูป ให้ใช้ “ผสม 1/2 รูป”</div>
+      <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/></svg>วิธีเร็วที่สุด: ถ้ามี 50 ตัวและถ่ายตัวละ 1 รูป ให้เลือก “1 รูป/สินค้า” → เลือกรูปทั้งหมด → ระบบจับ IMG_... ตามลำดับเอง ไม่ต้อง Rename</div>
+      <div class="callout"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/></svg>ถ้าถ่ายตัวละ 2 รูป ให้เลือก “2 รูป/สินค้า” → ระบบจับเป็น 1-2, 3-4, 5-6 ... ให้อัตโนมัติ ส่วนงานที่มีทั้ง 1 และ 2 รูป ให้ใช้ “ผสม 1/2 รูป”</div>
       <div id="photoQueueGrid" class="photo-queue-grid"></div>
       <div class="entry-actions"><button class="btn btn-ghost" id="cancelPhotoQueue">ยกเลิก</button><button class="btn btn-primary" id="startPhotoQueueEntry">ใช้รูปชุดนี้ → ลงรายละเอียด</button></div>
     </div>

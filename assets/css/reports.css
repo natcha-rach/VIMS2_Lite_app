@@ -42,3 +42,18 @@
 .sale-row .sale-price { font-family: var(--font-display); font-size: 16px; color: var(--color-tan-dark); }
 
 .weekend-report-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.weekend-report-card{padding:14px;border:1px solid var(--color-line);border-radius:12px;background:#fafafa}.weekend-report-card b{display:block;font-size:22px}.weekend-report-card span,.weekend-report-card small{display:block;color:var(--color-ink-soft);font-size:12px}@media(max-width:620px){.weekend-report-grid{grid-template-columns:1fr}}
+
+/* ---------- ตัวทำกำไรสูงสุด (ย้ายมาจาก Dashboard) ---------- */
+.rank-list { display: grid; gap: 7px; }
+.rank-item {
+  display: grid; grid-template-columns: 28px 1fr auto; gap: 9px; align-items: center;
+  padding: 10px 10px; border-bottom: 1px solid var(--color-line-soft, #eceef2);
+}
+.rank-no {
+  font-weight: 700; color: var(--v11-purple-2, #6d5ef5);
+  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
+  background: #eef0ff; border-radius: 8px; font-size: 12px;
+}
+.rank-item b { display: block; }
+.rank-item small { display: block; color: var(--color-ink-soft); }
+.rank-value { text-align: right; font-weight: 700; }

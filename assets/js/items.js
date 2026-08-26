@@ -171,7 +171,7 @@ function renderGroupOptions() {
 function renderGroups() {
   const el = $('groupList'); if (!el) return;
   if (!allGroups.length) { el.innerHTML = '<div class="empty-state">Lot นี้ยังไม่มีกลุ่ม กดเพิ่มกลุ่มด้านบนได้เลย</div>'; return; }
-  el.innerHTML = allGroups.map(g => `<div class="group-row"><div><b>${escapeHtml(g.group_name)}</b><span>${g.tier==='head'?'งานหัว':'ปกติ'} · ราคาเริ่ม ${formatBaht(g.base_price)}</span></div><div class="group-actions"><button class="btn btn-primary btn-sm" data-photo-group="${g.id}">⚡ ถ่ายรูปแล้วลงทั้งกอง</button><button class="btn btn-ghost btn-sm" data-start-group="${g.id}">ลงทีละชิ้น</button></div></div>`).join('');
+  el.innerHTML = allGroups.map(g => `<div class="group-row"><div><b>${escapeHtml(g.group_name)}</b><span>${g.tier==='head'?'งานหัว':'ปกติ'} · ราคาเริ่ม ${formatBaht(g.base_price)}</span></div><div class="group-actions"><button class="btn btn-primary btn-sm" data-photo-group="${g.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><polygon points="13 2 4 14 11 14 10 22 20 10 13 10 13 2"/></svg>ถ่ายรูปแล้วลงทั้งกอง</button><button class="btn btn-ghost btn-sm" data-start-group="${g.id}">ลงทีละชิ้น</button></div></div>`).join('');
   el.querySelectorAll('[data-start-group]').forEach(btn => btn.onclick = () => startGroup(btn.dataset.startGroup));
   // ปุ่มนี้เปิด Photo Queue เพื่อจัดรูปก่อนกรอกรายละเอียดสินค้า
   el.querySelectorAll('[data-photo-group]').forEach(btn => btn.onclick = () => openPhotoQueue(btn.dataset.photoGroup));
@@ -298,7 +298,7 @@ async function getLotAvgCost(lotId) {
 }
 function renderBulkProgress(){ const n=bulkState.index+1,total=bulkState.rows.length; $('progressTitle').textContent=bulkState.group.group_name; $('progressMeta').textContent=`${n} / ${total}`; $('progressBar').style.width=`${Math.round((bulkState.index/total)*100)}%`; }
 $('bulkImages')?.addEventListener('change', previewBulkImages);
-function previewBulkImages(){ const files=Array.from($('bulkImages').files||[]).slice(0,2); $('photoPreview').innerHTML=files.length?files.map(f=>`<img src="${URL.createObjectURL(f)}" alt="">`).join(''):'<span>📷</span><small>เลือก 1–2 รูป</small>'; if(files.length>2) showToast('ระบบใช้แค่ 2 รูปแรก'); }
+function previewBulkImages(){ const files=Array.from($('bulkImages').files||[]).slice(0,2); $('photoPreview').innerHTML=files.length?files.map(f=>`<img src="${URL.createObjectURL(f)}" alt="">`).join(''):'<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:55%;height:55%"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><small>เลือก 1–2 รูป</small>'; if(files.length>2) showToast('ระบบใช้แค่ 2 รูปแรก'); }
 $('quickEntryForm')?.addEventListener('submit', async e=>{
   e.preventDefault();
   const files=bulkState.photoPairs ? bulkState.photoPairs[bulkState.index].filter(Boolean) : Array.from($('bulkImages').files||[]).slice(0,2); if(!files.length) return showToast('แนะนำให้ใส่อย่างน้อย 1 รูป');
@@ -312,9 +312,9 @@ $('quickEntryForm')?.addEventListener('submit', async e=>{
     return showToast('อัปโหลดรูปไม่สำเร็จ จึงยกเลิก Item นี้: ' + imageError.message);
   }
   bulkState.rows[bulkState.index]=data; bulkState.inserted++; bulkState.index++;
-  if(bulkState.index>=bulkState.rows.length){ $('bulkSummary').innerHTML=`<div class="success-box">✓ ลงกลุ่ม <b>${escapeHtml(bulkState.group.group_name)}</b> ครบ ${bulkState.inserted} รายการแล้ว</div>`; showBulkStep(3); }
+  if(bulkState.index>=bulkState.rows.length){ $('bulkSummary').innerHTML=`<div class="success-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>ลงกลุ่ม <b>${escapeHtml(bulkState.group.group_name)}</b> ครบ ${bulkState.inserted} รายการแล้ว</div>`; showBulkStep(3); }
   else if(bulkState.photoPairs){ await prepareQueuedItem(bulkState.index); }
-  else { $('quickEntryForm').reset(); $('bulkCondition').value='A'; $('bulkTier').value=bulkState.group.tier; $('bulkCost').value=await getLotAvgCost(bulkState.lotId); $('bulkPrice').value=bulkState.group.base_price; $('photoPreview').innerHTML='<span>📷</span><small>เลือก 1–2 รูป</small>'; renderBulkProgress(); $('bulkName').focus(); }
+  else { $('quickEntryForm').reset(); $('bulkCondition').value='A'; $('bulkTier').value=bulkState.group.tier; $('bulkCost').value=await getLotAvgCost(bulkState.lotId); $('bulkPrice').value=bulkState.group.base_price; $('photoPreview').innerHTML='<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:55%;height:55%"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><small>เลือก 1–2 รูป</small>'; renderBulkProgress(); $('bulkName').focus(); }
 });
 
 $('focusSingle')?.addEventListener('click',()=>{ $('itemName').focus(); window.scrollTo({top:0,behavior:'smooth'}); });
@@ -340,7 +340,7 @@ async function renderItems(){
   $('itemList').innerHTML=itemsCache.map(i=>{
     const itemImages=byItem[i.id]||[]; const im=itemImages[0];
     return `<div class="stock-row">
-      <div class="thumb">${im?`<img src="${im.image_url}" alt="">`:'👕'}</div>
+      <div class="thumb">${im?`<img src="${im.image_url}" alt="">`:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
       <div class="stock-main"><b>${escapeHtml(i.item_name)}</b><span>${escapeHtml(i.size||'-')} · ${i.condition} · ${i.tier==='head'?'งานหัว':'ปกติ'} · ${escapeHtml(i.lots?.lot_name||'-')}</span></div>
       <div class="stock-price"><small>ต้นทุน ${formatBaht(i.cost_price)}</small><b>${formatBaht(i.current_price)}</b></div>
       <span class="badge ${i.status}">${i.status==='available'?'พร้อมขาย':i.status==='sold'?'ขายแล้ว':'เสีย'}</span>
@@ -554,7 +554,7 @@ function renderBulkTable() {
     const invalid = !String(row.item_name || '').trim();
     return `<tr class="${invalid ? 'bulk-table-row-invalid' : ''}" data-row="${index}">
       <td class="row-no">${index + 1}</td>
-      <td><div class="row-photos">${photos || '<span>📷</span>'}</div></td>
+      <td><div class="row-photos">${photos || '<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:55%;height:55%"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span>'}</div></td>
       <td><input class="name-input" data-row="${index}" data-field="item_name" value="${escapeHtml(row.item_name)}" placeholder="เช่น Nike Vintage"><span class="bulk-table-status" data-error-for="${index}">${invalid ? 'ต้องใส่ชื่อสินค้า' : ''}</span></td>
       <td><input data-row="${index}" data-field="size" value="${escapeHtml(row.size)}" placeholder="M"></td>
       <td><select data-row="${index}" data-field="condition"><option value="A" ${row.condition==='A'?'selected':''}>A</option><option value="B" ${row.condition==='B'?'selected':''}>B</option></select></td>
@@ -825,7 +825,7 @@ $('saveBulkTable')?.addEventListener('click', async () => {
     clearBulkDraft();
     $('bulkTablePanel').classList.add('hidden');
     $('quickEntryPanel').classList.remove('hidden');
-    $('bulkSummary').innerHTML = `<div class="success-box">✓ บันทึกสินค้า ${inserted.length} รายการสำเร็จ</div>`;
+    $('bulkSummary').innerHTML = `<div class="success-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>บันทึกสินค้า ${inserted.length} รายการสำเร็จ</div>`;
     showBulkStep(3);
     // refresh รายการและสถิติจาก Supabase เพื่อให้หน้าหลักสะท้อนข้อมูลล่าสุด
     await loadItems();
@@ -1026,7 +1026,7 @@ async function loadItemHistory(itemId) {
       const oldValue = value?.old ?? '-'; const newValue = value?.new ?? '-';
       return `<div class="history-change"><b>${labels[field] || field}</b><span>${escapeHtml(String(oldValue))} → <strong>${escapeHtml(String(newValue))}</strong></span></div>`;
     }).join('');
-    return `<div class="history-row"><div class="history-row-head"><span>${entry.action === 'image_replace' ? '📷 เปลี่ยนรูป' : '✏️ แก้ข้อมูล'}</span><span>${new Date(entry.created_at).toLocaleString('th-TH')}</span></div><div class="history-changes">${rows || '<div>มีการเปลี่ยนแปลง</div>'}</div></div>`;
+    return `<div class="history-row"><div class="history-row-head"><span>${entry.action === 'image_replace' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:-3px"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg> เปลี่ยนรูป' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> แก้ข้อมูล'}</span><span>${new Date(entry.created_at).toLocaleString('th-TH')}</span></div><div class="history-changes">${rows || '<div>มีการเปลี่ยนแปลง</div>'}</div></div>`;
   }).join('');
 }
 

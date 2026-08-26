@@ -104,7 +104,7 @@ function renderSoldGrid(items) {
     const image = soldImagesById[item.id]?.[0];
     return `
       <button class="item-tile tile-sold" data-id="${item.id}">
-        <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : "👕"}</div>
+        <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
         <div class="name">${escapeHtml(item.item_name)}</div>
         <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}</div>
         <div class="price">${formatBaht(item.current_price)}</div>
@@ -146,12 +146,12 @@ function renderGrid(items) {
     return `
       <div class="item-tile" data-id="${item.id}">
         <button type="button" class="item-tile-main" data-action="detail" data-id="${item.id}" aria-label="ดูรายละเอียด ${escapeHtml(item.item_name)}">
-          <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : "👕"}</div>
+          <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
           <div class="name">${escapeHtml(item.item_name)}</div>
           <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}</div>
           <div class="price">${formatBaht(item.current_price ?? item.sell_price)}</div>
         </button>
-        <button type="button" class="btn btn-primary item-tile-sell" data-action="sell" data-id="${item.id}">💰 ขาย</button>
+        <button type="button" class="btn btn-primary item-tile-sell" data-action="sell" data-id="${item.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>ขาย</button>
       </div>`;
   }).join("");
 
@@ -202,7 +202,7 @@ async function openItemSaleDetail(itemId, context = "available") {
   document.getElementById("openSellConfirm").classList.toggle("hidden", context === "sold");
 
   const images = (context === "sold" ? soldImagesById : itemImagesById)[item.id] || [];
-  document.getElementById("detailImage1").innerHTML = images[0] ? `<img src="${images[0].image_url}" alt="">` : "👕";
+  document.getElementById("detailImage1").innerHTML = images[0] ? `<img src="${images[0].image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>';
   document.getElementById("detailImage2").innerHTML = images[1] ? `<img src="${images[1].image_url}" alt="">` : "＋";
   document.getElementById("detailName").textContent = item.item_name;
   document.getElementById("detailMeta").textContent = `${item.size || "ไม่ระบุไซซ์"} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}`;

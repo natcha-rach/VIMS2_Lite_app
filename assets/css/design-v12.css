@@ -71,14 +71,22 @@ h1{font-size:28px;line-height:1.25} h2{font-size:17px} h3{font-size:15px}
   position:relative;padding:11px 13px!important;border-radius:10px!important;color:#5c6480!important;
   font:500 13px var(--v11-ui)!important;gap:12px!important;transition:.18s ease;
 }
-.sidebar-links a .icon{font-size:15px!important;filter:saturate(.85);width:20px!important}
+.sidebar-links a .icon{display:inline-flex!important;width:19px!important;height:19px!important;color:#7a82a0;flex-shrink:0}
+.sidebar-links a .icon svg{width:100%;height:100%;display:block}
 .sidebar-links a:hover{background:#f2f3fa!important;color:var(--v11-text)!important}
 .sidebar-links a.active{
   background:#eef0ff!important;
   color:var(--v11-purple-2)!important;font-weight:700!important;
   box-shadow:inset 3px 0 0 var(--v11-purple);
 }
-.sidebar-links a.active .icon{filter:none}
+.sidebar-links a.active .icon{color:var(--v11-purple-2)}
+.sidebar-links a{position:relative}
+.nav-badge{
+  margin-left:auto!important;flex-shrink:0;min-width:18px;height:18px;padding:0 5px;border-radius:999px;
+  background:var(--v11-red);color:#fff;font:700 10px var(--v11-ui);line-height:18px;text-align:center;
+}
+body.sidebar-collapsed .nav-badge{position:absolute;top:6px;right:6px;margin-left:0!important}
+@media(max-width:859.98px){.nav-badge{position:absolute;top:2px;right:14px;margin-left:0!important}}
 
 /* Sidebar footer (shop / user strip, mimics template's account footer) */
 .sidebar-footer{
@@ -295,7 +303,8 @@ tbody tr:hover{background:#f8f9fd!important}
 .quick-action-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin-top:14px}
 .quick-action{display:block;padding:12px;border:1px solid var(--v11-border);border-radius:10px;background:var(--v11-surface-2);text-decoration:none;transition:.18s ease}
 .quick-action:hover{transform:translateY(-1px);border-color:#c3caf2;background:#fff}
-.quick-action span{display:block;font-size:15px;margin-bottom:7px;color:var(--v11-purple-2)}
+.quick-action span{display:flex;align-items:center;justify-content:center;width:34px;height:34px;margin-bottom:9px;color:var(--v11-purple-2)}
+.quick-action span svg{width:18px;height:18px;display:block}
 .quick-action b{display:block;color:var(--v11-text);font:600 11px var(--v11-ui)}
 .quick-action small{display:block;color:#9aa1bf;font:400 9px var(--v11-ui);margin-top:2px}
 @media(max-width:1100px){.pulse-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.v11-action-row{grid-template-columns:1fr}.quick-action-grid{grid-template-columns:repeat(4,minmax(0,1fr))}}

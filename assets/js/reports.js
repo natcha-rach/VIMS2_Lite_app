@@ -58,7 +58,7 @@ async function loadReport() {
     ]);
     const err=salesR.error||expensesR.error||itemsR.error||lotsR.error; if(err) throw err;
     const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[], items=itemsR.data||[], lots=lotsR.data||[];
-    renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales,items); renderLotBreakdown(allSales,items,lots); renderWeekendBreakdown(sales); renderSaleList(sales); await renderTrend(start,end);
+    renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales,items); renderLotBreakdown(allSales,items,lots); renderWeekendBreakdown(sales); renderTopProfitItems(sales); renderSaleList(sales); await renderTrend(start,end);
   } catch(err) { console.error(err); showToast("โหลดรายงานไม่สำเร็จ: "+(err.message||err)); }
 }
 
@@ -106,6 +106,20 @@ function renderWeekendBreakdown(sales) {
   const by={6:{label:"เสาร์",count:0,revenue:0,profit:0},0:{label:"อาทิตย์",count:0,revenue:0,profit:0}};
   sales.filter(s=>s.channel==="street_market").forEach(s=>{const k=new Date(s.sale_date).getDay();if(!by[k])return;by[k].count++;by[k].revenue+=Number(s.sale_price||0);by[k].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
   document.getElementById("repWeekendBreakdown").innerHTML=[6,0].map(k=>{const v=by[k];return `<div class="weekend-report-card"><span>${v.label}</span><b>${formatBaht(v.revenue)}</b><small>${v.count} ชิ้น · กำไร ${formatBaht(v.profit)}</small></div>`;}).join("");
+}
+// ตัวทำกำไรสูงสุด: ใช้ราคาขายจริงลบต้นทุนจริง ไม่ใช้ราคาตั้งต้น รวมสินค้าชิ้นเดียวกันที่ขายหลายครั้งเข้าด้วยกัน
+function renderTopProfitItems(sales) {
+  const by = {};
+  sales.forEach(s => {
+    const it = s.items;
+    if (!it) return;
+    const key = s.item_id;
+    const profit = Number(s.sale_price||0) - Number(s.cost_price||0);
+    by[key] ||= { item: it, count: 0, revenue: 0, profit: 0 };
+    by[key].count++; by[key].revenue += Number(s.sale_price||0); by[key].profit += profit;
+  });
+  const top = Object.values(by).sort((a,b) => b.profit - a.profit).slice(0, 10);
+  document.getElementById("repTopProfitItems").innerHTML = top.length ? top.map((x,i) => `<div class="rank-item"><span class="rank-no">${i+1}</span><div><b>${escapeHtml(x.item.item_name)}</b><small>${escapeHtml(x.item.size||"-")} · ${x.item.condition||"-"} · ${x.item.tier==='head'?"งานหัว":"ปกติ"}</small></div><div class="rank-value">${formatBaht(x.profit)}<small>${x.count} ชิ้น</small></div></div>`).join("") : `<div class="empty-state">ยังไม่มีข้อมูลการขายในช่วงนี้</div>`;
 }
 function renderSaleList(sales) {
   document.getElementById("repSaleList").innerHTML=sales.length?sales.map(s=>`<div class="sale-row"><div><div class="sale-name">${escapeHtml(s.items?.item_name||"สินค้า")}</div><div class="sale-meta">${formatDate(s.sale_date)} · ${PAYMENT_LABELS[s.payment_method]||s.payment_method} · ${CHANNEL_LABELS[s.channel]||s.channel||"-"}</div></div><div class="sale-price">${formatBaht(s.sale_price)}</div></div>`).join(""):"<div class=empty-state>ไม่มีรายการขายในช่วงนี้</div>";
