@@ -40,18 +40,33 @@
 }
 .period-btn:hover { border-color: var(--color-ink-faint); color: var(--color-ink); }
 .period-btn.active { background: var(--color-tan); border-color: var(--color-tan); color: #06251c; }
-.custom-period { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-left: 0; }
-.custom-period input {
+/* Dropdown แทน pill-button 3 ปุ่มเดิม (รายวัน/รายเดือน/รายปี) — กดครั้งเดียวเห็นตัวเลือกทั้งหมด */
+.period-mode-select {
+  border: 1px solid var(--color-line);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-radius: 999px;
+  padding: 8px 30px 8px 14px;
+  font: 600 12px var(--font-body);
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%235c6480' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px;
+}
+.period-date-wrap { display: flex; align-items: center; margin-left: 4px; }
+.period-date-input {
   border: 1px solid var(--color-line);
   background: var(--color-surface-2);
   color: var(--color-ink);
   border-radius: 8px;
-  padding: 8px;
+  padding: 8px 10px;
   font: 12px var(--font-body);
   color-scheme: dark;
   min-width: 0;
-  flex: 1 1 130px;
 }
+.period-date-input.hidden { display: none; }
 
 /* ---------- KPI row (เทียบกับการ์ด "Today's Sales" ใน template) ----------
    หมายเหตุ: บั๊กเดิม — คลาสนี้เคยมีแค่ grid-template-columns โดยไม่มี display:grid
@@ -113,12 +128,7 @@
 .payment-cards span { display: block; color: var(--color-ink-soft); font-size: 12px; }
 .payment-cards b { display: block; font-size: 20px; margin-top: 4px; font-family: var(--font-display); font-weight: 400; }
 
-/* ---------- ยอดขายตามช่องทาง ---------- */
-.channel-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.channel-card { border: 1px solid var(--color-line); background: var(--color-surface-2); border-radius: 12px; padding: 13px; }
-.channel-card .channel-top { display: flex; justify-content: space-between; gap: 10px; }
-.channel-card b { font-size: 18px; }
-.channel-card small { display: block; color: var(--color-ink-soft); }
+/* ---------- ยอดขายตามช่องทาง — ย้ายไปแสดงเป็นตารางในหน้า Reports แล้ว (renderChannelBreakdown) ---------- */
 .bar-track { height: 7px; background: var(--color-line-soft); border-radius: 99px; overflow: hidden; margin: 10px 0 6px; }
 .bar-fill { height: 100%; background: var(--color-tan); border-radius: 99px; }
 
@@ -144,6 +154,18 @@
 }
 .markdown-item b { display: block; }
 .markdown-item small { display: block; color: var(--color-ink-soft); }
+
+/* ---------- Quick Insights (แทน Tier/Payment/Channel table เดิมที่ซ้ำกับ Reports) ---------- */
+.quick-insights { display: grid; gap: 8px; }
+.insight-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 13px; border: 1px solid var(--color-line); background: var(--color-surface-2);
+  border-radius: 12px;
+}
+.insight-row svg { width: 18px; height: 18px; flex: none; color: var(--color-ink-soft); }
+.insight-row span { flex: 1; font-size: 12px; color: var(--color-ink-soft); }
+.insight-row b { font-size: 13px; }
+.insight-row small { display: block; text-align: right; color: var(--color-ink-soft); }
 
 .profit { color: var(--color-profit); }
 .loss { color: var(--color-loss); }
@@ -176,7 +198,6 @@
 @media (min-width: 640px) {
   .dashboard-head { flex-direction: row; align-items: flex-end; justify-content: space-between; }
   .period-control { justify-content: flex-end; }
-  .channel-grid { grid-template-columns: repeat(2, 1fr); }
   .lot-recovery-row { grid-template-columns: 180px 1fr 90px; gap: 12px; align-items: center; }
   .recovery-value { text-align: right; }
 }
@@ -186,10 +207,9 @@
   .dashboard-two-col { grid-template-columns: 1fr 1fr; }
 }
 
-/* ---------- ≥980px: iPad Pro แนวนอน / เดสก์ท็อปเล็ก — KPI ครบ 4 คอลัมน์ ---------- */
+/* ---------- ≥980px: iPad Pro แนวนอน / เดสก์ท็อปเล็ก — KPI ครบ 3 คอลัมน์ x 2 แถว (6 การ์ด) ---------- */
 @media (min-width: 980px) {
-  .dashboard-main-kpis { grid-template-columns: repeat(4, 1fr); }
-  .channel-grid { grid-template-columns: repeat(3, 1fr); }
+  .dashboard-main-kpis { grid-template-columns: repeat(3, 1fr); }
 }
 
 /* ---------- ≥1400px: เดสก์ท็อปจอกว้าง — ขยายพื้นที่ใช้งาน ---------- */

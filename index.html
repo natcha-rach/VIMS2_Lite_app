@@ -61,83 +61,71 @@
         </div>
         <div class="dashboard-head">
           <div class="period-control">
-            <button class="period-btn active" data-period="today">วันนี้</button
-            ><button class="period-btn" data-period="7d">7 วัน</button
-            ><button class="period-btn" data-period="month">เดือนนี้</button
-            ><button class="period-btn" data-period="3m">3 เดือน</button
-            ><button class="period-btn" data-period="year">ปีนี้</button
-            ><button class="period-btn" data-period="all">ทั้งหมด</button>
-            <div class="custom-period">
-              <input type="date" id="fromDate" /><span>ถึง</span
-              ><input type="date" id="toDate" /><button
-                class="btn btn-ghost btn-sm"
-                id="applyCustom"
-              >
-                ใช้ช่วงนี้
-              </button>
+            <select id="periodModeSelect" class="period-mode-select">
+              <option value="day" selected>รายวัน</option>
+              <option value="month">รายเดือน</option>
+              <option value="year">รายปี</option>
+            </select>
+            <div class="period-date-wrap">
+              <input type="date" id="periodDate" class="period-date-input" />
+              <input type="month" id="periodMonth" class="period-date-input hidden" />
+              <select id="periodYear" class="period-date-input hidden"></select>
             </div>
           </div>
         </div>
 
-        <section class="v11-today-pulse" aria-label="ภาพรวมวันนี้">
+        <section class="v11-today-pulse" aria-label="ภาพรวมช่วงที่เลือก">
           <div class="pulse-heading">
             <div>
-              <span class="eyebrow">TODAY PULSE</span>
-              <h2>ร้านวันนี้เป็นอย่างไร?</h2>
-              <p>ตัวเลขสำคัญสำหรับตัดสินใจใน 30 วินาที โดยไม่ขึ้นกับตัวกรองช่วงเวลา</p>
+              <span class="eyebrow">PULSE</span>
+              <h2>ร้านเป็นอย่างไรบ้าง?</h2>
+              <p>ตัวเลขสำคัญของช่วงเวลาที่เลือกด้านบน</p>
             </div>
             <div class="pulse-date" id="pulseDate">วันนี้</div>
           </div>
-          <div class="pulse-grid" id="todayPulse">
-            <div class="pulse-card"><span>ยอดขายวันนี้</span><b>กำลังโหลด...</b></div>
-            <div class="pulse-card"><span>กำไรขั้นต้นวันนี้</span><b>กำลังโหลด...</b></div>
-            <div class="pulse-card"><span>ขายแล้ววันนี้</span><b>กำลังโหลด...</b></div>
-            <div class="pulse-card"><span>เงินสดรับวันนี้</span><b>กำลังโหลด...</b></div>
-            <div class="pulse-card"><span>พร้อมขายตอนนี้</span><b>กำลังโหลด...</b></div>
+          <div class="dashboard-kpi-grid dashboard-main-kpis" id="todayPulse">
+            <div class="stat-card">
+              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg></span> ยอดขาย</div>
+              <div class="value" id="statRevenue">-</div>
+              <div class="stat-meta-row"><small id="statRevenueMeta"></small><span class="stat-delta" id="statRevenueDelta"></span></div>
+              <div class="stat-spark"><canvas id="statRevenueSpark"></canvas></div>
+            </div>
+            <div class="stat-card">
+              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="14 6 21 6 21 13"/></svg></span> กำไรขั้นต้น</div>
+              <div class="value" id="statGrossProfit">-</div>
+              <div class="stat-meta-row"><small id="statMargin"></small><span class="stat-delta" id="statGrossProfitDelta"></span></div>
+              <div class="stat-spark"><canvas id="statGrossProfitSpark"></canvas></div>
+            </div>
+            <div class="stat-card">
+              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2V2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/></svg></span> ค่าใช้จ่าย</div>
+              <div class="value" id="statExpenses">-</div>
+              <div class="stat-meta-row"><small>ค่าใช้จ่ายที่บันทึกในช่วงนี้</small><span class="stat-delta" id="statExpensesDelta"></span></div>
+            </div>
+            <div class="stat-card">
+              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg></span> กำไรสุทธิ</div>
+              <div class="value" id="statNetProfit">-</div>
+              <div class="stat-meta-row"><small>กำไรขั้นต้น - ค่าใช้จ่าย</small><span class="stat-delta" id="statNetProfitDelta"></span></div>
+            </div>
+            <div class="stat-card">
+              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v18"/><path d="M7 4h7a4 4 0 0 1 0 8H7"/><path d="M7 12h6a4 4 0 0 1 0 8H7"/><line x1="4" y1="9" x2="10" y2="9"/></svg></span> เงินสดรับ</div>
+              <div class="value" id="statCash">-</div>
+              <div class="stat-meta-row"><small>เฉพาะรายการที่จ่ายเงินสด</small><span class="stat-delta" id="statCashDelta"></span></div>
+            </div>
+            <div class="stat-card">
+              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span> พร้อมขายตอนนี้</div>
+              <div class="value" id="statAvailable">-</div>
+              <div class="stat-meta-row"><small id="statAvailableMeta"></small></div>
+            </div>
           </div>
         </section>
 
-        <section class="v11-action-row">
-          <div class="tag-card action-center-card">
-            <div class="v11-section-head">
-              <div><span class="eyebrow">ACTION CENTER</span><h2>วันนี้ควรทำอะไร?</h2><p>ระบบคัดสิ่งที่ควรให้ความสนใจจากข้อมูลสต็อกและยอดขาย</p></div>
-              <span class="action-count" id="actionCount">0 เรื่อง</span>
-            </div>
-            <div id="actionCenter" class="action-list"></div>
-          </div>
-          <div class="tag-card quick-action-card">
-            <div class="v11-section-head"><div><span class="eyebrow">QUICK ACTIONS</span><h2>ทำงานเร็ว</h2><p>ทางลัดสำหรับงานที่ทำบ่อย</p></div></div>
-            <div class="quick-action-grid">
-              <a href="sell.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="18" cy="21" r="1.4"/><path d="M2.5 3h2.2l2.3 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L21 8H6"/></svg></span><b>ขายสินค้า</b><small>เปิด POS</small></a>
-              <a href="items.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg></span><b>เพิ่มสินค้า</b><small>จัดการ Stock</small></a>
-              <a href="lots.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span><b>รับ Lot</b><small>เพิ่มกระสอบใหม่</small></a>
-              <a href="reports.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="8 7 17 7 17 16"/></svg></span><b>ดูรายงาน</b><small>วิเคราะห์ยอด</small></a>
-            </div>
-          </div>
-        </section>
-
-        <section class="dashboard-kpi-grid dashboard-main-kpis">
-          <div class="stat-card">
-            <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg></span> ยอดขาย</div>
-            <div class="value" id="statRevenue">-</div>
-            <div class="stat-meta-row"><small id="statRevenueMeta"></small><span class="stat-delta" id="statRevenueDelta"></span></div>
-            <div class="stat-spark"><canvas id="statRevenueSpark"></canvas></div>
-          </div>
-          <div class="stat-card">
-            <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="14 6 21 6 21 13"/></svg></span> กำไรขั้นต้น</div>
-            <div class="value" id="statGrossProfit">-</div>
-            <div class="stat-meta-row"><small id="statMargin"></small><span class="stat-delta" id="statGrossProfitDelta"></span></div>
-            <div class="stat-spark"><canvas id="statGrossProfitSpark"></canvas></div>
-          </div>
-          <div class="stat-card">
-            <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2V2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/></svg></span> ค่าใช้จ่าย</div>
-            <div class="value" id="statExpenses">-</div>
-            <div class="stat-meta-row"><small>ค่าใช้จ่ายที่บันทึกในช่วงนี้</small><span class="stat-delta" id="statExpensesDelta"></span></div>
-          </div>
-          <div class="stat-card">
-            <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg></span> กำไรสุทธิ</div>
-            <div class="value" id="statNetProfit">-</div>
-            <div class="stat-meta-row"><small>กำไรขั้นต้น - ค่าใช้จ่าย</small><span class="stat-delta" id="statNetProfitDelta"></span></div>
+        <section class="tag-card quick-action-card">
+          <div class="v11-section-head"><div><span class="eyebrow">QUICK ACTIONS</span><h2>ทำงานเร็ว</h2><p>ทางลัดสำหรับงานที่ทำบ่อย</p></div></div>
+          <div class="quick-action-grid">
+            <a href="sell.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="18" cy="21" r="1.4"/><path d="M2.5 3h2.2l2.3 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L21 8H6"/></svg></span><b>ขายสินค้า</b><small>เปิด POS</small></a>
+            <a href="items.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg></span><b>เพิ่มสินค้า</b><small>จัดการ Stock</small></a>
+            <a href="lots.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span><b>รับ Lot</b><small>เพิ่มกระสอบใหม่</small></a>
+            <a href="reports.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="8 7 17 7 17 16"/></svg></span><b>ดูรายงาน</b><small>วิเคราะห์ยอด</small></a>
           </div>
         </section>
 
@@ -160,31 +148,6 @@
           </div>
         </section>
 
-        <section class="v112-intelligence" aria-label="Business Intelligence">
-          <div class="tag-card intelligence-hero">
-            <div class="v11-section-head">
-              <div>
-                <span class="eyebrow">BUSINESS INTELLIGENCE</span>
-                <h2>ร้านควรโฟกัสอะไรต่อ?</h2>
-                <p>ระบบอ่านยอดขาย สต็อก Margin และเงินทุน แล้วสรุปเป็นสัญญาณที่นำไปใช้ตัดสินใจได้ทันที</p>
-              </div>
-              <span class="insight-status" id="insightStatus">กำลังวิเคราะห์</span>
-            </div>
-            <div class="insight-grid" id="insightGrid"></div>
-          </div>
-          <div class="tag-card forecast-card">
-            <div class="v11-section-head">
-              <div>
-                <span class="eyebrow">RUN RATE</span>
-                <h2>ถ้ารักษาจังหวะนี้ต่อไป</h2>
-                <p>เป็นค่าประมาณจากยอดขายเฉลี่ยต่อวันของช่วงที่เลือก ไม่ใช่การพยากรณ์รับประกัน</p>
-              </div>
-            </div>
-            <div class="forecast-main" id="forecastMain"></div>
-            <div class="forecast-meta" id="forecastMeta"></div>
-          </div>
-        </section>
-
         <section class="v11-analytics-grid">
           <div class="tag-card v11-chart-card">
             <div class="v11-chart-header">
@@ -203,9 +166,10 @@
           </div>
           <div class="tag-card v11-chart-card">
             <div class="v11-chart-header">
-              <div><h2>Payment Mix</h2><p>สัดส่วนเงินรับตามวิธีจ่าย</p></div>
+              <div><h2>สรุปเพิ่มเติม</h2><p>ช่องทาง / วิธีจ่าย / Tier ที่ทำผลงานดีที่สุดของช่วงนี้</p></div>
+              <a href="reports.html" class="btn btn-ghost btn-sm">ดูรายละเอียด</a>
             </div>
-            <div class="v11-donut-wrap"><canvas id="paymentMixChart"></canvas><div class="v11-donut-center"><b id="paymentMixTotal">-</b><span>ยอดรับทั้งหมด</span></div></div>
+            <div class="quick-insights" id="quickInsights"></div>
           </div>
         </section>
 
@@ -213,44 +177,6 @@
           <div class="tag-card v11-chart-card">
             <div class="v11-chart-header"><div><h2>Inventory Health</h2><p>สุขภาพสต็อกปัจจุบัน</p></div></div>
             <div class="v11-donut-wrap"><canvas id="inventoryHealthChart"></canvas></div>
-          </div>
-          <div class="tag-card">
-            <div class="card-title-row"><div><h2>Sales Channels</h2><p class="muted">ช่องทางที่ทำยอดขายให้ร้านมากที่สุด</p></div></div>
-            <div class="channel-grid" id="channelGrid"></div>
-          </div>
-        </div>
-
-        <div class="tag-card">
-          <h2>เงินทุน & สต็อก</h2>
-          <div class="finance-grid" id="capitalStock"></div>
-        </div>
-
-        <div class="dashboard-two-col">
-          <div class="tag-card">
-            <div class="card-title-row">
-              <div>
-                <h2>ประสิทธิภาพตาม Tier</h2>
-                <p class="muted">งานหัว / Premium เทียบกับสินค้าปกติ</p>
-              </div>
-            </div>
-            <div class="table-scroll">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Tier</th>
-                    <th style="text-align: right">ขาย</th>
-                    <th style="text-align: right">ยอดขาย</th>
-                    <th style="text-align: right">กำไร</th>
-                    <th style="text-align: right">Margin</th>
-                  </tr>
-                </thead>
-                <tbody id="tierBreakdown">
-                  <tr>
-                    <td colspan="5">กำลังโหลด...</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           </div>
           <div class="tag-card">
             <div class="card-title-row">
@@ -263,34 +189,6 @@
           </div>
         </div>
 
-        <div class="tag-card">
-          <div class="card-title-row">
-            <div>
-              <h2>Performance ตาม Lot</h2>
-              <p class="muted">ยอดสะสมตลอดอายุ Lot — ดูยอดขาย ทุนคงเหลือ และกำไรของแต่ละกระสอบ</p>
-            </div>
-            <a href="lots.html" class="btn btn-ghost btn-sm">จัดการ Lot</a>
-          </div>
-          <div class="table-scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Lot</th>
-                  <th style="text-align: right">ทุนทั้งหมด</th>
-                  <th style="text-align: right">ทั้งหมด</th>
-                  <th style="text-align: right">ขายแล้ว</th>
-                  <th style="text-align: right">เหลือ</th>
-                  <th style="text-align: right">ยอดขายสะสม</th>
-                  <th style="text-align: right">ต้นทุนที่ขาย</th>
-                  <th style="text-align: right">ทุนคงเหลือ</th>
-                  <th style="text-align: right">กำไร</th>
-                  <th style="text-align: right">คืนทุน</th>
-                </tr>
-              </thead>
-              <tbody id="lotBreakdown"><tr><td colspan="10">กำลังโหลด...</td></tr></tbody>
-            </table>
-          </div>
-        </div>
         <div class="dashboard-two-col">
           <div class="tag-card">
             <div class="card-title-row">

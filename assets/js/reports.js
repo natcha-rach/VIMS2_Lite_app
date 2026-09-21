@@ -47,18 +47,18 @@ async function loadReport() {
   const {start,end}=getMainRange();
   try {
     /* Query ครั้งเดียวแล้วคำนวณหลายมุมใน browser เพื่อให้หน้า report ตอบสนองเร็ว */
-    // fetchAllRows กัน items/sales ตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
-    // ดึง Sales ทั้งหมด 1 ครั้ง เพราะ Performance ตาม Lot ต้องใช้ยอดสะสมตลอดอายุ Lot
-    // ส่วนการ์ดสรุป/รายการขายด้านบนยังกรองตามช่วงเวลาที่ผู้ใช้เลือก
-    const [salesR, expensesR, itemsR, lotsR] = await Promise.all([
+    // fetchAllRows กัน sales ตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
+    // หมายเหตุ V13: ไม่ดึง items/lots ทั้งตารางมาที่นี่แล้ว —
+    // - Tier breakdown ใช้ items(...).tier ที่ join มากับ sales อยู่แล้ว ไม่ต้อง query items แยก
+    // - Performance ตาม Lot ย้ายไปคำนวณผ่าน RPC get_lot_performance() แทน (ดู renderLotBreakdown)
+    const [salesR, expensesR] = await Promise.all([
       fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method,note,items(item_name,size,condition,tier)").order("sale_date",{ascending:false})),
-      fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,amount,category,note").gte("expense_date",start.toISOString().slice(0,10)).lte("expense_date",new Date(end.getTime()-86400000).toISOString().slice(0,10))),
-      fetchAllRows(() => supabaseClient.from("items").select("id,item_name,size,condition,tier,lot_id")),
-      fetchAllRows(() => supabaseClient.from("lots").select("id,lot_name,total_cost,total_items,purchase_date"))
+      fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,amount,category,note").gte("expense_date",start.toISOString().slice(0,10)).lte("expense_date",new Date(end.getTime()-86400000).toISOString().slice(0,10)))
     ]);
-    const err=salesR.error||expensesR.error||itemsR.error||lotsR.error; if(err) throw err;
-    const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[], items=itemsR.data||[], lots=lotsR.data||[];
-    renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales,items); renderLotBreakdown(allSales,items,lots); renderWeekendBreakdown(sales); renderTopProfitItems(sales); renderSaleList(sales); await renderTrend(start,end);
+    const err=salesR.error||expensesR.error; if(err) throw err;
+    const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[];
+    renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales); renderWeekendBreakdown(sales); renderTopProfitItems(sales); renderSaleList(sales);
+    await Promise.all([renderLotBreakdown(), renderTrend(start,end)]);
   } catch(err) { console.error(err); showToast("โหลดรายงานไม่สำเร็จ: "+(err.message||err)); }
 }
 
@@ -76,30 +76,31 @@ function renderChannelBreakdown(sales) {
   const by={}; sales.forEach(s=>{const k=s.channel||"other";by[k] ||= {count:0,revenue:0,profit:0};by[k].count++;by[k].revenue+=Number(s.sale_price||0);by[k].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
   document.getElementById("repChannelBreakdown").innerHTML=Object.keys(by).length?Object.entries(by).sort((a,b)=>b[1].revenue-a[1].revenue).map(([k,v])=>`<tr><td>${CHANNEL_LABELS[k]||k}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.revenue)}</td><td style="text-align:right" class="${v.profit>=0?'profit':'loss'}">${formatBaht(v.profit)}</td></tr>`).join(""):"<tr><td colspan=4 class=empty-state>ไม่มีรายการขาย</td></tr>";
 }
-function renderTierBreakdown(sales,items) {
-  const by={normal:{count:0,revenue:0,profit:0},head:{count:0,revenue:0,profit:0}}; const map=Object.fromEntries(items.map(i=>[i.id,i]));
-  sales.forEach(s=>{const k=map[s.item_id]?.tier==="head"?"head":"normal";by[k].count++;by[k].revenue+=Number(s.sale_price||0);by[k].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
+function renderTierBreakdown(sales) {
+  // ใช้ tier ที่ join มากับ sales (sales.items.tier) แทนการดึงตาราง items ทั้งตารางมา map เอง
+  const by={normal:{count:0,revenue:0,profit:0},head:{count:0,revenue:0,profit:0}};
+  sales.forEach(s=>{const k=s.items?.tier==="head"?"head":"normal";by[k].count++;by[k].revenue+=Number(s.sale_price||0);by[k].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
   document.getElementById("repTierBreakdown").innerHTML=Object.entries(by).map(([k,v])=>`<tr><td>${TIER_LABELS[k]}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.revenue)}</td><td style="text-align:right" class="${v.profit>=0?'profit':'loss'}">${formatBaht(v.profit)}</td></tr>`).join("");
 }
 // Performance ตาม Lot เป็นยอดสะสมตลอดอายุ Lot เพื่อไม่ให้การเปลี่ยนช่วงรายงานทำให้ตัวเลขทุนของกระสอบดูสับสน
-function renderLotBreakdown(sales,items,lots) {
-  // ตารางนี้เป็นยอดสะสมตลอดอายุ Lot เพื่อใช้ติดตามทุน/กำไรของกระสอบโดยตรง
-  const map=Object.fromEntries(items.map(i=>[i.id,i]));
-  const by=Object.fromEntries(lots.map(l=>[l.id,{lot:l,totalItems:Number(l.total_items||0),sold:0,revenue:0,costSold:0,remaining:0,remainingCapital:Number(l.total_cost||0),profit:0,recoveryPct:0}]));
-  sales.forEach(s=>{const i=map[s.item_id],r=i&&by[i.lot_id];if(!r)return;r.sold++;r.revenue+=Number(s.sale_price||0);r.costSold+=Number(s.cost_price||0);});
-  Object.values(by).forEach(r=>{r.remaining=Math.max(0,r.totalItems-r.sold);r.remainingCapital=Math.max(0,Number(r.lot.total_cost||0)-r.costSold);r.profit=r.revenue-r.costSold;r.recoveryPct=percent(r.revenue,Number(r.lot.total_cost||0));});
-  const rows=Object.values(by).filter(x=>x.totalItems>0||x.sold>0).sort((a,b)=>b.revenue-a.revenue);
-  document.getElementById("repLotBreakdown").innerHTML=rows.length?rows.map(x=>`<tr>
-    <td><b>${escapeHtml(x.lot.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(x.lot.purchase_date)}</small></td>
-    <td style="text-align:right">${formatBaht(x.lot.total_cost)}</td>
-    <td style="text-align:right">${x.totalItems}</td>
+// V13: คำนวณผ่าน RPC get_lot_performance() (Postgres SUM/GROUP BY) แทนการดึง items+lots
+// ทั้งตารางมา group ฝั่ง browser — ลดข้อมูลที่ต้องโหลดเมื่อร้านมีสินค้า/รายการขายเยอะขึ้นเรื่อยๆ
+async function renderLotBreakdown() {
+  const el = document.getElementById("repLotBreakdown");
+  const { data, error } = await supabaseClient.rpc("get_lot_performance");
+  if (error) { console.error(error); el.innerHTML = "<tr><td colspan=10 class=empty-state>โหลด Performance ตาม Lot ไม่สำเร็จ</td></tr>"; return; }
+  const rows = (data||[]).filter(x=>Number(x.total_items)>0||Number(x.sold)>0);
+  el.innerHTML=rows.length?rows.map(x=>`<tr>
+    <td><b>${escapeHtml(x.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(x.purchase_date)}</small></td>
+    <td style="text-align:right">${formatBaht(x.total_cost)}</td>
+    <td style="text-align:right">${x.total_items}</td>
     <td style="text-align:right">${x.sold}</td>
     <td style="text-align:right">${x.remaining}</td>
     <td style="text-align:right">${formatBaht(x.revenue)}</td>
-    <td style="text-align:right">${formatBaht(x.costSold)}</td>
-    <td style="text-align:right">${formatBaht(x.remainingCapital)}</td>
+    <td style="text-align:right">${formatBaht(x.cost_sold)}</td>
+    <td style="text-align:right">${formatBaht(x.remaining_capital)}</td>
     <td style="text-align:right" class="${x.profit>=0?'profit':'loss'}">${formatBaht(x.profit)}</td>
-    <td style="text-align:right">${x.recoveryPct.toFixed(1)}%</td>
+    <td style="text-align:right">${Number(x.recovery_pct).toFixed(1)}%</td>
   </tr>`).join(""):"<tr><td colspan=10 class=empty-state>ยังไม่มีข้อมูล Lot</td></tr>";
 }
 function renderWeekendBreakdown(sales) {
