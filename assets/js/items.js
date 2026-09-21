@@ -95,6 +95,15 @@ function maybeOfferBulkDraft() {
   showToast('กู้ Draft แล้ว — กรุณาเลือกรูปใหม่ก่อนบันทึก');
 }
 
+// เตือนก่อนปิด/รีเฟรชแท็บถ้ามีรูปที่ยังไม่บันทึกอยู่ใน Bulk Table
+// (รูปเป็น File object เก็บได้แค่ใน memory ของแท็บนี้ — Draft กู้คืนได้แค่ตัวอักษร ไม่ใช่รูป)
+window.addEventListener('beforeunload', (event) => {
+  const hasUnsavedPhotos = (bulkTableState.rows || []).some(row => row.files?.length > 0);
+  if (!hasUnsavedPhotos) return;
+  event.preventDefault();
+  event.returnValue = '';
+});
+
 // Realtime ของหน้า Items: reload เมื่ออีก Device เพิ่ม/แก้/ขาย Item หรือเปลี่ยน Group
 window.addEventListener('vims:realtime', (event) => {
   const table = event.detail?.table;
@@ -164,8 +173,20 @@ async function loadGroups(lotId = $('lotSelect')?.value) {
 }
 
 function renderGroupOptions() {
+  // Realtime อาจสั่ง re-render กลางที่ผู้ใช้กำลังกรอกอยู่ — จำค่าที่เลือกไว้แล้วคืนกลับหลัง render
+  // เพื่อไม่ให้ "กลุ่มปัจจุบัน" เด้งกลับเป็นไม่ระบุกลุ่มระหว่างที่กำลังลงสินค้า
   const options = '<option value="">ไม่ระบุกลุ่ม</option>' + allGroups.map(g => `<option value="${g.id}">${escapeHtml(g.group_name)} · ${formatBaht(g.base_price)}</option>`).join('');
-  if ($('groupSelect')) $('groupSelect').innerHTML = options; if ($('importGroupSelect')) $('importGroupSelect').innerHTML = allGroups.map(g => `<option value="${g.id}">${escapeHtml(g.group_name)} · ${formatBaht(g.base_price)}</option>`).join('');
+  const importOptions = allGroups.map(g => `<option value="${g.id}">${escapeHtml(g.group_name)} · ${formatBaht(g.base_price)}</option>`).join('');
+  if ($('groupSelect')) {
+    const prev = $('groupSelect').value;
+    $('groupSelect').innerHTML = options;
+    if (prev && allGroups.some(g => g.id === prev)) $('groupSelect').value = prev;
+  }
+  if ($('importGroupSelect')) {
+    const prev = $('importGroupSelect').value;
+    $('importGroupSelect').innerHTML = importOptions;
+    if (prev && allGroups.some(g => g.id === prev)) $('importGroupSelect').value = prev;
+  }
 }
 
 function renderGroups() {
@@ -632,6 +653,7 @@ function fillDownCurrentField() {
   }
   // ชื่อสินค้าเป็น field ที่มี validation จึงต้อง refresh สีของแถวหลัง Fill ลง
   if (field === 'item_name') refreshBulkTableValidationRows();
+  saveBulkDraft(); // Fill ลงแก้หลายสิบแถวพร้อมกัน ต้องบันทึก Draft ทันทีเหมือนแก้ทีละช่อง
   showToast(`Fill ${field} ลง ${Math.max(0, bulkTableState.rows.length - row - 1)} แถว`);
 }
 
@@ -692,6 +714,7 @@ function pasteBulkMatrix(text, startRow, startField) {
     });
   });
   refreshBulkTableValidationRows();
+  if (changed > 0) saveBulkDraft(); // วางจาก Excel มักแก้หลายสิบ/ร้อยช่องในทีเดียว ต้องกันหายเหมือนกัน
   return changed > 0;
 }
 
@@ -759,14 +782,21 @@ $('copyCurrentRow')?.addEventListener('click', copyCurrentBulkRow);
 $('pasteClipboard')?.addEventListener('click', pasteFromClipboardButton);
 
 // ตรวจข้อมูลทั้งหมดก่อนเริ่มเขียนลง Supabase
+// คืนสรุปรวมทุกปัญหา เช่น "ไม่มีชื่อ 12 รายการ · ไม่มีรูป 4 รายการ" แทนที่จะหยุดที่แถวแรกที่เจอ
 function validateBulkTable() {
   const rows = bulkTableState.rows || [];
   if (!rows.length) return 'ยังไม่มีรายการในตาราง';
-  const empty = rows.findIndex(row => !String(row.item_name || '').trim());
-  if (empty >= 0) return `รายการ #${empty + 1} ยังไม่มีชื่อสินค้า`;
-  const invalidPhotos = rows.findIndex(row => row.files.length < 1 || row.files.length > 2);
-  if (invalidPhotos >= 0) return `รายการ #${invalidPhotos + 1} ต้องมีรูป 1–2 รูป`;
-  return '';
+
+  const noName = rows.filter(row => !String(row.item_name || '').trim()).length;
+  const noPhoto = rows.filter(row => (row.files?.length || 0) < 1).length;
+  const tooManyPhoto = rows.filter(row => (row.files?.length || 0) > 2).length;
+
+  const parts = [];
+  if (noName) parts.push(`ไม่มีชื่อ ${noName} รายการ`);
+  if (noPhoto) parts.push(`ไม่มีรูป ${noPhoto} รายการ`);
+  if (tooManyPhoto) parts.push(`รูปเกิน 2 รูป ${tooManyPhoto} รายการ`);
+
+  return parts.join(' · ');
 }
 
 // บันทึก Bulk Table: insert items เป็นชุด แล้ว upload รูปของแต่ละ Item แบบจำกัด concurrency

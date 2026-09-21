@@ -342,12 +342,15 @@ function showToast(msg) {
 //      ↓
 //   โหลด Stock Grid ใหม่
 // ==========================================================
+const reloadSellDebounced = debounce(() => {
+  loadSellGrid();
+  if (activeTab === 'sold') loadSoldGrid();
+}, 500);
 window.addEventListener('vims:realtime', (event) => {
   const table = event.detail?.table;
   if (table === 'page_refresh' || ['items', 'item_images', 'sales'].includes(table)) {
-    loadSellGrid();
     soldLoaded = false; // ให้โหลดของขายแล้วใหม่ครั้งถัดไปที่สลับมาแท็บนี้
-    if (activeTab === 'sold') loadSoldGrid();
+    reloadSellDebounced();
   }
 });
 

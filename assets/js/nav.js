@@ -59,8 +59,9 @@
   }
   updateStockAgingBadge();
   // Realtime: ถ้ามีสินค้า/สถานะเปลี่ยนจากอุปกรณ์อื่น ให้คำนวณ badge ใหม่
+  const updateStockAgingBadgeDebounced = debounce(updateStockAgingBadge, 700);
   window.addEventListener("vims:realtime", (event) => {
     const table = event.detail?.table;
-    if (table === "page_refresh" || table === "items") updateStockAgingBadge();
+    if (table === "page_refresh" || table === "items") updateStockAgingBadgeDebounced();
   });
 })();

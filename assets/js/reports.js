@@ -152,6 +152,7 @@ async function renderTrend(start,end) {
 loadReport();
 
 // Realtime: รายงานจะโหลดข้อมูลใหม่เมื่อยอดขาย/ค่าใช้จ่าย/สินค้าเปลี่ยนจาก Device อื่น
+const reloadReportDebounced = debounce(loadReport, 700);
 window.addEventListener('vims:realtime', (event) => {
-  if (event.detail?.table === 'page_refresh' || ['sales', 'expenses', 'items', 'lots'].includes(event.detail?.table)) loadReport();
+  if (event.detail?.table === 'page_refresh' || ['sales', 'expenses', 'items', 'lots'].includes(event.detail?.table)) reloadReportDebounced();
 });

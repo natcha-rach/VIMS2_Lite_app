@@ -51,3 +51,17 @@ async function fetchAllRows(queryFactory, pageSize = 1000) {
   return { data: all, error: null };
 }
 window.fetchAllRows = fetchAllRows;
+
+// ==========================================================
+// debounce — รวม Realtime event ที่มาถี่ๆ ให้โหลดข้อมูลใหม่ "ครั้งเดียว" (trailing)
+// ทำไมต้องมี: บันทึก Bulk 200 ชิ้นสร้าง event ราว 600 ครั้ง (items + item_images)
+// ถ้าแต่ละ event สั่งโหลดตารางใหม่ทั้งหมด หน้าจอจะกระตุกและยิง query ซ้ำหลายร้อยครั้ง
+// ==========================================================
+function debounce(fn, wait = 500) {
+  let timer = null;
+  return function debounced(...args) {
+    clearTimeout(timer);
+    timer = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
+window.debounce = debounce;

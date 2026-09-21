@@ -471,11 +471,13 @@ $("editGoalBtn")?.addEventListener("click", async () => {
 function showToast(m){const t=$("toast");if(!t)return;t.textContent=m;t.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove("show"),2600)}
 
 // Realtime: Dashboard ต้องดึงข้อมูลใหม่เมื่อ Lot / Item / Sale / Expense เปลี่ยนจาก Device อื่น
+// debounce: Bulk save ยิง event เป็นร้อยครั้ง — โหลด Dashboard ใหม่ครั้งเดียวหลังนิ่งแล้ว
+const reloadDashboardDebounced = debounce(() => loadDashboard(currentRange()), 700);
 window.addEventListener('vims:realtime', (event) => {
   const table = event.detail?.table;
   if (table === 'page_refresh' || ['lots', 'lot_groups', 'items', 'sales', 'expenses'].includes(table)) {
     dashboardRows = null;
-    loadDashboard(currentRange());
+    reloadDashboardDebounced();
   }
 });
 

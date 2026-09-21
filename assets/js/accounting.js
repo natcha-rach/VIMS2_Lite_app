@@ -400,6 +400,7 @@ loadAll();
 loadBucketSettings();
 
 // Realtime: บัญชีสะท้อนค่าใช้จ่าย/ยอดขาย/Lot ที่เปลี่ยนจาก Device อื่น
+const reloadAccountingDebounced = debounce(loadAll, 700);
 window.addEventListener('vims:realtime', (event) => {
-  if (event.detail?.table === 'page_refresh' || ['expenses', 'sales', 'lots', 'items'].includes(event.detail?.table)) loadAll();
+  if (event.detail?.table === 'page_refresh' || ['expenses', 'sales', 'lots', 'items'].includes(event.detail?.table)) reloadAccountingDebounced();
 });

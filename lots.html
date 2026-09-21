@@ -58,7 +58,7 @@
         <form id="groupForm" class="group-form">
           <input type="hidden" id="groupId" />
           <div class="field"><label for="groupName">ชื่อกลุ่ม</label><input id="groupName" required placeholder="เช่น ฿40–60 / งานหัว / เสื้อยืด" /></div>
-          <div class="field-row"><div class="field"><label for="groupBasePrice">ราคาตั้งต้น</label><input id="groupBasePrice" type="number" min="0" step="0.01" required /></div><div class="field"><label for="groupTier">Tier</label><select id="groupTier"><option value="normal">ปกติ</option><option value="head">งานหัว / Premium</option></select></div></div>
+          <div class="field-row"><div class="field"><label for="groupBasePrice">ราคาตั้งต้น</label><input id="groupBasePrice" type="number" min="0" step="0.01" required /></div><div class="field"><label for="groupTier">Tier</label><select id="groupTier"><option value="normal">ปกติ</option><option value="head">งานหัว / Premium</option></select></div><div class="field"><label for="groupTargetQty">เป้าหมาย (ไม่บังคับ)</label><input id="groupTargetQty" type="number" min="0" step="1" placeholder="เช่น 50" /></div></div>
           <div class="field-row"><button type="button" class="btn btn-ghost hidden" id="cancelGroupEdit">ยกเลิกแก้ไข</button><button class="btn btn-primary" type="submit" id="groupSubmitBtn">เพิ่มกลุ่ม</button></div>
         </form>
         <div class="group-list-wrap"><div class="group-list-title">กลุ่มใน Lot นี้</div><div id="groupList"><div class="empty-state">กำลังโหลด...</div></div></div>
