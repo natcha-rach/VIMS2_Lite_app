@@ -37,9 +37,22 @@
           <p class="muted">ต้นทุนเฉลี่ยต่อชิ้นจะถูกใช้เป็นต้นทุนตั้งต้นของสินค้าใน Lot นี้</p>
           <form id="lotForm">
             <div class="field"><label for="lotName">ชื่อ/รหัสล็อต</label><input type="text" id="lotName" placeholder="เช่น Vintage กระสอบ 08/08/69" required /></div>
-            <div class="field-row"><div class="field"><label for="purchaseDate">วันที่ซื้อ</label><input type="date" id="purchaseDate" required /></div><div class="field"><label for="source">แหล่งที่มา</label><input type="text" id="source" placeholder="ชื่อร้าน/ตลาด" /></div></div>
+            <div class="field-row"><div class="field"><label for="purchaseDate">วันที่ซื้อ</label><input type="date" id="purchaseDate" required /></div><div class="field"><label for="source">แหล่งที่มา</label><input type="text" id="source" list="sourceList" placeholder="ชื่อร้าน/ตลาด" autocomplete="off" /><datalist id="sourceList"></datalist></div></div>
             <div class="field-row"><div class="field"><label for="totalCost">ต้นทุนรวมทั้งล็อต (บาท)</label><input type="number" id="totalCost" step="0.01" min="0" required /></div><div class="field"><label for="totalItems">จำนวนชิ้นทั้งหมด</label><input type="number" id="totalItems" min="0" required /></div></div>
             <div id="avgCostPreview" class="avg-cost-preview">ต้นทุนเฉลี่ย: - / ชิ้น</div>
+            <details class="cost-breakdown-details">
+              <summary>แยกต้นทุนละเอียด (ไม่บังคับ)</summary>
+              <p class="field-hint">ใส่ต้นทุนแยกส่วนแล้วระบบจะรวมเป็น "ต้นทุนรวมทั้งล็อต" ให้อัตโนมัติ (เขียนทับช่องด้านบน)</p>
+              <div class="field-row four">
+                <div class="field"><label for="costPurchase">ค่าซื้อ</label><input type="number" id="costPurchase" step="0.01" min="0" /></div>
+                <div class="field"><label for="costShipping">ค่าขนส่ง</label><input type="number" id="costShipping" step="0.01" min="0" value="0" /></div>
+                <div class="field"><label for="costCleaning">ค่าซัก/ทำความสะอาด</label><input type="number" id="costCleaning" step="0.01" min="0" value="0" /></div>
+                <div class="field"><label for="costRepair">ค่าซ่อม</label><input type="number" id="costRepair" step="0.01" min="0" value="0" /></div>
+              </div>
+              <div class="field-row"><div class="field"><label for="costOther">ค่าใช้จ่ายอื่นๆ</label><input type="number" id="costOther" step="0.01" min="0" value="0" /></div>
+                <div class="field"><label for="costBasis">คิดต้นทุนเฉลี่ย/ชิ้นจาก</label><select id="costBasis"><option value="received">จำนวนที่รับเข้าทั้งหมด</option><option value="sellable">จำนวนที่ผ่านคัดและลงขาย</option></select></div></div>
+              <div class="field"><label for="lotCode">รหัส Lot สำหรับ SKU (ไม่บังคับ)</label><input type="text" id="lotCode" placeholder="เช่น L0921" maxlength="20" /></div>
+            </details>
             <div class="field"><label for="note">หมายเหตุ</label><textarea id="note" rows="2" placeholder="เช่น กระสอบญี่ปุ่น 200 ตัว"></textarea></div>
             <div class="field-row"><button type="button" class="btn btn-ghost hidden" id="cancelLotEdit">ยกเลิกแก้ไข</button><button type="submit" class="btn btn-primary" id="lotSubmitBtn">บันทึกล๊อต</button></div>
           </form>
@@ -68,6 +81,7 @@
     <div class="toast" id="toast"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/js/vimsContext.js"></script>
     <script src="assets/js/nav.js"></script>
     <script src="assets/js/lots.js"></script><script src="assets/js/realtime.js"></script>
   </body>

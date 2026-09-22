@@ -204,7 +204,7 @@ async function loadAll() {
     await Promise.all([
       fetchAllRows(() => supabaseClient.from("lots").select("*")),
       fetchAllRows(() => supabaseClient.from("expenses").select("*")),
-      fetchAllRows(() => supabaseClient.from("sales").select("*, items(item_name)")),
+      fetchAllRows(() => supabaseClient.from("sales").select("*, items(item_name)").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
       fetchAllRows(() => supabaseClient.from("items").select("id,lot_id")),
     ]);
 

@@ -52,13 +52,13 @@ async function loadReport() {
     // - Tier breakdown ใช้ items(...).tier ที่ join มากับ sales อยู่แล้ว ไม่ต้อง query items แยก
     // - Performance ตาม Lot ย้ายไปคำนวณผ่าน RPC get_lot_performance() แทน (ดู renderLotBreakdown)
     const [salesR, expensesR] = await Promise.all([
-      fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method,note,items(item_name,size,condition,tier)").order("sale_date",{ascending:false})),
+      fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method,note,items(item_name,size,condition,tier)").is("voided_at",null).order("sale_date",{ascending:false})), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
       fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,amount,category,note").gte("expense_date",start.toISOString().slice(0,10)).lte("expense_date",new Date(end.getTime()-86400000).toISOString().slice(0,10)))
     ]);
     const err=salesR.error||expensesR.error; if(err) throw err;
     const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[];
     renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales); renderWeekendBreakdown(sales); renderTopProfitItems(sales); renderSaleList(sales);
-    await Promise.all([renderLotBreakdown(), renderTrend(start,end)]);
+    await Promise.all([renderLotBreakdown(), renderGroupPerformance(), renderSourceQuality(), renderTrend(start,end)]);
   } catch(err) { console.error(err); showToast("โหลดรายงานไม่สำเร็จ: "+(err.message||err)); }
 }
 
@@ -103,6 +103,38 @@ async function renderLotBreakdown() {
     <td style="text-align:right">${Number(x.recovery_pct).toFixed(1)}%</td>
   </tr>`).join(""):"<tr><td colspan=10 class=empty-state>ยังไม่มีข้อมูล Lot</td></tr>";
 }
+async function renderGroupPerformance() {
+  const el = document.getElementById("repGroupPerformance");
+  const { data, error } = await supabaseClient.rpc("get_group_performance");
+  if (error) { console.error(error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
+  const rows = (data || []).filter(x => Number(x.listed) > 0).sort((a, b) => Number(b.profit) - Number(a.profit));
+  el.innerHTML = rows.length ? rows.map(x => `<tr>
+    <td><b>${escapeHtml(x.group_name)}</b><small class="table-sub">${x.tier === "head" ? "งานหัว" : "ปกติ"}</small></td>
+    <td>${escapeHtml(x.lot_name)}</td>
+    <td style="text-align:right">${x.listed}</td>
+    <td style="text-align:right">${x.sold}</td>
+    <td style="text-align:right">${Number(x.sell_through_pct).toFixed(1)}%</td>
+    <td style="text-align:right">${formatBaht(x.revenue)}</td>
+    <td style="text-align:right" class="${x.profit>=0?'profit':'loss'}">${formatBaht(x.profit)}</td>
+  </tr>`).join("") : "<tr><td colspan=7 class=empty-state>ยังไม่มีกลุ่มที่ลงสินค้า</td></tr>";
+}
+
+async function renderSourceQuality() {
+  const el = document.getElementById("repSourceQuality");
+  const { data, error } = await supabaseClient.rpc("get_source_quality");
+  if (error) { console.error(error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
+  const rows = (data || []).filter(x => Number(x.lots_count) > 0);
+  el.innerHTML = rows.length ? rows.map(x => `<tr>
+    <td>${escapeHtml(x.source)}</td>
+    <td style="text-align:right">${x.lots_count}</td>
+    <td style="text-align:right">${x.total_received}</td>
+    <td style="text-align:right">${Number(x.reject_rate_pct).toFixed(1)}%</td>
+    <td style="text-align:right">${formatBaht(x.total_cost)}</td>
+    <td style="text-align:right">${formatBaht(x.total_revenue)}</td>
+    <td style="text-align:right" class="${x.total_profit>=0?'profit':'loss'}">${formatBaht(x.total_profit)}</td>
+  </tr>`).join("") : "<tr><td colspan=7 class=empty-state>ยังไม่มีข้อมูลแหล่งรับของ</td></tr>";
+}
+
 function renderWeekendBreakdown(sales) {
   const by={6:{label:"เสาร์",count:0,revenue:0,profit:0},0:{label:"อาทิตย์",count:0,revenue:0,profit:0}};
   sales.filter(s=>s.channel==="street_market").forEach(s=>{const k=new Date(s.sale_date).getDay();if(!by[k])return;by[k].count++;by[k].revenue+=Number(s.sale_price||0);by[k].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
@@ -142,7 +174,7 @@ async function renderTrend(start,end) {
   if(currentPeriod==="day"){title.textContent="แนวโน้ม 7 วันล่าสุด";col.textContent="วันที่";trendStart.setDate(trendStart.getDate()-6);labelFn=d=>formatDate(d).split(" ").slice(0,2).join(" ");}
   else if(currentPeriod==="month"){title.textContent="แนวโน้มรายวันในเดือนนี้";col.textContent="วันที่";labelFn=d=>formatDate(d).split(" ").slice(0,2).join(" ");}
   else {title.textContent="แนวโน้มรายเดือนในปีนี้";col.textContent="เดือน";labelFn=d=>new Intl.DateTimeFormat("th-TH",{month:"short"}).format(d);}
-  const {data,error}=await supabaseClient.from("sales").select("sale_date,sale_price,cost_price").gte("sale_date",trendStart.toISOString()).lt("sale_date",trendEnd.toISOString()); if(error){console.error(error);return;}
+  const {data,error}=await supabaseClient.from("sales").select("sale_date,sale_price,cost_price").is("voided_at",null).gte("sale_date",trendStart.toISOString()).lt("sale_date",trendEnd.toISOString()); if(error){console.error(error);return;}
   const buckets={}; data.forEach(s=>{const d=new Date(s.sale_date);const key=currentPeriod==="year"?`${d.getFullYear()}-${d.getMonth()}`:d.toDateString();buckets[key] ||= {count:0,revenue:0,profit:0,label:labelFn(d)};buckets[key].count++;buckets[key].revenue+=Number(s.sale_price||0);buckets[key].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
   const rows=Object.values(buckets);
   renderReportTrendChart(rows);

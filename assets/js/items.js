@@ -114,6 +114,10 @@ window.addEventListener('vims:realtime', (event) => {
 });
 
 
+// จริงเฉพาะครั้งแรกที่หน้าโหลด: ใช้ครั้งเดียวเพื่อ pre-fill Lot/กลุ่มจาก Context
+// แล้วปิดสวิตช์ทิ้ง ไม่งั้น realtime reload ครั้งถัดไปจะดึงกลับ Lot เดิมทับที่ผู้ใช้เพิ่งเปลี่ยน
+let contextApplied = false;
+
 async function loadLots(preferredLotId = null) {
   // โหลดเฉพาะ field ที่หน้า Item ใช้จริง และเรียง Lot ล่าสุดก่อน
   const { data, error } = await supabaseClient
@@ -136,9 +140,9 @@ async function loadLots(preferredLotId = null) {
 
   allLots = data || [];
 
-  // ถ้าเปิดมาจาก Lots page ด้วย ?lot=ID ให้เลือก Lot นั้น
-  const urlLotId = new URLSearchParams(window.location.search).get('lot');
-  const currentLotId = preferredLotId || urlLotId || $('lotSelect')?.value || '';
+  // ลำดับความสำคัญ: lot ที่ส่งมาตรงๆ (เช่นหลังบันทึก) > Context (URL > localStorage) > ค่าที่เลือกอยู่แล้ว
+  const ctx = window.VimsContext ? VimsContext.resolve() : {};
+  const currentLotId = preferredLotId || (!contextApplied && ctx.lotId) || $('lotSelect')?.value || '';
 
   selects.forEach(el => {
     el.innerHTML = allLots.length
@@ -157,6 +161,14 @@ async function loadLots(preferredLotId = null) {
   await loadGroups(selectedLotId);
   if (selectedLotId) await applyLotCostDefault(selectedLotId);
   updateQuickStats();
+  renderContextBar();
+
+  if (!contextApplied) {
+    contextApplied = true;
+    // mode=bulk/rapid มาจากปุ่ม "ทำต่อ" ของ Lot Card — เปิด workflow ที่ค้างไว้ให้อัตโนมัติ
+    if (ctx.mode === 'bulk' && selectedLotId) $('openBulk')?.click();
+    if (ctx.mode === 'rapid' && ctx.groupId && allGroups.some(g => g.id === ctx.groupId)) startGroup(ctx.groupId);
+  }
 
   if (!bulkDraftPrompted) {
     bulkDraftPrompted = true;
@@ -165,11 +177,56 @@ async function loadLots(preferredLotId = null) {
 }
 
 async function loadGroups(lotId = $('lotSelect')?.value) {
-  if (!lotId) { allGroups=[]; renderGroups(); renderGroupOptions(); return; }
+  if (!lotId) { allGroups=[]; renderGroups(); renderGroupOptions(); renderContextBar(); return; }
   const { data, error } = await supabaseClient.from('lot_groups').select('*').eq('lot_id', lotId).order('sort_order');
   if (error) return showToast('โหลดกลุ่มไม่สำเร็จ: ' + error.message);
   allGroups = data || [];
   renderGroups(); renderGroupOptions();
+
+  // pre-fill กลุ่มจาก Context ครั้งแรกที่หน้าโหลดเท่านั้น (ธงเดียวกับ loadLots)
+  const ctx = window.VimsContext ? VimsContext.resolve() : {};
+  if (!contextApplied && ctx.groupId && allGroups.some(g => g.id === ctx.groupId) && $('groupSelect')) {
+    $('groupSelect').value = ctx.groupId;
+  }
+  renderContextBar();
+}
+
+// แถบ Context: บอกว่ากำลังลงของให้ Lot/กลุ่มไหนอยู่ ไม่ต้องเดาจาก dropdown ที่อาจเลื่อนพ้นจอ
+async function renderContextBar() {
+  const bar = $('contextBar'); if (!bar) return;
+  const lotId = $('lotSelect')?.value || '';
+  const groupId = $('groupSelect')?.value || '';
+  const lot = allLots.find(l => l.id === lotId);
+  if (!lot) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+  bar.classList.remove('hidden');
+
+  const group = allGroups.find(g => g.id === groupId);
+  const avgCost = Number(lot.total_items) > 0 ? Number(lot.total_cost) / Number(lot.total_items) : 0;
+
+  let progressText = '';
+  if (group) {
+    const { data } = await supabaseClient.rpc('get_group_progress', { p_lot_id: lotId });
+    const p = (data || []).find(x => x.group_id === group.id);
+    if (p) progressText = group.target_qty ? `${p.listed}/${group.target_qty} ชิ้น` : `${p.listed} ชิ้น`;
+  }
+
+  bar.innerHTML = `
+    <div class="context-bar-main">
+      <span class="context-bar-lot">${escapeHtml(lot.lot_name)}</span>
+      ${group ? `<span class="context-bar-sep">/</span><span class="context-bar-group">${escapeHtml(group.group_name)}</span>` : `<span class="context-bar-sep">/</span><span class="context-bar-nogroup">ยังไม่เลือกกลุ่ม</span>`}
+    </div>
+    <div class="context-bar-meta">
+      <span>ต้นทุนตั้งต้น ${formatBaht(avgCost)}</span>
+      ${progressText ? `<span>· ลงแล้ว ${progressText}</span>` : ''}
+    </div>
+    <div class="context-bar-actions">
+      <button type="button" class="btn btn-ghost btn-sm" id="ctxChangeLot">เปลี่ยน Lot/กลุ่ม</button>
+      <a class="btn btn-ghost btn-sm" href="lots.html">กลับไป Lot</a>
+    </div>`;
+  $('ctxChangeLot')?.addEventListener('click', () => {
+    $('lotSelect')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    $('lotSelect')?.focus();
+  });
 }
 
 function renderGroupOptions() {
@@ -203,8 +260,28 @@ async function applyLotCostDefault(lotId) {
   if (!$('costPrice') || !lotId) return;
   $('costPrice').value = await getLotAvgCost(lotId);
 }
-$('lotSelect')?.addEventListener('change', () => { loadGroups($('lotSelect').value); applyLotCostDefault($('lotSelect').value); });
+$('lotSelect')?.addEventListener('change', () => {
+  loadGroups($('lotSelect').value);
+  applyLotCostDefault($('lotSelect').value);
+  persistContext();
+});
 $('bulkLot')?.addEventListener('change', () => { loadGroups($('bulkLot').value); });
+$('groupSelect')?.addEventListener('change', () => { renderContextBar(); persistContext(); });
+
+// บันทึก Lot/กลุ่มที่เลือกอยู่ลง localStorage + sync เข้า URL (ไม่ reload หน้า)
+// เพื่อให้ปิดแท็บแล้วเปิดใหม่ หรือแชร์ลิงก์ พากลับมาที่ Lot/กลุ่มเดิมได้
+function persistContext() {
+  const lotId = $('lotSelect')?.value || null;
+  const groupId = $('groupSelect')?.value || null;
+  if (window.VimsContext) {
+    VimsContext.save({ lotId, groupId });
+    const url = new URL(window.location.href);
+    if (lotId) url.searchParams.set('lot', lotId); else url.searchParams.delete('lot');
+    if (groupId) url.searchParams.set('group', groupId); else url.searchParams.delete('group');
+    url.searchParams.delete('mode');
+    window.history.replaceState({}, '', url);
+  }
+}
 $('createGroup')?.addEventListener('click', async () => {
   const lotId = $('bulkLot').value;
   const name = $('newGroupName').value.trim();
@@ -226,7 +303,8 @@ $('itemForm')?.addEventListener('submit', async e => {
     id: crypto.randomUUID(),
     lot_id: lotId, group_id: groupId, item_name: $('itemName').value.trim(), size: $('size').value.trim(),
     condition: $('condition').value, tier: $('tier').value, cost_price: Number($('costPrice').value || 0),
-    base_price: group ? Number(group.base_price) : Number($('sellPrice').value || 0), current_price: Number($('sellPrice').value || 0), status:'available'
+    base_price: group ? Number(group.base_price) : Number($('sellPrice').value || 0), current_price: Number($('sellPrice').value || 0), status:'available',
+    listed_at: new Date().toISOString()
   };
   if (!payload.item_name) return showToast('กรุณาใส่ชื่อสินค้า');
   const files = Array.from($('singleImages').files || []).slice(0,2);
@@ -245,9 +323,35 @@ $('itemForm')?.addEventListener('submit', async e => {
   $('itemForm').reset(); $('condition').value='A'; $('tier').value='normal'; $('lotSelect').value=lotId; await loadGroups(lotId); await loadItems();
 });
 
+// ย่อรูปฝั่ง client ก่อนอัปโหลด (ด้านยาวสุด ~1600px, JPEG ~0.8) — ลดเวลาอัปโหลดและพื้นที่ Storage
+// บนกองใหญ่ 200 ชิ้น x 2 รูป ที่ไม่ย่อไฟล์จาก iPhone กล้องยุคใหม่แต่ละใบหลาย MB รวมกันหลัก GB
+// ถ้าย่อไม่สำเร็จ (เช่นเบราว์เซอร์เก่าไม่รองรับ canvas) ให้ใช้ไฟล์ต้นฉบับแทน ไม่ปิดกั้นการอัปโหลด
+async function compressImageFile(file, maxDim = 1600, quality = 0.8) {
+  if (!file.type || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
+    if (scale >= 1) { bitmap.close?.(); return file; } // รูปเล็กอยู่แล้ว ไม่ต้องย่อ
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close?.();
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+    if (!blob) return file;
+    const newName = file.name.replace(/\.\w+$/, '') + '.jpg';
+    return new File([blob], newName, { type: 'image/jpeg' });
+  } catch (error) {
+    console.warn('ย่อรูปไม่สำเร็จ ใช้ไฟล์ต้นฉบับแทน:', error);
+    return file;
+  }
+}
+
 async function uploadItemImages(itemId, files) {
   // จำกัดรูปต่อ Item ไว้ที่ 2 รูปตาม Database Contract: sort_order 1/2
-  const safeFiles = Array.from(files || []).slice(0, 2);
+  const rawFiles = Array.from(files || []).slice(0, 2);
+  const safeFiles = await Promise.all(rawFiles.map(f => compressImageFile(f)));
   const uploadedPaths = [];
 
   for (let i = 0; i < safeFiles.length; i++) {
@@ -295,6 +399,27 @@ async function uploadItemImages(itemId, files) {
   return uploadedPaths;
 }
 
+// Receiving Wizard: ไม่ใช่ workflow ใหม่ แต่เป็นตัวช่วยเลือกวิธีลงของที่เหมาะกับจำนวนที่รับเข้า
+// แล้วพาไปเครื่องมือเดิมที่เหมาะสม (Photo Queue / ลงทีละชิ้น / ฟอร์มเพิ่มด่วน) พร้อมคำแนะนำสั้นๆ
+const WIZARD_HINTS = {
+  sack: { count: 150, hint: 'สร้าง/เลือกกลุ่มด้านล่าง ใส่จำนวนที่ต้องลงโดยประมาณ แล้วกด "ถ่ายรูปแล้วลงทั้งกอง" เพื่อเปิด Photo Queue' },
+  small: { count: 20, hint: 'สร้าง/เลือกกลุ่มด้านล่าง แล้วกด "ลงทีละชิ้น" — ระบบจะจำราคา/Tier/สภาพล่าสุดให้ ลงต่อเนื่องได้เร็ว' },
+  quick: { count: 1, hint: null }
+};
+document.querySelectorAll('[data-wizard]').forEach(btn => btn.addEventListener('click', () => {
+  const mode = btn.dataset.wizard;
+  document.querySelectorAll('[data-wizard]').forEach(b => b.classList.toggle('active', b === btn));
+  if (mode === 'quick') {
+    $('closeBulk')?.click();
+    $('focusSingle')?.click();
+    return;
+  }
+  const cfg = WIZARD_HINTS[mode];
+  if ($('groupCount')) $('groupCount').value = cfg.count;
+  const hintEl = $('wizardHint');
+  if (hintEl) { hintEl.textContent = cfg.hint; hintEl.classList.remove('hidden'); }
+}));
+
 $('openBulk')?.addEventListener('click', async () => { $('bulkModal').classList.remove('hidden'); $('bulkLot').value=$('lotSelect').value; await loadGroups($('bulkLot').value); showBulkStep(1); });
 $('closeBulk')?.addEventListener('click', () => $('bulkModal').classList.add('hidden'));
 $('backToGroups')?.addEventListener('click', () => showBulkStep(1));
@@ -323,7 +448,7 @@ function previewBulkImages(){ const files=Array.from($('bulkImages').files||[]).
 $('quickEntryForm')?.addEventListener('submit', async e=>{
   e.preventDefault();
   const files=bulkState.photoPairs ? bulkState.photoPairs[bulkState.index].filter(Boolean) : Array.from($('bulkImages').files||[]).slice(0,2); if(!files.length) return showToast('แนะนำให้ใส่อย่างน้อย 1 รูป');
-  const payload={lot_id:bulkState.lotId,group_id:bulkState.group.id,item_name:$('bulkName').value.trim(),size:$('bulkSize').value.trim(),condition:$('bulkCondition').value,tier:$('bulkTier').value,cost_price:Number($('bulkCost').value||0),base_price:Number(bulkState.group.base_price||0),current_price:Number($('bulkPrice').value||0),status:'available'};
+  const payload={lot_id:bulkState.lotId,group_id:bulkState.group.id,item_name:$('bulkName').value.trim(),size:$('bulkSize').value.trim(),condition:$('bulkCondition').value,tier:$('bulkTier').value,cost_price:Number($('bulkCost').value||0),base_price:Number(bulkState.group.base_price||0),current_price:Number($('bulkPrice').value||0),status:'available',listed_at:new Date().toISOString()};
   if(!payload.item_name) return showToast('กรุณาใส่ชื่อสินค้า');
   const {data,error}=await supabaseClient.from('items').insert(payload).select().single(); if(error) return showToast('บันทึกไม่สำเร็จ: '+error.message);
   try {
@@ -340,40 +465,97 @@ $('quickEntryForm')?.addEventListener('submit', async e=>{
 
 $('focusSingle')?.addEventListener('click',()=>{ $('itemName').focus(); window.scrollTo({top:0,behavior:'smooth'}); });
 $('filterStatus')?.addEventListener('change',loadItems); $('searchBox')?.addEventListener('input',loadItems);
+// Item ที่เลือกไว้สำหรับ Bulk Action (SKU/checkbox filter — V15/V16)
+let selectedItemIds = new Set();
+
 async function loadItems(){
   const status=$('filterStatus').value,q=($('searchBox').value||'').trim();
-  // fetchAllRows กันรายการสินค้าตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
+  const extra=$('filterExtra')?.value||'';
+  // ใช้ v_items_list แทน items ตรงๆ เพื่อได้ image_count/age_days/ชื่อ Lot-Group มาในคำสั่งเดียว กรองฝั่ง server ได้ครบ
+  // (ยังคง fetchAllRows กันตกหล่นเมื่อเกิน 1000 แถว)
   const {data,error}=await fetchAllRows(()=>{
-    let query=supabaseClient.from('items').select('*, lots(lot_name), lot_groups(group_name)').order('created_at',{ascending:false});
+    let query=supabaseClient.from('v_items_list').select('*').eq('intake_status','listed').order('created_at',{ascending:false});
     if(status!=='all') query=query.eq('status',status);
-    if(q) query=query.ilike('item_name',`%${q}%`);
+    if(q) query=query.or(`item_name.ilike.%${q}%,sku.ilike.%${q}%`);
+    if(extra==='no_photo') query=query.eq('image_count',0);
+    if(extra==='no_price') query=query.or('current_price.is.null,current_price.eq.0');
+    if(extra==='age30') query=query.gte('age_days',30);
+    if(extra==='age60') query=query.gte('age_days',60);
+    if(extra==='age90') query=query.gte('age_days',90);
     return query;
   });
-  if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ</div>';return;} itemsCache=data||[]; renderItems(); updateQuickStats();
+  if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: '+error.message+'</div>';return;}
+  itemsCache=data||[];
+  selectedItemIds = new Set([...selectedItemIds].filter(id => itemsCache.some(i => i.id === id)));
+  renderItems(); updateQuickStats(); renderBulkActionBar();
 }
 async function renderItems(){
-  // โหลดรูปทั้งหมดของรายการที่กำลังแสดง เพื่อให้ card รู้ว่ามีรูป 1 หรือ 2 รูป
   if(!itemsCache.length){$('itemList').innerHTML='<div class="empty-state">ไม่มีสินค้าในรายการนี้</div>';return;}
   const ids=itemsCache.map(i=>i.id);
   const {data:imgs}=await fetchAllRows(()=>supabaseClient.from('item_images').select('*').in('item_id',ids).order('sort_order'));
   const byItem={}; (imgs||[]).forEach(x=>(byItem[x.item_id]??=[]).push(x));
-  // สร้าง Stock Card; ปุ่มแก้ไขจะส่ง Item ID กลับเข้า editItem() ซึ่งเป็นจุดเชื่อมกับ Edit Modal
   $('itemList').innerHTML=itemsCache.map(i=>{
     const itemImages=byItem[i.id]||[]; const im=itemImages[0];
+    const metaBits=[escapeHtml(i.size||'-'), i.condition, i.tier==='head'?'งานหัว':'ปกติ', escapeHtml(i.lot_name||'-')];
+    if (i.group_name) metaBits.push(escapeHtml(i.group_name));
+    if (i.storage_location) metaBits.push('📍'+escapeHtml(i.storage_location));
+    if (Number.isFinite(i.age_days) && i.status==='available') metaBits.push(`ค้าง ${i.age_days} วัน`);
     return `<div class="stock-row">
+      <input type="checkbox" class="stock-select" data-select-item="${i.id}" ${selectedItemIds.has(i.id)?'checked':''} ${i.status==='sold'?'disabled title="ขายแล้ว แก้ไม่ได้"':''} />
       <div class="thumb">${im?`<img src="${im.image_url}" alt="">`:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
-      <div class="stock-main"><b>${escapeHtml(i.item_name)}</b><span>${escapeHtml(i.size||'-')} · ${i.condition} · ${i.tier==='head'?'งานหัว':'ปกติ'} · ${escapeHtml(i.lots?.lot_name||'-')}</span></div>
+      <div class="stock-main"><b>${escapeHtml(i.item_name)}${i.sku?` <span class="sku-tag">${escapeHtml(i.sku)}</span>`:''}</b><span>${metaBits.join(' · ')}</span></div>
       <div class="stock-price"><small>ต้นทุน ${formatBaht(i.cost_price)}</small><b>${formatBaht(i.current_price)}</b></div>
       <span class="badge ${i.status}">${i.status==='available'?'พร้อมขาย':i.status==='sold'?'ขายแล้ว':'เสีย'}</span>
       <div class="stock-actions"><button class="btn btn-ghost btn-sm" data-edit-item="${i.id}">แก้ไข</button></div>
     </div>`;
   }).join('');
   $('itemList').querySelectorAll('[data-edit-item]').forEach(btn=>btn.onclick=()=>openEditItem(btn.dataset.editItem));
+  $('itemList').querySelectorAll('[data-select-item]').forEach(cb=>cb.addEventListener('change',()=>{
+    const id=cb.dataset.selectItem;
+    if(cb.checked) selectedItemIds.add(id); else selectedItemIds.delete(id);
+    renderBulkActionBar();
+  }));
 }
-async function updateQuickStats(){ const {data,error}=await fetchAllRows(()=>supabaseClient.from('items').select('status,cost_price')); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`<div><span>สินค้าทั้งหมด</span><b>${rows.length}</b></div><div><span>พร้อมขาย</span><b>${available.length}</b></div><div><span>ขายแล้ว</span><b>${sold.length}</b></div><div><span>ต้นทุนคงเหลือ</span><b>${formatBaht(value)}</b></div>`; }
+function renderBulkActionBar(){
+  const bar=$('bulkActionBar'); if(!bar) return;
+  const n=selectedItemIds.size;
+  bar.classList.toggle('hidden', n===0);
+  if($('bulkSelCount')) $('bulkSelCount').textContent=`เลือกแล้ว ${n} รายการ`;
+  const groupSel=$('bulkMoveGroup');
+  if(groupSel) groupSel.innerHTML='<option value="">-- เลือกกลุ่มปลายทาง --</option>'+allGroups.map(g=>`<option value="${g.id}">${escapeHtml(g.group_name)}</option>`).join('');
+}
+$('filterExtra')?.addEventListener('change', loadItems);
+async function callBulkUpdate(patch, successMsg){
+  if(!selectedItemIds.size) return showToast('ยังไม่ได้เลือกรายการ');
+  const ids=[...selectedItemIds];
+  const {data,error}=await supabaseClient.rpc('bulk_update_items',{p_ids:ids,...patch});
+  if(error) return showToast('อัปเดตไม่สำเร็จ: '+error.message);
+  showToast(`${successMsg} (${data} รายการ)`);
+  selectedItemIds.clear();
+  await loadItems();
+}
+$('bulkApplyPct')?.addEventListener('click', () => {
+  const pct=Number($('bulkPct').value||0); if(!pct||pct<=0||pct>=100) return showToast('ใส่ % ลดราคาให้ถูกต้อง (1-99)');
+  callBulkUpdate({p_price_multiplier:1-pct/100}, `ลดราคา ${pct}% แล้ว`);
+});
+$('bulkApplyPrice')?.addEventListener('click', () => {
+  const price=Number($('bulkNewPrice').value); if(!Number.isFinite(price)||price<0) return showToast('ใส่ราคาใหม่ให้ถูกต้อง');
+  callBulkUpdate({p_new_price:price}, 'ตั้งราคาใหม่แล้ว');
+});
+$('bulkApplyGroup')?.addEventListener('click', () => {
+  const groupId=$('bulkMoveGroup').value||null; if(!groupId) return showToast('เลือกกลุ่มปลายทางก่อน');
+  callBulkUpdate({p_set_group:true,p_group_id:groupId}, 'ย้ายกลุ่มแล้ว');
+});
+$('bulkApplyStorage')?.addEventListener('click', () => {
+  const loc=$('bulkStorage').value.trim(); if(!loc) return showToast('ใส่ตำแหน่งเก็บก่อน');
+  callBulkUpdate({p_storage_location:loc}, 'ตั้งตำแหน่งเก็บแล้ว');
+});
+$('bulkApplyDamaged')?.addEventListener('click', () => callBulkUpdate({p_status:'damaged'}, 'ทำเครื่องหมายเสียแล้ว'));
+$('bulkApplyAvailable')?.addEventListener('click', () => callBulkUpdate({p_status:'available'}, 'คืนเป็นพร้อมขายแล้ว'));
+async function updateQuickStats(){ const {data,error}=await fetchAllRows(()=>supabaseClient.from('items').select('status,cost_price').eq('intake_status','listed')); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`<div><span>สินค้าทั้งหมด</span><b>${rows.length}</b></div><div><span>พร้อมขาย</span><b>${available.length}</b></div><div><span>ขายแล้ว</span><b>${sold.length}</b></div><div><span>ต้นทุนคงเหลือ</span><b>${formatBaht(value)}</b></div>`; }
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 function showToast(msg){const t=$('toast');if(!t)return;t.textContent=msg;t.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove('show'),2600);}
-loadLots(new URLSearchParams(window.location.search).get('lot')); loadItems();
+loadLots(); loadItems();
 
 
 // ============================================================
@@ -799,21 +981,47 @@ function validateBulkTable() {
   return parts.join(' · ');
 }
 
-// บันทึก Bulk Table: insert items เป็นชุด แล้ว upload รูปของแต่ละ Item แบบจำกัด concurrency
+// บันทึก Bulk Table แบบ "สองเฟส" (V15):
+//   เฟส 1) insert ทั้งกองเป็น intake_status='draft' — ยังไม่โผล่ใน Stock/Sell/Reports (ดู migration v15)
+//   เฟส 2) อัปโหลดรูปทีละ Item แล้ว flip เฉพาะแถวที่สำเร็จเป็น 'listed'
+// แถวที่อัปโหลดรูปไม่สำเร็จจะ "ค้างเป็น draft" แทนที่จะ rollback ทั้งกอง — กด "ลองใหม่เฉพาะที่ผิด" ได้โดยไม่ต้องอัปโหลดซ้ำทั้ง 200 ใบ
+let bulkRetryQueue = null; // { lotId, group, rows: [{item, row}] } — เก็บไว้เผื่อกดลองใหม่
+
+async function runBulkImageUpload(lotId, group, itemRowPairs) {
+  const total = itemRowPairs.length;
+  const failed = [];
+  let done = 0;
+  // อัปโหลดพร้อมกันทีละ 4 งาน กันยิง request 200 ชุดพร้อมกันจนเบราว์เซอร์/เน็ตล่ม
+  for (let i = 0; i < itemRowPairs.length; i += 4) {
+    const chunk = itemRowPairs.slice(i, i + 4);
+    await Promise.all(chunk.map(async ({ item, row }) => {
+      try {
+        await uploadItemImages(item.id, row.files);
+        await supabaseClient.from('items').update({ intake_status: 'listed', listed_at: new Date().toISOString() }).eq('id', item.id);
+      } catch (imageError) {
+        console.warn(`แถว "${row.item_name}" อัปโหลดไม่สำเร็จ ยังคงเป็น draft:`, imageError);
+        failed.push({ item, row });
+      }
+      done++;
+    }));
+    showToast(`อัปโหลดรูป ${Math.min(done, total)}/${total}`);
+  }
+  return { succeeded: total - failed.length, failed };
+}
+
 $('saveBulkTable')?.addEventListener('click', async () => {
-  // ตรวจ validation ก่อนแตะ Database
   const validationError = validateBulkTable();
   if (validationError) return showToast(validationError);
-  // ปิดปุ่มชั่วคราวเพื่อกันการกดซ้ำและสร้าง Item ซ้ำ
   const button = $('saveBulkTable');
   button.disabled = true;
   const rows = bulkTableState.rows;
   const group = bulkTableState.group;
+  const lotId = bulkTableState.lotId;
   try {
-    // สร้าง payload ของ Items ทั้งกอง; ยังไม่มี image_url เพราะรูปอยู่ใน Storage แยกตาราง
+    // เฟส 1: insert ทั้งกองเป็น draft ก่อน — ยังไม่นับเป็น "ลงแล้ว" ใน Lot reconciliation จนกว่าจะอัปโหลดรูปสำเร็จ
     const payload = rows.map(row => ({
       id: crypto.randomUUID(),
-      lot_id: bulkTableState.lotId,
+      lot_id: lotId,
       group_id: group.id,
       item_name: String(row.item_name).trim(),
       size: String(row.size || '').trim(),
@@ -822,53 +1030,64 @@ $('saveBulkTable')?.addEventListener('click', async () => {
       cost_price: Number(row.cost || 0),
       base_price: Number(group.base_price || row.price || 0),
       current_price: Number(row.price || group.base_price || 0),
-      status: 'available'
+      status: 'available',
+      intake_status: 'draft'
     }));
-    // Insert ครั้งเดียวเพื่อให้ Supabase สร้าง Item IDs กลับมาครบทั้งชุด
     const { data: inserted, error } = await supabaseClient.from('items').insert(payload).select();
     if (error) throw error;
     if (!inserted || inserted.length !== rows.length) throw new Error('Supabase คืนจำนวน Item ไม่ครบ');
-    // จับคู่ Item ที่ Supabase คืนมากับ staging row ตามลำดับ insert
-    // จากนั้น upload รูปของแต่ละ Item พร้อมกันทีละ 4 งาน เพื่อลดการยิง request 200 ชุดพร้อมกัน
-    const uploadedByItem = new Map();
 
-    try {
-      for (let i = 0; i < rows.length; i += 4) {
-        const chunk = rows.slice(i, i + 4).map((row, offset) => ({ row, item: inserted[i + offset] }));
-        await Promise.all(chunk.map(async ({ row, item }) => {
-          const paths = await uploadItemImages(item.id, row.files);
-          uploadedByItem.set(item.id, paths);
-        }));
-        showToast(`อัปโหลดรูป ${Math.min(i + 4, rows.length)}/${rows.length}`);
-      }
-    } catch (imageError) {
-      // Bulk insert สำเร็จแล้วแต่รูปบางรายการล้มเหลว:
-      // ลบไฟล์ที่ upload สำเร็จ + ลบ Items ทั้งกอง เพื่อไม่ให้เกิดข้อมูลค้างครึ่งกอง
-      const paths = Array.from(uploadedByItem.values()).flat();
-      if (paths.length) await supabaseClient.storage.from('item-images').remove(paths);
-      await supabaseClient.from('items').delete().in('id', inserted.map(item => item.id));
-      throw new Error(`อัปโหลดรูปไม่ครบ จึง rollback สินค้าทั้งกอง: ${imageError.message}`);
+    // เฟส 2: อัปโหลดรูป + flip เป็น listed เฉพาะแถวที่สำเร็จ
+    const pairs = rows.map((row, i) => ({ item: inserted[i], row }));
+    const { succeeded, failed } = await runBulkImageUpload(lotId, group, pairs);
+
+    if (failed.length) {
+      bulkRetryQueue = { lotId, group, rows: failed };
+      bulkTableState = { lotId, group, rows: failed.map(f => f.row), source: 'retry' };
+      showToast(`บันทึกสำเร็จ ${succeeded}/${rows.length} — เหลือ ${failed.length} รายการรูปอัปโหลดไม่ผ่าน`);
+      $('bulkSummary').innerHTML = `<div class="warn-box">บันทึกสำเร็จ ${succeeded}/${rows.length} รายการ<br>เหลือ ${failed.length} รายการที่รูปอัปโหลดไม่ผ่าน (ยังอยู่ในสต็อกแบบ draft ไม่ขึ้น Stock/Sell) — กด "ลองใหม่เฉพาะที่ผิด" ด้านล่างได้เลยโดยไม่ต้องอัปโหลดซ้ำทั้งกอง<br><button type="button" class="btn btn-primary btn-sm" id="retryFailedUploads" style="margin-top:8px">ลองใหม่เฉพาะที่ผิด (${failed.length})</button></div>`;
+      $('retryFailedUploads')?.addEventListener('click', retryFailedBulkUploads);
+    } else {
+      bulkRetryQueue = null;
+      bulkTableState = { lotId:null, group:null, rows:[], source:'photo-queue' };
+      clearBulkDraft();
+      $('bulkTablePanel').classList.add('hidden');
+      $('quickEntryPanel').classList.remove('hidden');
+      $('bulkSummary').innerHTML = `<div class="success-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>บันทึกสินค้า ${inserted.length} รายการสำเร็จ</div>`;
     }
+    showBulkStep(3);
+    await loadItems();
+    await loadGroups(lotId);
+  } catch (error) {
+    console.error('Bulk Table save error:', error);
+    showToast('บันทึกกองไม่สำเร็จ: ' + error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
 
-    // ล้าง staging หลังบันทึกสำเร็จ เพื่อไม่ให้ข้อมูลเก่าค้างอยู่ใน browser
+// ลองอัปโหลดรูปใหม่เฉพาะแถวที่ค้างเป็น draft — Item เดิมยังอยู่ ไม่ต้อง insert ซ้ำ ไม่ต้องอัปโหลดที่สำเร็จแล้วซ้ำ
+async function retryFailedBulkUploads() {
+  if (!bulkRetryQueue || !bulkRetryQueue.rows.length) return;
+  const { lotId, group, rows } = bulkRetryQueue;
+  showToast(`กำลังลองใหม่ ${rows.length} รายการ...`);
+  const { succeeded, failed } = await runBulkImageUpload(lotId, group, rows);
+  if (failed.length) {
+    bulkRetryQueue = { lotId, group, rows: failed };
+    bulkTableState = { lotId, group, rows: failed.map(f => f.row), source: 'retry' };
+    $('bulkSummary').innerHTML = `<div class="warn-box">ลองใหม่สำเร็จ ${succeeded}/${rows.length} — เหลือ ${failed.length} รายการยังอัปโหลดไม่ผ่าน<br><button type="button" class="btn btn-primary btn-sm" id="retryFailedUploads" style="margin-top:8px">ลองใหม่เฉพาะที่ผิด (${failed.length})</button></div>`;
+    $('retryFailedUploads')?.addEventListener('click', retryFailedBulkUploads);
+  } else {
+    bulkRetryQueue = null;
     bulkTableState = { lotId:null, group:null, rows:[], source:'photo-queue' };
     clearBulkDraft();
     $('bulkTablePanel').classList.add('hidden');
     $('quickEntryPanel').classList.remove('hidden');
-    $('bulkSummary').innerHTML = `<div class="success-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>บันทึกสินค้า ${inserted.length} รายการสำเร็จ</div>`;
-    showBulkStep(3);
-    // refresh รายการและสถิติจาก Supabase เพื่อให้หน้าหลักสะท้อนข้อมูลล่าสุด
-    await loadItems();
-    await loadGroups(group.lot_id);
-  } catch (error) {
-    // ถ้า insert หรือ upload รูปบางส่วนผิดพลาด จะไม่ซ่อน error เพื่อให้นายแก้ไขได้
-    console.error('Bulk Table save error:', error);
-    showToast('บันทึกกองไม่สำเร็จ: ' + error.message);
-  } finally {
-    // เปิดปุ่มกลับไม่ว่าผลลัพธ์จะสำเร็จหรือผิดพลาด
-    button.disabled = false;
+    $('bulkSummary').innerHTML = `<div class="success-box">ลองใหม่สำเร็จครบทุกรายการแล้ว</div>`;
   }
-});
+  await loadItems();
+  await loadGroups(lotId);
+}
 
 // เตรียมรูปของ Item ที่กำลังกรอกเข้า file input ของ Quick Entry
 async function prepareQueuedItem(index) {

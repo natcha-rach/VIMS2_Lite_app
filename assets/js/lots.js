@@ -12,6 +12,18 @@ function escapeHtml(v = "") {
 }
 
 function setDefaultPurchaseDate() { $("purchaseDate").valueAsDate = new Date(); }
+
+// ถ้ากรอก "ค่าซื้อ" ในส่วนแยกต้นทุนไว้ ให้ต้นทุนรวมคำนวณจากผลรวมอัตโนมัติ (เขียนทับช่องต้นทุนรวม)
+// สอดคล้องกับ trigger compute_lot_total_cost() ฝั่ง Postgres — ทำที่ browser ด้วยเพื่อ preview ทันทีก่อนกดบันทึก
+function costBreakdownActive() { return $("costPurchase").value !== ""; }
+function syncCostBreakdown() {
+  if (!costBreakdownActive()) { updateAvgCost(); return; }
+  const sum = ["costPurchase", "costShipping", "costCleaning", "costRepair", "costOther"]
+    .reduce((s, id) => s + Number($(id).value || 0), 0);
+  $("totalCost").value = sum;
+  $("totalCost").readOnly = true;
+  updateAvgCost();
+}
 function updateAvgCost() {
   const cost = Number($("totalCost").value || 0);
   const count = Number($("totalItems").value || 0);
@@ -20,10 +32,12 @@ function updateAvgCost() {
 
 $("totalCost").addEventListener("input", updateAvgCost);
 $("totalItems").addEventListener("input", updateAvgCost);
+["costPurchase", "costShipping", "costCleaning", "costRepair", "costOther"].forEach(id => $(id).addEventListener("input", syncCostBreakdown));
 setDefaultPurchaseDate();
 
 $("lotForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  const useBreakdown = costBreakdownActive();
   const payload = {
     lot_name: $("lotName").value.trim(),
     purchase_date: $("purchaseDate").value,
@@ -31,6 +45,14 @@ $("lotForm").addEventListener("submit", async (e) => {
     total_cost: Number($("totalCost").value),
     total_items: Number($("totalItems").value),
     note: $("note").value.trim(),
+    lot_code: $("lotCode").value.trim() || null,
+    // ต้นทุนแยกส่วน (V16) — purchase_cost=null คือยังใช้ต้นทุนรวมแบบเดิม ไม่ส่ง breakdown เลย
+    purchase_cost: useBreakdown ? Number($("costPurchase").value || 0) : null,
+    shipping_cost: Number($("costShipping").value || 0),
+    cleaning_cost: Number($("costCleaning").value || 0),
+    repair_cost: Number($("costRepair").value || 0),
+    other_cost: Number($("costOther").value || 0),
+    cost_basis: $("costBasis").value,
   };
   if (payload.total_items < 0 || payload.total_cost < 0) return showToast("ต้นทุน/จำนวนไม่ถูกต้อง");
 
@@ -49,6 +71,7 @@ $("cancelLotEdit").addEventListener("click", exitEditMode);
 function exitEditMode() {
   editingLotId = null;
   $("lotForm").reset();
+  $("totalCost").readOnly = false;
   setDefaultPurchaseDate();
   updateAvgCost();
   $("lotFormTitle").textContent = "เพิ่มล็อตใหม่";
@@ -64,6 +87,14 @@ function enterEditMode(lot) {
   $("totalCost").value = lot.total_cost ?? 0;
   $("totalItems").value = lot.total_items ?? 0;
   $("note").value = lot.note || "";
+  $("lotCode").value = lot.lot_code || "";
+  $("costPurchase").value = lot.purchase_cost ?? "";
+  $("costShipping").value = lot.shipping_cost ?? 0;
+  $("costCleaning").value = lot.cleaning_cost ?? 0;
+  $("costRepair").value = lot.repair_cost ?? 0;
+  $("costOther").value = lot.other_cost ?? 0;
+  $("costBasis").value = lot.cost_basis || "received";
+  $("totalCost").readOnly = lot.purchase_cost != null;
   $("lotFormTitle").textContent = "แก้ไขล็อต";
   $("lotSubmitBtn").textContent = "บันทึกการแก้ไข";
   $("cancelLotEdit").classList.remove("hidden");
@@ -83,6 +114,10 @@ async function loadLots() {
     return;
   }
   lotsCache = data || [];
+  // เติม datalist จากแหล่งที่มาเดิมที่เคยพิมพ์ไว้ กันสะกดต่างกันจนรายงาน "คุณภาพแหล่งรับของ" แยกกลุ่มผิด
+  const sources = [...new Set(lotsCache.map(l => l.source).filter(Boolean))].sort();
+  const sourceList = $("sourceList");
+  if (sourceList) sourceList.innerHTML = sources.map(s => `<option value="${escapeHtml(s)}"></option>`).join("");
   if (!lotsCache.length) {
     $("lotList").innerHTML = `<div class="empty-state">ยังไม่มีล็อต เพิ่มล็อตแรกด้านบนได้เลย</div>`;
     return;
@@ -106,7 +141,7 @@ async function loadLots() {
 
   $("lotList").innerHTML = lotsCache.map(lot => {
     const avg = Number(lot.total_items) > 0 ? Number(lot.total_cost) / Number(lot.total_items) : 0;
-    const st = summaryByLot[lot.id] || { received: lot.total_items, listed: 0, sold: 0, rejected: lot.rejected_qty || 0, damaged: lot.damaged_qty || 0, pending: lot.total_items, items_total: 0, revenue: 0, profit: 0, remaining_to_breakeven: lot.total_cost };
+    const st = summaryByLot[lot.id] || { received: lot.total_items, listed: 0, available: 0, sold: 0, rejected: lot.rejected_qty || 0, damaged: lot.damaged_qty || 0, pending: lot.total_items, items_total: 0, revenue: 0, profit: 0, remaining_to_breakeven: lot.total_cost };
     const groups = groupsByLot[lot.id] || [];
     const status = lot.status || "sorting";
     const pendingWarn = st.pending < 0;
@@ -132,8 +167,18 @@ async function loadLots() {
       </div>
       ${lot.note ? `<div class="lot-note">${escapeHtml(lot.note)}</div>` : ""}
       <div class="item-actions">
-        <a class="btn btn-ghost btn-sm" href="items.html?lot=${encodeURIComponent(lot.id)}">ดูสินค้าใน Lot</a>
+        <a class="btn btn-ghost btn-sm" href="${window.VimsContext ? VimsContext.itemsUrl({ lotId: lot.id }) : `items.html?lot=${encodeURIComponent(lot.id)}`}">ดูสินค้าใน Lot</a>
+        ${(() => {
+          // "ทำต่อ" พาไปกลุ่มแรกที่ยังไม่ครบเป้า (ถ้ามีกำหนดเป้าไว้) — ถ้าไม่มีกลุ่มไหนตั้งเป้า ให้พาไปหน้า Items ของ Lot เฉยๆ
+          if (status === "closed" || !window.VimsContext) return "";
+          const openGroup = groups.find(g => g.target_qty && (progressByGroup[g.id]?.listed || 0) < g.target_qty);
+          const url = openGroup
+            ? VimsContext.itemsUrl({ lotId: lot.id, groupId: openGroup.id, mode: "rapid" })
+            : VimsContext.itemsUrl({ lotId: lot.id, mode: "bulk" });
+          return `<a class="btn btn-primary btn-sm" href="${url}">ทำต่อ</a>`;
+        })()}
         <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${lot.id}">แก้ไข Lot</button>
+        ${st.available > 0 ? `<button class="btn btn-ghost btn-sm" data-action="recost" data-id="${lot.id}">คำนวณต้นทุนคงเหลือใหม่</button>` : ""}
         ${nextStep ? `<button class="btn btn-primary btn-sm" data-action="advance" data-id="${lot.id}" ${canAdvance ? "" : `disabled title="คัดให้ครบก่อน (รอคัด ต้องเป็น 0)"`}>${nextStep.label}</button>` : ""}
         ${status === "closed" ? `<button class="btn btn-ghost btn-sm" data-action="reopen" data-id="${lot.id}">เปิดล็อตใหม่</button>` : ""}
         <button class="btn btn-danger btn-sm" data-action="delete" data-id="${lot.id}">${hasHistory ? "ปิด/ซ่อน Lot" : "ลบ Lot"}</button>
@@ -147,6 +192,7 @@ async function loadLots() {
   document.querySelectorAll('[data-action="delete"]').forEach(btn => btn.addEventListener("click", () => handleDelete(btn.dataset.id, summaryByLot[btn.dataset.id])));
   document.querySelectorAll('[data-action="groups"]').forEach(btn => btn.addEventListener("click", () => openGroupManager(btn.dataset.id)));
   document.querySelectorAll('[data-action="advance"]').forEach(btn => btn.addEventListener("click", () => advanceLotStatus(btn.dataset.id)));
+  document.querySelectorAll('[data-action="recost"]').forEach(btn => btn.addEventListener("click", () => recostLot(btn.dataset.id, summaryByLot[btn.dataset.id])));
   document.querySelectorAll('[data-action="reopen"]').forEach(btn => btn.addEventListener("click", () => reopenLot(btn.dataset.id)));
   document.querySelectorAll("[data-adjust]").forEach(btn => btn.addEventListener("click", () => adjustLotCounter(btn.dataset.id, btn.dataset.adjust, Number(btn.dataset.delta))));
 }
@@ -167,6 +213,20 @@ async function reopenLot(lotId) {
   const { error } = await supabaseClient.from("lots").update({ status: "ready", closed_at: null }).eq("id", lotId);
   if (error) return showToast("เปิดล็อตใหม่ไม่สำเร็จ: " + error.message);
   showToast("เปิดล็อตใหม่แล้ว");
+  loadLots();
+}
+
+// คำนวณต้นทุนเฉลี่ย/ชิ้นใหม่จากต้นทุนรวม Lot — แตะเฉพาะสินค้า "พร้อมขาย" เท่านั้น
+// ของที่ขายแล้วคง cost_price เดิมไว้เป็น snapshot ต้นทุน ณ วันขาย (ดู recost_lot ใน migration_v16)
+async function recostLot(lotId, summary) {
+  const lot = lotsCache.find(l => l.id === lotId); if (!lot) return;
+  const basisLabel = { received: "จำนวนที่รับเข้าทั้งหมด", sellable: "จำนวนที่ผ่านคัดและลงขาย" };
+  const currentBasis = lot.cost_basis || "received";
+  const ok = confirm(`คำนวณต้นทุนเฉลี่ย/ชิ้นใหม่ของ Lot "${lot.lot_name}" จากฐาน: ${basisLabel[currentBasis]}\n\nจะอัปเดตเฉพาะสินค้าที่ยัง "พร้อมขาย" (${summary?.available ?? "-"} ชิ้น) ของที่ขายไปแล้วจะไม่ถูกแก้ย้อนหลัง\n\nกด OK เพื่อดำเนินการ (เปลี่ยนฐานคำนวณได้ที่ "แก้ไข Lot")`);
+  if (!ok) return;
+  const { data, error } = await supabaseClient.rpc("recost_lot", { p_lot_id: lotId, p_basis: currentBasis });
+  if (error) return showToast("คำนวณไม่สำเร็จ: " + error.message);
+  showToast(`ต้นทุนเฉลี่ยใหม่ ${formatBaht(data.avg_cost)}/ชิ้น (${data.items_updated} รายการ)`);
   loadLots();
 }
 

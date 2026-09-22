@@ -525,3 +525,5 @@ td.loss { color: var(--color-loss); }
 @media (min-width: 900px) and (max-width: 1100px) {
   .vims-sync-status, .sync-indicator { top: 8px; right: 12px; }
 }
+
+.sku-tag{font-size:10.5px;font-weight:600;color:var(--color-ink-soft);background:var(--color-surface-2);border:1px solid var(--color-line);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:1px}

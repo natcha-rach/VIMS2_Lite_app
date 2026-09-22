@@ -20,6 +20,7 @@ async function loadSellGrid() {
     .from("items")
     .select("*, lots(lot_name), lot_groups(group_name)")
     .eq("status", "available")
+    .eq("intake_status", "listed") // V15: ซ่อน Item ที่ยังอยู่ระหว่างอัปโหลดรูป (draft) ไม่ให้ขายได้ตั้งแต่ในรายการ
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -56,6 +57,7 @@ async function loadSoldGrid() {
   const { data: sales, error } = await supabaseClient
     .from("sales")
     .select("item_id, sale_price, sale_date, items(id, item_name, size, condition, tier, cost_price, base_price, lot_id, group_id, lots(lot_name), lot_groups(group_name))")
+    .is("voided_at", null) // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
     .order("sale_date", { ascending: false })
     .limit(300);
 
@@ -147,7 +149,7 @@ function renderGrid(items) {
       <div class="item-tile" data-id="${item.id}">
         <button type="button" class="item-tile-main" data-action="detail" data-id="${item.id}" aria-label="ดูรายละเอียด ${escapeHtml(item.item_name)}">
           <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
-          <div class="name">${escapeHtml(item.item_name)}</div>
+          <div class="name">${escapeHtml(item.item_name)}${item.sku ? ` <span class="sku-tag">${escapeHtml(item.sku)}</span>` : ""}</div>
           <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}</div>
           <div class="price">${formatBaht(item.current_price ?? item.sell_price)}</div>
         </button>
@@ -180,6 +182,7 @@ function applySearch() {
   const filtered = source.filter((item) => {
     const haystack = [
       item.item_name,
+      item.sku, // V15: พิมพ์/ค้นหาด้วย SKU ได้ (ไม่ใช่การสแกน — แค่ค้นข้อความ)
       item.size,
       item.condition,
       item.lots?.lot_name,
@@ -215,7 +218,7 @@ async function openItemSaleDetail(itemId, context = "available") {
   // โหลดประวัติการขายเฉพาะ Item นี้ เพื่อให้รู้ว่ามีรายการขายเดิมหรือไม่
   const { data: sales } = await supabaseClient
     .from("sales")
-    .select("id, sale_date, sale_price, cost_price, payment_method, channel, note")
+    .select("id, sale_date, sale_price, cost_price, payment_method, channel, note, voided_at, void_reason")
     .eq("item_id", item.id)
     .order("sale_date", { ascending: false });
   renderSaleHistory(sales || []);
@@ -231,12 +234,29 @@ function renderSaleHistory(sales) {
   }
   el.innerHTML = sales.map((sale) => {
     const profit = Number(sale.sale_price || 0) - Number(sale.cost_price || 0);
-    return `<div class="sale-history-row">
+    const voided = !!sale.voided_at;
+    return `<div class="sale-history-row ${voided ? "voided" : ""}">
       <div><b>${formatBaht(sale.sale_price)}</b><span>${formatDateTime(sale.sale_date)}</span></div>
       <div><span>${paymentLabel(sale.payment_method)}</span><span>${channelLabel(sale.channel)}</span></div>
       <strong class="${profit >= 0 ? "profit" : "loss"}">${profit >= 0 ? "+" : ""}${formatBaht(profit)}</strong>
+      ${voided
+        ? `<span class="voided-tag" title="${sale.void_reason ? escapeHtml(sale.void_reason) : ""}">ยกเลิกแล้ว</span>`
+        : `<button type="button" class="btn btn-ghost btn-sm" data-void-sale="${sale.id}">ยกเลิกการขายนี้</button>`}
     </div>`;
   }).join("");
+  el.querySelectorAll("[data-void-sale]").forEach((btn) => btn.addEventListener("click", () => voidSaleById(btn.dataset.voidSale)));
+}
+
+// ยกเลิกการขาย (กู้จากกดขายผิด) — คืนสถานะ Item เป็น available ทันที
+async function voidSaleById(saleId) {
+  const reason = prompt("เหตุผลที่ยกเลิก (ไม่บังคับ):", "") || null;
+  const { error } = await supabaseClient.rpc("void_sale", { p_sale_id: saleId, p_reason: reason });
+  if (error) return showToast("ยกเลิกไม่สำเร็จ: " + error.message);
+  showToast("ยกเลิกการขายแล้ว — สินค้ากลับเป็นพร้อมขาย");
+  document.getElementById("saleDetailModal").classList.add("hidden");
+  soldLoaded = false;
+  await loadSellGrid();
+  if (activeTab === "sold") await loadSoldGrid();
 }
 
 // จากรายละเอียด → เปิดฟอร์มขายจริง โดยใช้ current_price เป็นราคาเริ่มต้น

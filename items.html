@@ -35,6 +35,8 @@
       <div class="head-actions"><button class="btn btn-ghost" id="openBulk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;vertical-align:-3px;margin-right:5px"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg>ลงสินค้าหลายชิ้น</button><button class="btn btn-primary" id="focusSingle">＋ เพิ่มสินค้า</button></div>
     </div>
 
+    <div id="contextBar" class="context-bar hidden"></div>
+
     <section class="quick-stats" id="quickStats"></section>
 
     <section class="tag-card" id="singleCard">
@@ -47,7 +49,21 @@
       </form>
     </section>
 
-    <section class="tag-card"><div class="section-title"><div><h2>สต็อก</h2></div><div class="toolbar"><input id="searchBox" placeholder="ค้นหาสินค้า..."/><select id="filterStatus"><option value="available">พร้อมขาย</option><option value="sold">ขายแล้ว</option><option value="damaged">เสีย</option><option value="all">ทั้งหมด</option></select></div></div><div id="itemList"><div class="empty-state">กำลังโหลด...</div></div></section>
+    <section class="tag-card">
+      <div class="section-title"><div><h2>สต็อก</h2></div><div class="toolbar"><input id="searchBox" placeholder="ค้นหาสินค้า / SKU..."/><select id="filterStatus"><option value="available">พร้อมขาย</option><option value="sold">ขายแล้ว</option><option value="damaged">เสีย</option><option value="all">ทั้งหมด</option></select><select id="filterExtra"><option value="">ตัวกรองเพิ่มเติม</option><option value="no_photo">ไม่มีรูป</option><option value="no_price">ยังไม่ตั้งราคา</option><option value="age30">ค้างสต็อก 30+ วัน</option><option value="age60">ค้างสต็อก 60+ วัน</option><option value="age90">ค้างสต็อก 90+ วัน</option></select></div></div>
+      <div id="bulkActionBar" class="bulk-action-bar hidden">
+        <span id="bulkSelCount">เลือกแล้ว 0 รายการ</span>
+        <div class="bulk-action-controls">
+          <div class="bulk-action-group"><input id="bulkPct" type="number" placeholder="ลด %" min="1" max="90" style="width:70px" /><button type="button" class="btn btn-ghost btn-sm" id="bulkApplyPct">ลดราคา %</button></div>
+          <div class="bulk-action-group"><input id="bulkNewPrice" type="number" placeholder="ราคาใหม่" min="0" style="width:90px" /><button type="button" class="btn btn-ghost btn-sm" id="bulkApplyPrice">ตั้งราคา</button></div>
+          <div class="bulk-action-group"><select id="bulkMoveGroup"></select><button type="button" class="btn btn-ghost btn-sm" id="bulkApplyGroup">ย้ายกลุ่ม</button></div>
+          <div class="bulk-action-group"><input id="bulkStorage" placeholder="ตำแหน่งเก็บ" style="width:110px" /><button type="button" class="btn btn-ghost btn-sm" id="bulkApplyStorage">ตั้งที่เก็บ</button></div>
+          <button type="button" class="btn btn-ghost btn-sm" id="bulkApplyDamaged">ทำเครื่องหมายเสีย</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="bulkApplyAvailable">คืนเป็นพร้อมขาย</button>
+        </div>
+      </div>
+      <div id="itemList"><div class="empty-state">กำลังโหลด...</div></div>
+    </section>
   </main>
 </div>
 
@@ -56,6 +72,13 @@
     <div class="modal-head"><div><h2>ลงสินค้าหลายชิ้น</h2><p>สร้างกลุ่มราคาเฉพาะ Lot แล้วเลือกวิธีลงของให้เหมาะกับจำนวนที่มี</p></div><button class="icon-btn" id="closeBulk">×</button></div>
     <div class="bulk-steps"><span class="active" data-step-label="1">1. เลือก Lot / กลุ่ม</span><span data-step-label="2">2. ลงสินค้า</span><span data-step-label="3">3. ตรวจสอบ</span></div>
     <div id="bulkStep1">
+      <div class="receiving-wizard">
+        <span class="receiving-wizard-label">รับสินค้าใหม่:</span>
+        <button type="button" class="btn btn-ghost btn-sm" data-wizard="sack">กระสอบใหญ่ (100–200 ตัว)</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-wizard="small">ล็อตเล็ก (5–50 ตัว)</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-wizard="quick">เพิ่มด่วน (1–3 ตัว)</button>
+      </div>
+      <p id="wizardHint" class="receiving-wizard-hint hidden"></p>
       <div class="field-row"><div class="field"><label>Lot</label><select id="bulkLot"></select></div><div class="field"><label>จำนวนที่ต้องลง</label><input id="groupCount" type="number" min="1" max="200" value="1" /></div></div>
       <div class="group-create"><div class="field"><label>ชื่อกลุ่ม</label><input id="newGroupName" placeholder="เช่น ฿100+ / งานหัว / Vintage" /></div><div class="field"><label>ราคาตั้งต้น</label><input id="newGroupPrice" type="number" min="0" value="199" /></div><div class="field"><label>Tier</label><select id="newGroupTier"><option value="normal">ปกติ</option><option value="head">งานหัว</option></select></div><button class="btn btn-ghost" id="createGroup">＋ เพิ่มกลุ่ม</button></div>
       <div id="groupList" class="group-list"></div>
@@ -168,6 +191,6 @@
 <div class="toast" id="toast"></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="assets/js/supabaseClient.js"></script><script src="assets/js/nav.js"></script><script src="assets/js/items.js"></script><script src="assets/js/realtime.js"></script>
+<script src="assets/js/supabaseClient.js"></script><script src="assets/js/vimsContext.js"></script><script src="assets/js/nav.js"></script><script src="assets/js/items.js"></script><script src="assets/js/realtime.js"></script>
 </body>
 </html>

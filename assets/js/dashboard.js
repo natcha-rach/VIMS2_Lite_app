@@ -62,8 +62,8 @@ async function fetchDashboardData() {
   // หมายเหตุ V13: ไม่ดึง lots/lot_groups ที่นี่แล้ว เพราะ Lot Performance/Recovery ย้ายไปใช้
   // RPC get_lot_performance() (คำนวณใน Postgres) แทนการดึงมา group ฝั่ง browser — ดู renderLotRecovery()
   const [itemsR, salesR, expensesR, settingsR] = await Promise.all([
-    fetchAllRows(() => supabaseClient.from("items").select("id,lot_id,item_name,size,condition,tier,cost_price,current_price,status,created_at,sold_at,group_id")),
-    fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method")),
+    fetchAllRows(() => supabaseClient.from("items").select("id,lot_id,item_name,size,condition,tier,cost_price,current_price,status,created_at,listed_at,sold_at,group_id").eq("intake_status","listed")), // V15: ไม่นับ Item ที่ยังเป็น draft (รอรูป)
+    fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
     fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,amount,category")),
     supabaseClient.from("app_settings").select("key,value").eq("key", "monthly_sales_goal").maybeSingle()
   ]);
@@ -397,13 +397,13 @@ function renderDashboard(data, range) {
   renderQuickInsights(periodSales, items, revenue);
 
   const now = new Date(); const agingBuckets = [{label:"0–7 วัน",min:0,max:7,count:0},{label:"8–30 วัน",min:8,max:30,count:0},{label:"31–60 วัน",min:31,max:60,count:0},{label:"61–90 วัน",min:61,max:90,count:0},{label:"90+ วัน",min:91,max:99999,count:0}];
-  available.forEach(i => { const days = Math.max(0, Math.floor((now-new Date(i.created_at))/86400000)); const b = agingBuckets.find(x => days>=x.min && days<=x.max); if (b) b.count++; });
+  available.forEach(i => { const days = Math.max(0, Math.floor((now-new Date(i.listed_at||i.created_at))/86400000)); const b = agingBuckets.find(x => days>=x.min && days<=x.max); if (b) b.count++; }); // V15: อายุสต็อกนับจาก listed_at (วันที่ลงครบ) ไม่ใช่ created_at
   const maxAge = Math.max(1,...agingBuckets.map(x=>x.count));
   $("agingList").innerHTML = agingBuckets.map(b => `<div class="aging-row"><span>${b.label}</span><div class="bar-track"><div class="bar-fill" style="width:${Math.round(b.count/maxAge*100)}%"></div></div><b>${b.count}</b></div>`).join("");
 
   $("stockCount").innerHTML = `<div><b>${items.length}</b><span>สินค้าทั้งหมด</span></div><div><b>${available.length}</b><span>พร้อมขาย</span></div><div><b>${sold.length}</b><span>ขายแล้ว</span></div><div><b>${damaged.length}</b><span>เสีย</span></div><div><b>${formatBaht(stockCost)}</b><span>ต้นทุนคงเหลือ</span></div><div><b>${formatBaht(stockRetail)}</b><span>ราคาขายคงเหลือ</span></div>`;
 
-  const markdown = available.map(i => { const days=Math.max(0,Math.floor((now-new Date(i.created_at))/86400000)); return {...i,days}; }).filter(i=>i.days>=60).sort((a,b)=>b.days-a.days).slice(0,8);
+  const markdown = available.map(i => { const days=Math.max(0,Math.floor((now-new Date(i.listed_at||i.created_at))/86400000)); return {...i,days}; }).filter(i=>i.days>=60).sort((a,b)=>b.days-a.days).slice(0,8);
   $("markdownList").innerHTML = markdown.length ? markdown.map(i => `<div class="markdown-item"><div><b>${escapeHtml(i.item_name)}</b><small>${i.days} วัน · ${escapeHtml(i.size||"-")} · ${i.condition} · ${i.tier==='head'?'งานหัว':'ปกติ'}</small></div><div style="text-align:right"><b>${formatBaht(i.current_price)}</b><small>ต้นทุน ${formatBaht(i.cost_price)}</small></div></div>`).join("") : `<div class="empty-state">ยังไม่มีสินค้าที่ค้าง 60+ วัน</div>`;
 
   // Top profit items ย้ายไปวิเคราะห์ต่อในหน้า "รายงาน" (reports.js) แทน — Dashboard
@@ -412,6 +412,42 @@ function renderDashboard(data, range) {
 }
 
 
+// V17: "งานวันนี้" — ใช้ get_lot_summary() ตัวเดียวกับหน้า Lots เพื่อให้ตัวเลขตรงกันเป๊ะ
+// 1) Lot ที่ยังค้างลง (สถานะ receiving/sorting และรอคัด > 0)
+// 2) Lot ที่ใกล้คืนทุน (เหลือคืนทุนไม่เกิน 20% ของต้นทุน)
+async function renderTodayTasks() {
+  const el = $("todayTasks"); if (!el) return;
+  const { data, error } = await supabaseClient.rpc("get_lot_summary");
+  if (error) { console.error(error); el.innerHTML = `<div class="empty-state">โหลดไม่สำเร็จ</div>`; return; }
+  const lots = (data || []);
+  const pending = lots.filter(l => ["receiving","sorting"].includes(l.status) && Number(l.pending) > 0)
+    .sort((a,b) => Number(b.pending) - Number(a.pending)).slice(0, 5);
+  const nearBreakeven = lots.filter(l => l.status !== "closed" && Number(l.total_cost) > 0
+    && Number(l.remaining_to_breakeven) > 0 && Number(l.remaining_to_breakeven) <= Number(l.total_cost) * 0.2)
+    .sort((a,b) => Number(a.remaining_to_breakeven) - Number(b.remaining_to_breakeven)).slice(0, 5);
+
+  const lotName = id => lotsMetaCache?.[id]?.lot_name || "Lot";
+  const sections = [];
+  sections.push(`<div class="today-task-group"><h3>Lot ที่ยังค้างลง (${pending.length})</h3>${
+    pending.length ? pending.map(l => `<a class="today-task-row" href="lots.html">
+      <span>${escapeHtml(lotName(l.lot_id))}</span><b>เหลือลง ${l.pending} ชิ้น</b>
+    </a>`).join("") : `<div class="empty-state small">ไม่มี Lot ที่ค้างลง</div>`
+  }</div>`);
+  sections.push(`<div class="today-task-group"><h3>Lot ใกล้คืนทุน (${nearBreakeven.length})</h3>${
+    nearBreakeven.length ? nearBreakeven.map(l => `<a class="today-task-row" href="lots.html">
+      <span>${escapeHtml(lotName(l.lot_id))}</span><b>เหลืออีก ${formatBaht(l.remaining_to_breakeven)}</b>
+    </a>`).join("") : `<div class="empty-state small">ยังไม่มี Lot ที่ใกล้คืนทุน</div>`
+  }</div>`);
+  el.innerHTML = sections.join("");
+}
+
+// เก็บชื่อ Lot แยกไว้เบาๆ (ไม่ผูกกับ dashboardRows) เพื่อแสดงชื่อใน Today's Tasks โดยไม่ query ซ้ำ
+let lotsMetaCache = null;
+async function loadLotsMeta() {
+  const { data } = await supabaseClient.from("lots").select("id,lot_name");
+  lotsMetaCache = Object.fromEntries((data || []).map(l => [l.id, l]));
+}
+
 async function loadDashboard(range) {
   try {
     dashboardRows ||= await fetchDashboardData();
@@ -419,6 +455,8 @@ async function loadDashboard(range) {
   } catch (err) { console.error(err); showToast("โหลด Dashboard ไม่สำเร็จ: " + (err.message || err)); }
   // แยกจาก renderDashboard เพราะดึงผ่าน RPC (async) และไม่ผูกกับ periodRange — ไม่ต้อง block การแสดง KPI หลัก
   renderLotRecovery();
+  if (!lotsMetaCache) await loadLotsMeta();
+  renderTodayTasks();
 }
 
 function setPeriodMode(mode) {
