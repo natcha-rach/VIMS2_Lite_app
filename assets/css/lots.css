@@ -14,9 +14,13 @@
 .stepper-btn{width:22px;height:22px;border-radius:6px;border:1px solid var(--color-line);background:var(--color-surface-2);color:var(--color-ink);cursor:pointer;font-size:14px;line-height:1;display:inline-flex;align-items:center;justify-content:center}
 .stepper-btn:hover{background:var(--color-surface-hover)}
 .cost-breakdown-details{margin:10px 0;padding:10px 12px;border:1px solid var(--color-line);border-radius:10px;background:var(--color-surface-2)}
-.cost-breakdown-details summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--color-ink)!important}
+.cost-breakdown-details.cost-breakdown-details summary{cursor:pointer;font-weight:600;font-size:13px;color:#EDEFF4!important}
 .cost-breakdown-details[open] summary{margin-bottom:10px}
-/* กล่องนี้พื้นเข้ม แต่ธีมหลัก (design-v12) ตั้งสี label ไว้สำหรับพื้นอ่อน (#6a7290) ทำให้จางอ่านยาก — บังคับใช้สีอ่านง่ายบนพื้นเข้มแทน */
-.cost-breakdown-details .field label{color:var(--color-ink)!important}
-.cost-breakdown-details .field-hint{color:var(--color-ink-soft)!important}
+/* กล่องนี้พื้นเข้ม แต่ธีมหลัก (design-v12) ตั้งสี label/ช่องกรอกไว้สำหรับพื้นอ่อน ทำให้จางอ่านยาก
+   ใช้ class ซ้ำ (.cost-breakdown-details.cost-breakdown-details) เพื่อดันความสำคัญให้ชนะกฎเดิมแน่ๆ แม้ทั้งคู่จะเป็น !important */
+.cost-breakdown-details.cost-breakdown-details .field label{color:#EDEFF4!important}
+.cost-breakdown-details.cost-breakdown-details .field-hint{color:#C3C8DA!important}
+.cost-breakdown-details.cost-breakdown-details .field input,
+.cost-breakdown-details.cost-breakdown-details .field select{color:#1a1d29!important;background:#fff!important}
+.cost-breakdown-details.cost-breakdown-details .field input::placeholder{color:#8a8fa3!important}
 .field-hint{margin:2px 0 10px;font-size:12px;color:var(--color-ink-soft)}
