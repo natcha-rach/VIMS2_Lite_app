@@ -526,4 +526,6 @@ td.loss { color: var(--color-loss); }
   .vims-sync-status, .sync-indicator { top: 8px; right: 12px; }
 }
 
-.sku-tag{font-size:10.5px;font-weight:600;color:var(--color-ink-soft);background:var(--color-surface-2);border:1px solid var(--color-line);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+/* display:inline-block!important กันไม่ให้กฎ "span{display:block}" ของบล็อกแม่ (เช่น .stock-main, .name) ดึง tag นี้ให้ยืดเต็มแถว
+   สีปรับให้เหมาะกับพื้นหลังสีอ่อนของหน้า Stock/Sell (ของเดิมใช้โทนเข้มที่ออกแบบไว้สำหรับการ์ดพื้นเข้มอย่างหน้า Lots) */
+.sku-tag{display:inline-block!important;font-size:10.5px;font-weight:600;color:#5b6274!important;background:#eef0f5!important;border:1px solid #dde1ea;border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:1px}
