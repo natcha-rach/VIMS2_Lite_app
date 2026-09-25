@@ -218,7 +218,9 @@
 }
 .today-tasks-list{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 .today-task-group h3{margin:0 0 8px;font-size:13px;color:var(--color-ink-soft)}
-.today-task-row{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-radius:9px;background:var(--color-surface-2);margin-bottom:6px;text-decoration:none;color:inherit;font-size:13px}
-.today-task-row:hover{background:var(--color-surface-hover,#eee)}
+.today-task-row,.today-task-row *{color:#EDEFF4}
+.today-task-row{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;border-radius:9px;background:var(--color-surface-2);margin-bottom:6px;text-decoration:none;font-size:13px}
+.today-task-row b{color:#B7BECC}
+.today-task-row:hover{background:var(--color-surface-hover,#2b3245)}
 .empty-state.small{padding:10px;font-size:12.5px}
 @media(max-width:720px){.today-tasks-list{grid-template-columns:1fr}}
