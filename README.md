@@ -2,6 +2,27 @@
 
 ระบบหลังบ้านร้านเสื้อมือสองสำหรับใช้งานคนเดียว โดยตั้งใจให้เล็กและดูแลง่าย: **HTML/CSS/JS + Supabase** ไม่มี Express/Prisma และไม่มี API backend ของเราเอง
 
+## โครงสร้างโฟลเดอร์
+
+```
+├── index.html, items.html, lots.html,        ← หน้าเว็บ (อัปโหลดทั้งหมดขึ้น hosting)
+│   sell.html, reports.html, accounting.html
+├── assets/
+│   ├── css/            ← ไฟล์สไตล์ที่ใช้งานจริงทั้งหมด (ของไม่ได้ใช้เก็บใน css/archive/)
+│   └── js/              ← ไฟล์ JS ที่ใช้งานจริงทั้งหมด
+├── sql/
+│   ├── schema_part1_tables_and_rls.sql  ← รัน 3 ไฟล์นี้ตามลำดับสำหรับโปรเจกต์ Supabase ใหม่
+│   ├── schema_part2_functions.sql
+│   ├── schema_part3_cost_reports.sql
+│   ├── schema.sql                        ← เนื้อหาเดียวกันรวมไฟล์เดียว (ใช้กับ CLI/psql)
+│   ├── reset_before_retry.sql            ← ใช้เมื่อรันค้างกลางทางแล้วต้องล้างแล้วเริ่มใหม่
+│   └── archive/                          ← migration ของเวอร์ชันเก่าๆ (V2-V17) เก็บไว้เป็นประวัติ ไม่ต้องรันถ้าเริ่มจากศูนย์
+└── docs/
+    ├── SUPABASE_SETUP.md   ← คู่มือติดตั้งฉบับเต็ม
+    ├── CODE_MAP.md          ← แผนที่โค้ดปัจจุบัน
+    └── archive/             ← CHANGELOG/DESIGN ของเวอร์ชันเก่า เก็บไว้อ้างอิงประวัติ
+```
+
 ## Business flow
 
 `Lot → คัดเป็นกลุ่ม → ลง Item → Available → Sell → Sold → วิเคราะห์กำไร`
@@ -73,19 +94,25 @@ Excel รองรับ:
 
 ## Supabase
 
-### ฐานข้อมูลใหม่
-รัน `sql/schema.sql`
+รายละเอียดขั้นตอนเต็มอยู่ที่ [`docs/SUPABASE_SETUP.md`](docs/SUPABASE_SETUP.md) สรุปสั้นๆ:
 
-### มีฐานข้อมูลเดิม
-รันตามลำดับ:
-1. schema เดิม
-2. `sql/migration_v2.sql`
-3. `sql/migration_v3.sql`
+### โปรเจกต์ Supabase ใหม่ (ยังไม่มีตารางอะไรเลย)
+วางแล้วรันใน SQL Editor ตามลำดับ (ทีละไฟล์ รอ Success ก่อนไปไฟล์ถัดไป):
+1. `sql/schema_part1_tables_and_rls.sql`
+2. `sql/schema_part2_functions.sql`
+3. `sql/schema_part3_cost_reports.sql`
+
+หรือถ้ารันผ่าน CLI/psql (ไม่ผ่านเว็บ SQL Editor) ใช้ไฟล์รวมไฟล์เดียวได้เลยคือ `sql/schema.sql` (เนื้อหาเหมือนกับ 3 ไฟล์ข้างบนรวมกัน)
+
+ถ้ารันแล้วเจอ error กลางทาง (เช่นมีตารางค้างจากความพยายามครั้งก่อน) ให้รัน `sql/reset_before_retry.sql` ก่อน แล้วเริ่มรัน part1-3 ใหม่ตั้งแต่ต้น
+
+### มีฐานข้อมูล V13 เดิมอยู่แล้ว (อัปเกรดแบบไม่ล้างของเดิม)
+ไฟล์ migration แต่ละเวอร์ชันเก็บไว้ที่ `sql/archive/` (เช่น `migration_v14_lot_reconciliation.sql` ถึง `migration_v17_reports.sql`) — รันเรียงตามเลขเวอร์ชันบนฐานข้อมูลเดิมได้โดยไม่ต้องรัน schema_part ใหม่ทั้งหมด
 
 > โปรเจกต์นี้ยังตั้ง RLS แบบเปิดตามแนวคิดเดิม เพราะตั้งใจใช้คนเดียว หากจะเปิดเป็น public app ควรเพิ่ม Supabase Auth + RLS ก่อน
 
 ### Storage
-Bucket `item-images` ถูกสร้างจาก schema/migration และใช้เก็บรูปสินค้า
+สร้าง bucket ชื่อ `item-images` (public) ไว้เก็บรูปสินค้า — `schema_part1_tables_and_rls.sql` มีคำสั่ง insert bucket ให้แล้ว แต่ควรเข้าไปเช็คใน Dashboard > Storage อีกทีว่าขึ้นจริง
 
 ## หมายเหตุ
 - จำกัด bulk ที่ 200 รายการต่อครั้ง
@@ -231,7 +258,7 @@ loadItemHistory()
 Edit Modal / ประวัติการแก้ไข
 ```
 
-> ก่อนใช้งาน V7 กับฐานเดิม ให้รัน `sql/migration_v7.sql` ใน Supabase SQL Editor
+> ก่อนใช้งาน V7 กับฐานเดิม ให้รัน `sql/archive/migration_v7.sql` ใน Supabase SQL Editor
 
 ## V8 Code Map — Sale Workflow
 
@@ -290,19 +317,19 @@ reports.html
 - Dashboard ไม่แก้ข้อมูลธุรกรรม เป็น read-only analytics layer
 
 ### V9 database
-รัน `sql/migration_v9.sql` หลัง migration_v8 เพื่อเพิ่ม index สำหรับรายงาน
+รัน `sql/archive/migration_v9.sql` หลัง migration_v8 เพื่อเพิ่ม index สำหรับรายงาน
 
 
 ## V10 — Supabase connection
 - `assets/js/supabaseClient.js` is configured with the user's Supabase Project URL.
 - The URL must be the project root, not `/rest/v1/`.
 - Storage bucket expected by the app: `item-images`.
-- For a fresh Supabase project, use `sql/schema.sql`; do not run incremental migrations v2-v9.
+- For a fresh Supabase project, use `sql/schema_part1_tables_and_rls.sql` → `sql/schema_part2_functions.sql` → `sql/schema_part3_cost_reports.sql` (or the combined `sql/schema.sql`); do not run the old incremental migrations in `sql/archive/`.
 
 
 ## V10.1
-See `CODE_MAP.md`, `CHANGELOG_V10.1.md`, and `sql/migration_v10_1_realtime.sql`. Run the migration only after confirming the existing V10 tables.
+See `docs/CODE_MAP.md`, `docs/archive/CHANGELOG_V10.1.md`, and `sql/archive/migration_v10_1_realtime.sql`. Run the migration only after confirming the existing V10 tables.
 
 
 ## V11.2 Business Intelligence
-Dashboard now includes decision-support signals and a month-end run-rate estimate. See `CHANGELOG_V11.2.md`.
+Dashboard now includes decision-support signals and a month-end run-rate estimate. See `docs/archive/CHANGELOG_V11.2.md`.
