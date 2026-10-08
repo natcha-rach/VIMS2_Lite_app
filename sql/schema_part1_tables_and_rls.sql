@@ -159,9 +159,33 @@ alter table expenses enable row level security;
 alter table app_settings enable row level security;
 alter table item_change_history enable row level security;
 
--- SECURITY: ไม่สร้าง policy แบบเปิดโล่ง (using true) อีกแล้ว
--- RLS เปิดไว้แต่ยังไม่มี policy = ปิดทุกทางจนกว่าจะรัน schema_part4_security.sql (owner-only)
+drop policy if exists "allow all - lots" on lots;
+drop policy if exists "allow all - lot_groups" on lot_groups;
+drop policy if exists "allow all - items" on items;
+drop policy if exists "allow all - item_images" on item_images;
+drop policy if exists "allow all - sales" on sales;
+drop policy if exists "allow all - expenses" on expenses;
+drop policy if exists "allow all - app_settings" on app_settings;
+drop policy if exists "allow all - item_change_history" on item_change_history;
+drop policy if exists "allow all - lot_events" on lot_events;
 
--- SECURITY: policy ของ storage.objects สร้างใน schema_part4_security.sql (owner-only) แทน
+create policy "allow all - lots" on lots for all using (true) with check (true);
+create policy "allow all - lot_groups" on lot_groups for all using (true) with check (true);
+create policy "allow all - items" on items for all using (true) with check (true);
+create policy "allow all - item_images" on item_images for all using (true) with check (true);
+create policy "allow all - sales" on sales for all using (true) with check (true);
+create policy "allow all - expenses" on expenses for all using (true) with check (true);
+create policy "allow all - app_settings" on app_settings for all using (true) with check (true);
+create policy "allow all - item_change_history" on item_change_history for all using (true) with check (true);
+create policy "allow all - lot_events" on lot_events for all using (true) with check (true);
+
+drop policy if exists "public read item images" on storage.objects;
+drop policy if exists "public upload item images" on storage.objects;
+drop policy if exists "public update item images" on storage.objects;
+drop policy if exists "public delete item images" on storage.objects;
+create policy "public read item images" on storage.objects for select using (bucket_id = 'item-images');
+create policy "public upload item images" on storage.objects for insert with check (bucket_id = 'item-images');
+create policy "public update item images" on storage.objects for update using (bucket_id = 'item-images') with check (bucket_id = 'item-images');
+create policy "public delete item images" on storage.objects for delete using (bucket_id = 'item-images');
 
 -- ขาย 1 ชิ้นแบบ atomic: ถ้า insert sale หรือเปลี่ยนสถานะไม่สำเร็จ ทั้ง transaction จะ rollback

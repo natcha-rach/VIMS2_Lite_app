@@ -29,14 +29,15 @@ create table if not exists lot_events (
 create index if not exists idx_lot_events_lot on lot_events(lot_id, created_at desc);
 
 alter table lot_events enable row level security;
--- SECURITY: policy ของ lot_events สร้างใน schema_part4_security.sql (owner-only)
+drop policy if exists "allow all - lot_events" on lot_events;
+create policy "allow all - lot_events" on lot_events for all using (true) with check (true);
 
 -- 4) recost_lot: คำนวณต้นทุนเฉลี่ย/ชิ้นใหม่ แล้วอัปเดตเฉพาะสินค้าที่ "พร้อมขาย" (available)
 -- ของที่ขายแล้วคง cost_price เดิมไว้เป็น snapshot ต้นทุน ณ วันขาย ไม่ถูกแก้ย้อนหลัง
 create or replace function public.recost_lot(p_lot_id uuid, p_basis text default null)
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -85,7 +86,7 @@ end;
 $$;
 
 revoke all on function public.recost_lot(uuid,text) from public;
-grant execute on function public.recost_lot(uuid,text) to authenticated;
+grant execute on function public.recost_lot(uuid,text) to anon, authenticated;
 
 
 -- V17: Reports (group performance, source quality)
@@ -106,7 +107,7 @@ returns table (
 )
 language sql
 stable
-security invoker
+security definer
 set search_path = public
 as $$
   select
@@ -131,7 +132,7 @@ as $$
 $$;
 
 revoke all on function public.get_group_performance() from public;
-grant execute on function public.get_group_performance() to authenticated;
+grant execute on function public.get_group_performance() to anon, authenticated;
 
 -- 2) get_source_quality: สรุปตามแหล่งรับของ (lots.source) — อัตราคัดออก/เสีย และกำไรต่อ Lot
 create or replace function public.get_source_quality()
@@ -148,7 +149,7 @@ returns table (
 )
 language sql
 stable
-security invoker
+security definer
 set search_path = public
 as $$
   with lot_sales as (
@@ -181,4 +182,4 @@ as $$
 $$;
 
 revoke all on function public.get_source_quality() from public;
-grant execute on function public.get_source_quality() to authenticated;
+grant execute on function public.get_source_quality() to anon, authenticated;

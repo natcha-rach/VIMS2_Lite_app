@@ -7,7 +7,7 @@ create or replace function public.sell_item(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -30,7 +30,7 @@ end;
 $$;
 
 revoke all on function public.sell_item(uuid,numeric,text,text,text) from public;
-grant execute on function public.sell_item(uuid,numeric,text,text,text) to authenticated;
+grant execute on function public.sell_item(uuid,numeric,text,text,text) to anon, authenticated;
 
 
 -- Atomic update: เปลี่ยนข้อมูล Item + สร้าง history record ใน transaction เดียว
@@ -49,7 +49,7 @@ create or replace function public.update_item_with_history(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -89,7 +89,7 @@ end;
 $$;
 
 revoke all on function public.update_item_with_history(uuid,text,text,text,text,text,uuid,numeric,numeric,numeric,jsonb) from public;
-grant execute on function public.update_item_with_history(uuid,text,text,text,text,text,uuid,numeric,numeric,numeric,jsonb) to authenticated;
+grant execute on function public.update_item_with_history(uuid,text,text,text,text,text,uuid,numeric,numeric,numeric,jsonb) to anon, authenticated;
 
 
 -- V13: Lot Performance คำนวณใน Postgres แทน browser
@@ -115,7 +115,7 @@ returns table (
 )
 language sql
 stable
-security invoker
+security definer
 set search_path = public
 as $$
   select
@@ -150,7 +150,7 @@ as $$
 $$;
 
 revoke all on function public.get_lot_performance() from public;
-grant execute on function public.get_lot_performance() to authenticated;
+grant execute on function public.get_lot_performance() to anon, authenticated;
 
 
 -- V14: Lot Reconciliation RPC
@@ -184,7 +184,7 @@ returns table (
 )
 language sql
 stable
-security invoker
+security definer
 set search_path = public
 as $$
   with it as (
@@ -239,7 +239,7 @@ as $$
 $$;
 
 revoke all on function public.get_lot_summary(uuid) from public;
-grant execute on function public.get_lot_summary(uuid) to authenticated;
+grant execute on function public.get_lot_summary(uuid) to anon, authenticated;
 
 -- 4) get_group_progress — จำนวนที่ลงจริงต่อกลุ่ม เทียบ target_qty
 create or replace function public.get_group_progress(p_lot_id uuid default null)
@@ -253,7 +253,7 @@ returns table (
 )
 language sql
 stable
-security invoker
+security definer
 set search_path = public
 as $$
   select
@@ -270,7 +270,7 @@ as $$
 $$;
 
 revoke all on function public.get_group_progress(uuid) from public;
-grant execute on function public.get_group_progress(uuid) to authenticated;
+grant execute on function public.get_group_progress(uuid) to anon, authenticated;
 
 
 -- V15: SKU / Entry modes / Stock view / Bulk actions / Void sale
@@ -279,7 +279,7 @@ grant execute on function public.get_group_progress(uuid) to authenticated;
 create or replace function public.assign_item_sku()
 returns trigger
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -313,7 +313,7 @@ create or replace function public.sell_item(
 )
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -336,7 +336,7 @@ end;
 $$;
 
 revoke all on function public.sell_item(uuid,numeric,text,text,text) from public;
-grant execute on function public.sell_item(uuid,numeric,text,text,text) to authenticated;
+grant execute on function public.sell_item(uuid,numeric,text,text,text) to anon, authenticated;
 
 -- 5) sales: void (ยกเลิกการขาย) — กู้จากกดขายผิดโดยไม่ต้องแก้ SQL ตรงๆ
 alter table sales add column if not exists voided_at timestamptz;
@@ -345,7 +345,7 @@ alter table sales add column if not exists void_reason text;
 create or replace function public.void_sale(p_sale_id uuid, p_reason text default null)
 returns jsonb
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -363,7 +363,7 @@ end;
 $$;
 
 revoke all on function public.void_sale(uuid,text) from public;
-grant execute on function public.void_sale(uuid,text) to authenticated;
+grant execute on function public.void_sale(uuid,text) to anon, authenticated;
 
 -- 6) v_items_list: view รวม Lot/Group name + จำนวนรูป + อายุสต็อก สำหรับหน้า Stock filter
 -- ให้กรอง/ค้นหาที่ server ได้ครบ (ไม่มีรูป, อายุ 30/60/90 วัน ฯลฯ) แทนการดึงทุกแถวมากรองที่ browser
@@ -380,7 +380,7 @@ from items i
 left join lots l on l.id = i.lot_id
 left join lot_groups g on g.id = i.group_id;
 
-grant select on public.v_items_list to authenticated;
+grant select on public.v_items_list to anon, authenticated;
 
 -- 7) bulk_update_items: แก้ไขหลายรายการพร้อมกัน (ลดราคา %, ตั้งราคาใหม่, ย้ายกลุ่ม, เปลี่ยนสถานะ, ที่เก็บ)
 -- ห้ามแตะ Item ที่ status='sold' เพื่อไม่ให้ไปยุ่งกับ snapshot ต้นทุน ณ เวลาขาย
@@ -395,7 +395,7 @@ create or replace function public.bulk_update_items(
 )
 returns int
 language plpgsql
-security invoker
+security definer
 set search_path = public
 as $$
 declare
@@ -426,4 +426,4 @@ end;
 $$;
 
 revoke all on function public.bulk_update_items(uuid[],numeric,numeric,boolean,uuid,text,text) from public;
-grant execute on function public.bulk_update_items(uuid[],numeric,numeric,boolean,uuid,text,text) to authenticated;
+grant execute on function public.bulk_update_items(uuid[],numeric,numeric,boolean,uuid,text,text) to anon, authenticated;

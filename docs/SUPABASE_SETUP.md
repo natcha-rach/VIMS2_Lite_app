@@ -25,7 +25,6 @@ For a fresh/empty database, run these three files in the Supabase SQL Editor, **
 1. `sql/schema_part1_tables_and_rls.sql`
 2. `sql/schema_part2_functions.sql`
 3. `sql/schema_part3_cost_reports.sql`
-4. `sql/schema_part4_security.sql`  (**required** — owner-only RLS, storage lockdown)
 
 (Split into three because the combined file is large enough that pasting it into the web SQL Editor in one go can silently truncate.)
 
@@ -33,23 +32,7 @@ If you're running it via `psql`/CLI instead of the web editor, the combined sing
 
 If a run fails partway through and leaves some tables half-created, run `sql/reset_before_retry.sql` first to clear them out, then start again from part 1.
 
-Do not run anything in `sql/archive/` or `sql/danger/` on a fresh database — those are old incremental migrations (V2 through V17), kept only for upgrading an existing pre-V14 database without a full reset.
-
-## 3.1) Owner account (required — do this before/with part 4)
-
-1. Authentication > Users > **Add user** (email + strong password).
-2. Authentication > Sign In / Providers > **disable "Allow new users to sign up"**.
-3. After running part 4, register the owner (edit the email):
-
-```sql
-insert into public.app_admins(user_id)
-select id from auth.users where email = 'YOUR_EMAIL@example.com'
-on conflict do nothing;
-```
-
-4. Optional but recommended: enable TOTP MFA for this account.
-
-Full checklist and residual risks: `docs/SECURITY.md`.
+Do not run anything in `sql/archive/` on a fresh database — those are old incremental migrations (V2 through V17), kept only for upgrading an existing pre-V14 database without a full reset.
 
 ## 4) Storage
 

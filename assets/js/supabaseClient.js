@@ -8,44 +8,7 @@
 const SUPABASE_URL = "https://cphhutlxvbinaycmsekm.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwaGh1dGx4dmJpbmF5Y21zZWttIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyMTcyNzEsImV4cCI6MjEwMTc5MzI3MX0._8Qjqrnnlot6Lt5vGuQQg_PgfZ9YavBxLxMG22ctxvc";
 
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false },
-});
-
-// ==========================================================
-// Auth guard — ทุกหน้า (ยกเว้น login.html) ต้องล็อกอินก่อน
-// หมายเหตุสำคัญ: ตัวนี้เป็นแค่ "ความสะดวก" (พาไปหน้า login) ไม่ใช่ตัวป้องกันจริง
-// ตัวป้องกันจริงคือ RLS ใน Supabase (sql/schema_part4_security.sql) ที่ให้เฉพาะเจ้าของร้านอ่าน/เขียนได้
-// ==========================================================
-const IS_LOGIN_PAGE = /(^|\/)login\.html$/.test(location.pathname);
-const AUTH_STORAGE_KEY = "sb-" + new URL(SUPABASE_URL).hostname.split(".")[0] + "-auth-token";
-
-function goToLogin() {
-  const page = (location.pathname.split("/").pop() || "index.html") + location.search;
-  location.replace("login.html?next=" + encodeURIComponent(page));
-}
-
-if (!IS_LOGIN_PAGE) {
-  // เช็คเร็วๆ แบบ synchronous ก่อนหน้าจะโหลดข้อมูล (กันจอกะพริบ/error ตอนยังไม่ล็อกอิน)
-  let hasStoredSession = false;
-  try { hasStoredSession = !!localStorage.getItem(AUTH_STORAGE_KEY); } catch (e) { /* localStorage ใช้ไม่ได้ */ }
-  if (!hasStoredSession) goToLogin();
-
-  // ถ้า session หมดอายุ/ถูกเพิกถอน (เช่น logout จากอีกแท็บ) ให้กลับไปหน้า login
-  supabaseClient.auth.onAuthStateChange((event, session) => {
-    if (event === "SIGNED_OUT" || (event === "INITIAL_SESSION" && !session)) goToLogin();
-  });
-}
-
-// ออกจากระบบ: เคลียร์ session + ข้อมูลร่างที่ค้างในเครื่อง แล้วกลับหน้า login
-async function vimsSignOut() {
-  try { await supabaseClient.auth.signOut(); } catch (e) { console.warn("signOut:", e); }
-  try {
-    Object.keys(localStorage).filter((k) => k.startsWith("vims2_")).forEach((k) => localStorage.removeItem(k));
-  } catch (e) { /* ignore */ }
-  location.replace("login.html");
-}
-window.vimsSignOut = vimsSignOut;
+const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ให้โมดูล Realtime และสคริปต์หน้าอื่นเข้าถึง client ตัวเดียวกันได้
 window.supabaseClient = supabaseClient;
 

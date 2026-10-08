@@ -326,10 +326,6 @@ $('itemForm')?.addEventListener('submit', async e => {
 // ย่อรูปฝั่ง client ก่อนอัปโหลด (ด้านยาวสุด ~1600px, JPEG ~0.8) — ลดเวลาอัปโหลดและพื้นที่ Storage
 // บนกองใหญ่ 200 ชิ้น x 2 รูป ที่ไม่ย่อไฟล์จาก iPhone กล้องยุคใหม่แต่ละใบหลาย MB รวมกันหลัก GB
 // ถ้าย่อไม่สำเร็จ (เช่นเบราว์เซอร์เก่าไม่รองรับ canvas) ให้ใช้ไฟล์ต้นฉบับแทน ไม่ปิดกั้นการอัปโหลด
-// whitelist ชนิดรูปที่อัปโหลดได้ (ต้องตรงกับ allowed_mime_types ของ bucket ใน schema_part4_security.sql)
-const ALLOWED_IMAGE_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/heic': 'heic', 'image/heif': 'heif' };
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB ต่อไฟล์
-
 async function compressImageFile(file, maxDim = 1600, quality = 0.8) {
   if (!file.type || !file.type.startsWith('image/') || file.type === 'image/gif') return file;
   try {
@@ -355,18 +351,12 @@ async function compressImageFile(file, maxDim = 1600, quality = 0.8) {
 async function uploadItemImages(itemId, files) {
   // จำกัดรูปต่อ Item ไว้ที่ 2 รูปตาม Database Contract: sort_order 1/2
   const rawFiles = Array.from(files || []).slice(0, 2);
-  // ตรวจชนิด/ขนาดไฟล์ฝั่ง client (ด่านสุดท้ายอยู่ที่ Storage bucket: allowed_mime_types + file_size_limit)
-  rawFiles.forEach((f) => {
-    if (!ALLOWED_IMAGE_EXT[f.type]) throw new Error(`ไฟล์ "${f.name}" ไม่ใช่รูปที่รองรับ (jpg/png/webp/gif/heic)`);
-    if (f.size > MAX_UPLOAD_BYTES) throw new Error(`ไฟล์ "${f.name}" ใหญ่เกิน 10 MB`);
-  });
   const safeFiles = await Promise.all(rawFiles.map(f => compressImageFile(f)));
   const uploadedPaths = [];
 
   for (let i = 0; i < safeFiles.length; i++) {
     const file = safeFiles[i];
-    // นามสกุลมาจาก MIME type ที่ผ่าน whitelist เท่านั้น — ไม่เชื่อชื่อไฟล์จากผู้ใช้ (กัน path แปลกๆ / นามสกุลหลอก)
-    const ext = ALLOWED_IMAGE_EXT[file.type] || 'jpg';
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
     const path = `${itemId}/${crypto.randomUUID()}.${ext}`;
 
     // 1) Upload binary file ไป Supabase Storage
@@ -494,7 +484,7 @@ async function loadItems(){
     if(extra==='age90') query=query.gte('age_days',90);
     return query;
   });
-  if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: '+escapeHtml(error.message)+'</div>';return;}
+  if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: '+error.message+'</div>';return;}
   itemsCache=data||[];
   selectedItemIds = new Set([...selectedItemIds].filter(id => itemsCache.some(i => i.id === id)));
   renderItems(); updateQuickStats(); renderBulkActionBar();
@@ -512,7 +502,7 @@ async function renderItems(){
     if (Number.isFinite(i.age_days) && i.status==='available') metaBits.push(`ค้าง ${i.age_days} วัน`);
     return `<div class="stock-row">
       <input type="checkbox" class="stock-select" data-select-item="${i.id}" ${selectedItemIds.has(i.id)?'checked':''} ${i.status==='sold'?'disabled title="ขายแล้ว แก้ไม่ได้"':''} />
-      <div class="thumb">${im?`<img src="${safeImgUrl(im.image_url)}" alt="">`:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
+      <div class="thumb">${im?`<img src="${im.image_url}" alt="">`:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
       <div class="stock-main"><b>${escapeHtml(i.item_name)}${i.sku?` <span class="sku-tag">${escapeHtml(i.sku)}</span>`:''}</b><span>${metaBits.join(' · ')}</span></div>
       <div class="stock-price"><small>ต้นทุน ${formatBaht(i.cost_price)}</small><b>${formatBaht(i.current_price)}</b></div>
       <span class="badge ${i.status}">${i.status==='available'?'พร้อมขาย':i.status==='sold'?'ขายแล้ว':'เสีย'}</span>
@@ -1155,11 +1145,11 @@ $('excelInput')?.addEventListener('change', async event => {
   const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
   // Normalize ชื่อ column ให้ตรงกับ schema ที่ Bulk Table ใช้
   importedRows = rows.map(row => ({
-    item_name: String(row.item_name || row.name || '').trim().slice(0, 200),
-    size: String(row.size || '').trim().slice(0, 30),
+    item_name: String(row.item_name || row.name || '').trim(),
+    size: String(row.size || '').trim(),
     condition: ['A','B'].includes(String(row.condition || '').toUpperCase()) ? String(row.condition).toUpperCase() : 'A',
     tier: String(row.tier || '').toLowerCase() === 'head' ? 'head' : 'normal',
-    price: (() => { const p = Number(row.price || row.sell_price || 0); return Number.isFinite(p) ? Math.min(Math.max(p, 0), 1000000) : 0; })(),
+    price: Number(row.price || row.sell_price || 0),
     photo_count: Math.max(1, Math.min(2, Number(row.photo_count || 1)))
   })).filter(row => row.item_name);
   // จำกัด Bulk operation ไม่เกิน 200 Item ตาม Requirement ของร้าน
@@ -1250,8 +1240,6 @@ async function openEditItem(itemId) {
 
   // Sold Item ยังแก้ข้อมูลสินค้าได้ แต่ห้ามเปลี่ยนสถานะกลับเป็น Available/Damaged
   $('editStatus').disabled = item.status === 'sold';
-  // ตั้ง sold ตรงๆ ไม่ได้ (จะไม่มีรายการขาย → ยอดขาย/กำไรหาย) ต้องขายผ่านหน้า "ขายของ"
-  Array.from($('editStatus').options).forEach(o => { if (o.value === 'sold') { o.hidden = item.status !== 'sold'; o.disabled = item.status !== 'sold'; } });
   $('editItemWarning').textContent = item.status === 'sold'
     ? 'สินค้านี้ขายแล้ว: แก้ชื่อ/รูป/ราคา/รายละเอียดได้ แต่ระบบจะไม่อนุญาตให้เปลี่ยนสถานะกลับเป็นพร้อมขายหรือเสีย เพื่อรักษาประวัติการขาย'
     : '';
@@ -1266,7 +1254,7 @@ function renderEditCurrentImages() {
     $('editCurrentImages').innerHTML = '<div class="edit-image-empty">ยังไม่มีรูปสินค้า</div>';
     return;
   }
-  $('editCurrentImages').innerHTML = editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${safeImgUrl(img.image_url)}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
+  $('editCurrentImages').innerHTML = editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${img.image_url}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
 }
 
 // โหลดประวัติการแก้ไขจาก Supabase; ใช้สำหรับ audit trail ของ Item แต่ละตัว
@@ -1285,7 +1273,7 @@ async function loadItemHistory(itemId) {
     const labels = {item_name:'ชื่อสินค้า',size:'Size',condition:'สภาพ',tier:'Tier',status:'สถานะ',group_id:'กลุ่ม',cost_price:'ต้นทุน',base_price:'ราคาตั้งต้น',current_price:'ราคาปัจจุบัน'};
     const rows = Object.entries(changes).map(([field, value]) => {
       const oldValue = value?.old ?? '-'; const newValue = value?.new ?? '-';
-      return `<div class="history-change"><b>${escapeHtml(labels[field] || field)}</b><span>${escapeHtml(String(oldValue))} → <strong>${escapeHtml(String(newValue))}</strong></span></div>`;
+      return `<div class="history-change"><b>${labels[field] || field}</b><span>${escapeHtml(String(oldValue))} → <strong>${escapeHtml(String(newValue))}</strong></span></div>`;
     }).join('');
     return `<div class="history-row"><div class="history-row-head"><span>${entry.action === 'image_replace' ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px;display:inline-block;vertical-align:-3px"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg> เปลี่ยนรูป' : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;vertical-align:-1px;margin-right:3px"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> แก้ข้อมูล'}</span><span>${new Date(entry.created_at).toLocaleString('th-TH')}</span></div><div class="history-changes">${rows || '<div>มีการเปลี่ยนแปลง</div>'}</div></div>`;
   }).join('');
@@ -1306,7 +1294,7 @@ $('editImages')?.addEventListener('change', event => {
   const files = Array.from(event.target.files || []).slice(0,2);
   if (event.target.files.length > 2) showToast('ระบบใช้รูปใหม่แค่ 2 รูปแรก');
   const previews = files.map((file, index) => `<div class="edit-image-card"><img src="${URL.createObjectURL(file)}" alt=""><span>รูปใหม่ ${index + 1}</span></div>`).join('');
-  $('editCurrentImages').innerHTML = previews || editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${safeImgUrl(img.image_url)}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
+  $('editCurrentImages').innerHTML = previews || editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${img.image_url}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
 });
 
 function changedFieldMap(before, after) {

@@ -14,8 +14,6 @@
 │   ├── schema_part1_tables_and_rls.sql  ← รัน 3 ไฟล์นี้ตามลำดับสำหรับโปรเจกต์ Supabase ใหม่
 │   ├── schema_part2_functions.sql
 │   ├── schema_part3_cost_reports.sql
-│   ├── schema_part4_security.sql        ← ล็อก RLS/function/storage ให้เฉพาะเจ้าของ (ต้องรัน)
-│   ├── danger/                           ← สคริปต์ลบข้อมูล/ล้างตาราง ห้ามรันบนข้อมูลจริง
 │   ├── schema.sql                        ← เนื้อหาเดียวกันรวมไฟล์เดียว (ใช้กับ CLI/psql)
 │   ├── reset_before_retry.sql            ← ใช้เมื่อรันค้างกลางทางแล้วต้องล้างแล้วเริ่มใหม่
 │   └── archive/                          ← migration ของเวอร์ชันเก่าๆ (V2-V17) เก็บไว้เป็นประวัติ ไม่ต้องรันถ้าเริ่มจากศูนย์
@@ -103,7 +101,6 @@ Excel รองรับ:
 1. `sql/schema_part1_tables_and_rls.sql`
 2. `sql/schema_part2_functions.sql`
 3. `sql/schema_part3_cost_reports.sql`
-4. `sql/schema_part4_security.sql` ← **บังคับ** (ล็อกสิทธิ์ให้เฉพาะเจ้าของ) แล้วทำตามหัวข้อ "ขั้นตอน Deploy" ใน `docs/SECURITY.md`
 
 หรือถ้ารันผ่าน CLI/psql (ไม่ผ่านเว็บ SQL Editor) ใช้ไฟล์รวมไฟล์เดียวได้เลยคือ `sql/schema.sql` (เนื้อหาเหมือนกับ 3 ไฟล์ข้างบนรวมกัน)
 
@@ -112,7 +109,7 @@ Excel รองรับ:
 ### มีฐานข้อมูล V13 เดิมอยู่แล้ว (อัปเกรดแบบไม่ล้างของเดิม)
 ไฟล์ migration แต่ละเวอร์ชันเก็บไว้ที่ `sql/archive/` (เช่น `migration_v14_lot_reconciliation.sql` ถึง `migration_v17_reports.sql`) — รันเรียงตามเลขเวอร์ชันบนฐานข้อมูลเดิมได้โดยไม่ต้องรัน schema_part ใหม่ทั้งหมด
 
-> **ความปลอดภัย:** ตอนนี้ระบบต้องล็อกอิน (Supabase Auth) และ RLS อนุญาตเฉพาะเจ้าของร้านเท่านั้น — ต้องรัน `sql/schema_part4_security.sql` และกำหนดเจ้าของตาม [`docs/SECURITY.md`](docs/SECURITY.md) ก่อนใช้งาน (ถ้ายังไม่ทำ ตารางจะถูกปิดทุกทาง เข้าแอปไม่ได้)
+> โปรเจกต์นี้ยังตั้ง RLS แบบเปิดตามแนวคิดเดิม เพราะตั้งใจใช้คนเดียว หากจะเปิดเป็น public app ควรเพิ่ม Supabase Auth + RLS ก่อน
 
 ### Storage
 สร้าง bucket ชื่อ `item-images` (public) ไว้เก็บรูปสินค้า — `schema_part1_tables_and_rls.sql` มีคำสั่ง insert bucket ให้แล้ว แต่ควรเข้าไปเช็คใน Dashboard > Storage อีกทีว่าขึ้นจริง

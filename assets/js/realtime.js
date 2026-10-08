@@ -41,8 +41,7 @@
 
   // Realtime event จาก Supabase จะเรียก listener ของหน้าปัจจุบัน เช่น sell.js / reports.js / accounting.js
   function subscribeRealtime() {
-    // channel != null = กำลัง subscribe อยู่แล้ว (กันเรียกซ้ำจน supabase-js โยน error "cannot add postgres_changes callbacks after subscribe()")
-    if (subscribed || channel || !window.supabaseClient) return;
+    if (subscribed || !window.supabaseClient) return;
 
     channel = window.supabaseClient.channel('vims2-lite-realtime');
 
@@ -121,8 +120,5 @@
   }
 
   window.VIMSRealtime = { initRealtimeSync, setSyncStatus, emitChange };
-  // เริ่ม Realtime หลังยืนยันว่ามี session แล้วเท่านั้น: RLS เป็น owner-only ถ้า subscribe ด้วยสิทธิ์ anon จะไม่ได้รับ event ใดๆ
-  window.supabaseClient.auth.getSession().then(({ data }) => {
-    if (data && data.session) initRealtimeSync();
-  });
+  initRealtimeSync();
 })();

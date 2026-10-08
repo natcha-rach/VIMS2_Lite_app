@@ -69,12 +69,12 @@ function renderStats(sales,expenses) {
 }
 function renderPaymentBreakdown(sales) {
   const by={}; sales.forEach(s=>{by[s.payment_method] ||= {count:0,total:0};by[s.payment_method].count++;by[s.payment_method].total+=Number(s.sale_price||0);});
-  const rows=Object.keys(by).length?Object.entries(by).map(([k,v])=>`<tr><td>${escapeHtml(PAYMENT_LABELS[k]||k)}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.total)}</td></tr>`).join(""):"<tr><td colspan=3 class=empty-state>ไม่มีรายการขาย</td></tr>";
+  const rows=Object.keys(by).length?Object.entries(by).map(([k,v])=>`<tr><td>${PAYMENT_LABELS[k]||k}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.total)}</td></tr>`).join(""):"<tr><td colspan=3 class=empty-state>ไม่มีรายการขาย</td></tr>";
   document.getElementById("repPaymentBreakdown").innerHTML=rows;
 }
 function renderChannelBreakdown(sales) {
   const by={}; sales.forEach(s=>{const k=s.channel||"other";by[k] ||= {count:0,revenue:0,profit:0};by[k].count++;by[k].revenue+=Number(s.sale_price||0);by[k].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
-  document.getElementById("repChannelBreakdown").innerHTML=Object.keys(by).length?Object.entries(by).sort((a,b)=>b[1].revenue-a[1].revenue).map(([k,v])=>`<tr><td>${escapeHtml(CHANNEL_LABELS[k]||k)}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.revenue)}</td><td style="text-align:right" class="${v.profit>=0?'profit':'loss'}">${formatBaht(v.profit)}</td></tr>`).join(""):"<tr><td colspan=4 class=empty-state>ไม่มีรายการขาย</td></tr>";
+  document.getElementById("repChannelBreakdown").innerHTML=Object.keys(by).length?Object.entries(by).sort((a,b)=>b[1].revenue-a[1].revenue).map(([k,v])=>`<tr><td>${CHANNEL_LABELS[k]||k}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.revenue)}</td><td style="text-align:right" class="${v.profit>=0?'profit':'loss'}">${formatBaht(v.profit)}</td></tr>`).join(""):"<tr><td colspan=4 class=empty-state>ไม่มีรายการขาย</td></tr>";
 }
 function renderTierBreakdown(sales) {
   // ใช้ tier ที่ join มากับ sales (sales.items.tier) แทนการดึงตาราง items ทั้งตารางมา map เอง
@@ -155,7 +155,7 @@ function renderTopProfitItems(sales) {
   document.getElementById("repTopProfitItems").innerHTML = top.length ? top.map((x,i) => `<div class="rank-item"><span class="rank-no">${i+1}</span><div><b>${escapeHtml(x.item.item_name)}</b><small>${escapeHtml(x.item.size||"-")} · ${x.item.condition||"-"} · ${x.item.tier==='head'?"งานหัว":"ปกติ"}</small></div><div class="rank-value">${formatBaht(x.profit)}<small>${x.count} ชิ้น</small></div></div>`).join("") : `<div class="empty-state">ยังไม่มีข้อมูลการขายในช่วงนี้</div>`;
 }
 function renderSaleList(sales) {
-  document.getElementById("repSaleList").innerHTML=sales.length?sales.map(s=>`<div class="sale-row"><div><div class="sale-name">${escapeHtml(s.items?.item_name||"สินค้า")}</div><div class="sale-meta">${formatDate(s.sale_date)} · ${escapeHtml(PAYMENT_LABELS[s.payment_method]||s.payment_method)} · ${escapeHtml(CHANNEL_LABELS[s.channel]||s.channel||"-")}</div></div><div class="sale-price">${formatBaht(s.sale_price)}</div></div>`).join(""):"<div class=empty-state>ไม่มีรายการขายในช่วงนี้</div>";
+  document.getElementById("repSaleList").innerHTML=sales.length?sales.map(s=>`<div class="sale-row"><div><div class="sale-name">${escapeHtml(s.items?.item_name||"สินค้า")}</div><div class="sale-meta">${formatDate(s.sale_date)} · ${PAYMENT_LABELS[s.payment_method]||s.payment_method} · ${CHANNEL_LABELS[s.channel]||s.channel||"-"}</div></div><div class="sale-price">${formatBaht(s.sale_price)}</div></div>`).join(""):"<div class=empty-state>ไม่มีรายการขายในช่วงนี้</div>";
 }
 let reportTrendChart = null;
 function renderReportTrendChart(rows){
