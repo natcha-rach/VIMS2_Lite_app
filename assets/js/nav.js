@@ -25,6 +25,19 @@
     applyCollapsedState(collapsed);
   });
 
+  // ปุ่มออกจากระบบ (ต่อท้าย sidebar-footer) — ใช้ vimsSignOut() จาก supabaseClient.js
+  const footer = sidebar.querySelector(".sidebar-footer");
+  if (footer && typeof window.vimsSignOut === "function" && !document.getElementById("logoutBtn")) {
+    const btn = document.createElement("button");
+    btn.id = "logoutBtn";
+    btn.type = "button";
+    btn.className = "logout-btn";
+    btn.title = "ออกจากระบบ";
+    btn.textContent = "ออกจากระบบ";
+    btn.addEventListener("click", () => window.vimsSignOut());
+    footer.appendChild(btn);
+  }
+
   // ไฮไลต์เมนูของหน้าปัจจุบัน
   const currentPage = location.pathname.split("/").pop() || "index.html";
   document.querySelectorAll(".sidebar-links a").forEach((a) => {

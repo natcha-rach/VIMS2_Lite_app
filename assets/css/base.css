@@ -529,3 +529,12 @@ td.loss { color: var(--color-loss); }
 /* display:inline-block!important กันไม่ให้กฎ "span{display:block}" ของบล็อกแม่ (เช่น .stock-main, .name) ดึง tag นี้ให้ยืดเต็มแถว
    สีปรับให้เหมาะกับพื้นหลังสีอ่อนของหน้า Stock/Sell (ของเดิมใช้โทนเข้มที่ออกแบบไว้สำหรับการ์ดพื้นเข้มอย่างหน้า Lots) */
 .sku-tag{display:inline-block!important;font-size:10.5px;font-weight:600;color:#5b6274!important;background:#eef0f5!important;border:1px solid #dde1ea;border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:1px}
+
+
+/* ปุ่มออกจากระบบใน sidebar (เพิ่มโดย nav.js) */
+.logout-btn {
+  margin-left: auto; padding: 6px 10px; border: 1px solid var(--color-line, #d5dbe8); border-radius: 8px;
+  background: transparent; color: var(--color-ink-soft, #6b7280); font: inherit; font-size: 12px; cursor: pointer;
+}
+.logout-btn:hover { color: var(--color-loss, #dc2626); border-color: var(--color-loss, #dc2626); }
+body.sidebar-collapsed .logout-btn { display: none; }

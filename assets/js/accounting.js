@@ -372,7 +372,7 @@ document.getElementById("exportCsvBtn").addEventListener("click", () => {
   const header = "วันที่,รายการ,เงินเข้า,เงินออก,คงเหลือสะสม";
   const rows = ledgerRowsForExport.map((ev) => {
     const dateStr = ev.date.toLocaleDateString("th-TH");
-    const desc = `"${ev.desc.replace(/"/g, '""')}"`;
+    const desc = `"${csvSafeText(ev.desc).replace(/"/g, '""')}"`; // csvSafeText กัน CSV Formula Injection
     return [dateStr, desc, ev.in.toFixed(2), ev.out.toFixed(2), ev.balance.toFixed(2)].join(",");
   });
 

@@ -125,7 +125,8 @@ function renderGoalCard(sales) {
 }
 
 function toCsvValue(v) {
-  const s = String(v ?? "");
+  // csvSafeText (security.js) กัน CSV Formula Injection: ค่าที่ขึ้นต้นด้วย = + - @ ถูกเติม ' นำหน้า
+  const s = csvSafeText(v);
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
 }
 
