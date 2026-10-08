@@ -19,9 +19,33 @@ const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { retur
 const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }; // จำไว้ว่า saleDetailModal เปิดมาจากแท็บไหน เพื่อซ่อนปุ่ม "ขายสินค้านี้" ตอนดูของที่ขายแล้ว
 
 // โหลดสินค้าเฉพาะสถานะ available เพื่อไม่ให้สินค้าที่ขายแล้วกลับมาเลือกขายซ้ำ
+// ดึงทีละหน้า 1,000 แถว (ไม่พึ่ง fetchAllRows ใน supabaseClient.js เผื่อไฟล์บนเว็บเป็นเวอร์ชันเก่า)
+async function fetchAllPages(factory, pageSize = 1000) {
+  let from = 0;
+  let all = [];
+  while (true) {
+    const { data, error } = await factory().range(from, from + pageSize - 1);
+    if (error) return { data: null, error };
+    all = all.concat(data || []);
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: all, error: null };
+}
+
+// ครอบ try/catch: ถ้าพังจะขึ้นข้อความสาเหตุบนหน้าจอ แทนที่จะค้าง "กำลังโหลด..." เงียบๆ
 async function loadSellGrid() {
+  try {
+    await loadSellGridInner();
+  } catch (e) {
+    console.error(e);
+    document.getElementById("sellGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(e?.message || e)}</div>`;
+  }
+}
+
+async function loadSellGridInner() {
   // รูปมากับ item ใน query เดียว (embedded select) — ไม่ใช้ .in(ids) ที่ URL ยาวเกินแล้วรูปหายเงียบๆ
-  const { data: items, error } = await fetchAllRows(() => supabaseClient
+  const { data: items, error } = await fetchAllPages(() => supabaseClient
     .from("items")
     .select("id, item_name, size, condition, tier, sku, cost_price, base_price, current_price, lot_id, group_id, lots(lot_name), lot_groups(group_name), item_images(image_url, sort_order)")
     .eq("status", "available")
@@ -31,7 +55,7 @@ async function loadSellGrid() {
 
   if (error) {
     console.error(error);
-    document.getElementById("sellGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ</div>`;
+    document.getElementById("sellGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(error.message)}</div>`;
     return;
   }
 
