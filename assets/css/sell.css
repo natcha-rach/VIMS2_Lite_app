@@ -140,3 +140,23 @@
 .sale-history-row{grid-template-columns:1.1fr 1fr auto auto}
 .sale-history-row.voided{opacity:.55}
 .voided-tag{font-size:11px;color:var(--color-ink-soft);border:1px solid var(--color-line);border-radius:6px;padding:2px 8px}
+
+/* V18: Lot filter / ตะกร้า / chips */
+.sell-filters { gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.sell-filters select { flex: 1 1 calc(50% - 4px); min-width: 0; }
+.sell-filters input { flex: 1 1 100%; min-width: 0; }
+.sell-filters .hidden { display: none; }
+.item-tile-cart { width: 100%; margin-top: 6px; }
+.item-tile.in-cart { outline: 2px solid var(--color-tan-dark); outline-offset: -2px; }
+.cart-bar { position: fixed; left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-radius: 14px; background: #fff; box-shadow: 0 6px 24px rgba(0,0,0,.18); font-weight: 600; }
+.cart-bar.hidden { display: none; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin: -4px 0 14px; }
+.chip { border: 1px solid var(--color-tan-dark); background: transparent; border-radius: 999px; padding: 6px 12px; font-size: 13px; cursor: pointer; color: inherit; }
+.chip:active { transform: scale(.96); }
+.cart-lines { max-height: 32vh; overflow-y: auto; margin-bottom: 12px; }
+.cart-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid rgba(0,0,0,.08); font-size: 14px; }
+.cart-line > div:first-child { flex: 1; min-width: 0; }
+.cart-line span { display: block; font-size: 12px; color: var(--color-ink-soft); }
+.cart-line-price { text-align: right; }
+.cart-summary { margin-bottom: 14px; font-size: 14px; }
+.cart-summary .loss { margin-top: 4px; }

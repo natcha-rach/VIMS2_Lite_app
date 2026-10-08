@@ -3,6 +3,9 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob: https://cphhutlxvbinaycmsekm.supabase.co; connect-src 'self' https://cphhutlxvbinaycmsekm.supabase.co wss://cphhutlxvbinaycmsekm.supabase.co; object-src 'none'; base-uri 'self'; form-action 'self'" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>ขายของ | ระบบร้านเสื้อมือสอง</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -62,8 +65,10 @@
           <button type="button" class="sell-tab active" data-tab="available">พร้อมขาย</button>
           <button type="button" class="sell-tab" data-tab="sold">ขายแล้ว</button>
         </div>
-        <div class="field" style="margin-bottom: 16px">
-          <input type="text" id="searchBox" placeholder="ค้นหาชื่อเสื้อ..." />
+        <div class="field-row sell-filters" style="margin-bottom: 16px">
+          <select id="lotFilter" aria-label="กรองตาม Lot"><option value="">ทุก Lot</option></select>
+          <select id="typeFilter" aria-label="กรองตามประเภทสินค้า"><option value="">ทุกประเภท</option></select>
+          <input type="text" id="searchBox" placeholder="ค้นหาชื่อเสื้อ / SKU..." />
         </div>
         <div class="sell-hint" id="sellHintAvailable">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/></svg>คลิกสินค้าเพื่อดูรูป ต้นทุน Lot ราคา และประวัติการขายก่อนยืนยัน
@@ -100,6 +105,13 @@
                 required
               />
             </div>
+            <div class="chips" id="singleChips">
+              <button type="button" class="chip" data-disc="5">-5%</button>
+              <button type="button" class="chip" data-disc="10">-10%</button>
+              <button type="button" class="chip" data-disc="20">-20%</button>
+              <button type="button" class="chip" data-disc="floor10">ปัดลงหลักสิบ</button>
+              <button type="button" class="chip" data-disc="reset">ราคาตั้ง</button>
+            </div>
             <div class="field">
               <label for="paymentMethod">วิธีจ่ายเงิน</label>
               <select id="paymentMethod" required>
@@ -130,6 +142,37 @@
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      <!-- ตะกร้า: ขายหลายชิ้นต่อบิล -->
+      <div class="cart-bar hidden" id="cartBar">
+        <span id="cartBarText">ตะกร้า 0 ชิ้น</span>
+        <button type="button" class="btn btn-primary" id="openCart">ชำระเงิน</button>
+      </div>
+      <div class="modal-backdrop hidden" id="cartModal">
+        <div class="modal-sheet">
+          <h2>ตะกร้า <span id="cartCount"></span></h2>
+          <div id="cartLines" class="cart-lines"></div>
+          <div class="field">
+            <label for="cartTotal">ราคารวมที่ตกลง (บาท)</label>
+            <input type="number" id="cartTotal" step="0.01" min="0" />
+          </div>
+          <div class="chips" id="cartChips">
+            <button type="button" class="chip" data-disc="5">-5%</button>
+            <button type="button" class="chip" data-disc="10">-10%</button>
+            <button type="button" class="chip" data-disc="20">-20%</button>
+            <button type="button" class="chip" data-disc="floor10">ปัดลงหลักสิบ</button>
+            <button type="button" class="chip" data-disc="reset">ราคาตั้งรวม</button>
+          </div>
+          <div class="cart-summary" id="cartSummary"></div>
+          <div class="field"><label for="cartPay">วิธีจ่ายเงิน</label><select id="cartPay"></select></div>
+          <div class="field"><label for="cartChannel">ช่องทางขาย</label><select id="cartChannel"></select></div>
+          <div class="field-row">
+            <button type="button" class="btn btn-ghost" id="cartClose" style="flex:1">กลับ</button>
+            <button type="button" class="btn btn-ghost" id="cartClear" style="flex:1">ล้างตะกร้า</button>
+            <button type="button" class="btn btn-primary" id="cartConfirm" style="flex:2">ยืนยันการขาย</button>
+          </div>
         </div>
       </div>
 
@@ -189,8 +232,8 @@
 
     <div class="toast" id="toast"></div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/vendor/supabase-js-2.117.2.umd.js"></script>
+    <script src="assets/js/supabaseClient.js"></script><script src="assets/js/security.js"></script>
     <script src="assets/js/nav.js"></script>
     <script src="assets/js/sell.js"></script>
     <script src="assets/js/realtime.js"></script>

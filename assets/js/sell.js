@@ -12,16 +12,22 @@ let soldImagesById = {};
 let soldLoaded = false;
 let selectedItem = null;
 let activeTab = "available"; // "available" | "sold" — คุมว่าแท็บไหนกำลังแสดงอยู่
-let detailContext = "available"; // จำไว้ว่า saleDetailModal เปิดมาจากแท็บไหน เพื่อซ่อนปุ่ม "ขายสินค้านี้" ตอนดูของที่ขายแล้ว
+let detailContext = "available";
+const cart = new Map(); // item_id -> item (ตะกร้าอยู่ในหน่วยความจำ: รีเฟรชหน้า = ตะกร้าหาย)
+const LS = { lot: "vims2_sell_lot", type: "vims2_sell_type", pay: "vims2_last_payment", chan: "vims2_last_channel" };
+const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* ignore */ } }; // จำไว้ว่า saleDetailModal เปิดมาจากแท็บไหน เพื่อซ่อนปุ่ม "ขายสินค้านี้" ตอนดูของที่ขายแล้ว
 
 // โหลดสินค้าเฉพาะสถานะ available เพื่อไม่ให้สินค้าที่ขายแล้วกลับมาเลือกขายซ้ำ
 async function loadSellGrid() {
-  const { data: items, error } = await supabaseClient
+  // รูปมากับ item ใน query เดียว (embedded select) — ไม่ใช้ .in(ids) ที่ URL ยาวเกินแล้วรูปหายเงียบๆ
+  const { data: items, error } = await fetchAllRows(() => supabaseClient
     .from("items")
-    .select("*, lots(lot_name), lot_groups(group_name)")
+    .select("id, item_name, size, condition, tier, sku, cost_price, base_price, current_price, lot_id, group_id, lots(lot_name), lot_groups(group_name), item_images(image_url, sort_order)")
     .eq("status", "available")
-    .eq("intake_status", "listed") // V15: ซ่อน Item ที่ยังอยู่ระหว่างอัปโหลดรูป (draft) ไม่ให้ขายได้ตั้งแต่ในรายการ
-    .order("created_at", { ascending: false });
+    .eq("intake_status", "listed") // V15: ซ่อน Item ที่ยังเป็น draft (รอรูป)
+    .order("created_at", { ascending: false })
+    .order("id"));
 
   if (error) {
     console.error(error);
@@ -30,26 +36,18 @@ async function loadSellGrid() {
   }
 
   inStockItems = items || [];
-
-  // โหลดรูปหลัก/รูปที่ 2 แยกจาก items เพราะรูปถูกเก็บใน item_images แบบ 1-to-many
-  const ids = inStockItems.map((item) => item.id);
   itemImagesById = {};
-  if (ids.length) {
-    const { data: images, error: imageError } = await supabaseClient
-      .from("item_images")
-      .select("item_id, image_url, sort_order")
-      .in("item_id", ids)
-      .order("sort_order", { ascending: true });
+  inStockItems.forEach((item) => {
+    itemImagesById[item.id] = (item.item_images || []).slice().sort((x, y) => x.sort_order - y.sort_order);
+  });
 
-    if (!imageError) {
-      (images || []).forEach((image) => {
-        if (!itemImagesById[image.item_id]) itemImagesById[image.item_id] = [];
-        itemImagesById[image.item_id].push(image);
-      });
-    }
-  }
+  // ของในตะกร้าที่ถูกขาย/ถอนจากเครื่องอื่นไปแล้ว → เอาออก, ที่เหลืออัปเดตราคาล่าสุด
+  const fresh = new Map(inStockItems.map((i) => [i.id, i]));
+  [...cart.keys()].forEach((id) => (fresh.has(id) ? cart.set(id, fresh.get(id)) : cart.delete(id)));
 
-  renderGrid(inStockItems);
+  populateLotFilter();
+  applySearch();
+  updateCartBar();
 }
 
 // โหลดของที่ขายแล้ว (300 รายการล่าสุด) สำหรับแท็บ "ขายแล้ว" — ดูรายงานย้อนหลังทั้งหมดได้ที่หน้ารายงาน
@@ -106,7 +104,7 @@ function renderSoldGrid(items) {
     const image = soldImagesById[item.id]?.[0];
     return `
       <button class="item-tile tile-sold" data-id="${item.id}">
-        <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
+        <div class="item-tile-image">${image ? `<img src="${safeImgUrl(image.image_url)}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
         <div class="name">${escapeHtml(item.item_name)}</div>
         <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}</div>
         <div class="price">${formatBaht(item.current_price)}</div>
@@ -130,9 +128,11 @@ document.querySelectorAll(".sell-tab").forEach((tab) => {
     document.getElementById("sellHintAvailable").classList.toggle("hidden", activeTab !== "available");
     document.getElementById("sellHintSold").classList.toggle("hidden", activeTab !== "sold");
     document.getElementById("searchBox").value = "";
+    document.getElementById("lotFilter").classList.toggle("hidden", activeTab !== "available");
+    document.getElementById("typeFilter").classList.toggle("hidden", activeTab !== "available");
     if (activeTab === "sold" && !soldLoaded) await loadSoldGrid();
     else if (activeTab === "sold") renderSoldGrid(soldItems);
-    else renderGrid(inStockItems);
+    else applySearch();
   });
 });
 
@@ -146,14 +146,15 @@ function renderGrid(items) {
   const html = items.map((item) => {
     const image = itemImagesById[item.id]?.[0];
     return `
-      <div class="item-tile" data-id="${item.id}">
+      <div class="item-tile${cart.has(item.id) ? " in-cart" : ""}" data-id="${item.id}">
         <button type="button" class="item-tile-main" data-action="detail" data-id="${item.id}" aria-label="ดูรายละเอียด ${escapeHtml(item.item_name)}">
-          <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
+          <div class="item-tile-image">${image ? `<img src="${safeImgUrl(image.image_url)}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
           <div class="name">${escapeHtml(item.item_name)}${item.sku ? ` <span class="sku-tag">${escapeHtml(item.sku)}</span>` : ""}</div>
           <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}</div>
           <div class="price">${formatBaht(item.current_price ?? item.sell_price)}</div>
         </button>
         <button type="button" class="btn btn-primary item-tile-sell" data-action="sell" data-id="${item.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>ขาย</button>
+        <button type="button" class="btn btn-ghost item-tile-cart" data-action="cart" data-id="${item.id}">${cart.has(item.id) ? "✓ อยู่ในตะกร้า" : "+ ตะกร้า"}</button>
       </div>`;
   }).join("");
 
@@ -164,7 +165,9 @@ function renderGrid(items) {
       event.preventDefault();
       event.stopPropagation();
       const itemId = button.dataset.id;
-      if (button.dataset.action === "sell") {
+      if (button.dataset.action === "cart") {
+        toggleCart(itemId);
+      } else if (button.dataset.action === "sell") {
         openItemSaleDetail(itemId, "available").then(() => openSellConfirm());
       } else {
         openItemSaleDetail(itemId, "available");
@@ -176,22 +179,55 @@ function renderGrid(items) {
 // ค้นหาแบบทันทีจากชื่อสินค้า / size / group / lot เพื่อให้ใช้หน้าร้านได้เร็ว — ใช้ได้ทั้งแท็บพร้อมขายและขายแล้ว
 function applySearch() {
   const q = document.getElementById("searchBox").value.trim().toLowerCase();
+  const lot = activeTab === "available" ? document.getElementById("lotFilter").value : "";
+  const type = activeTab === "available" ? document.getElementById("typeFilter").value : "";
   const source = activeTab === "sold" ? soldItems : inStockItems;
   const render = activeTab === "sold" ? renderSoldGrid : renderGrid;
-  if (!q) return render(source);
   const filtered = source.filter((item) => {
-    const haystack = [
-      item.item_name,
-      item.sku, // V15: พิมพ์/ค้นหาด้วย SKU ได้ (ไม่ใช่การสแกน — แค่ค้นข้อความ)
-      item.size,
-      item.condition,
-      item.lots?.lot_name,
-      item.lot_groups?.group_name,
-    ].filter(Boolean).join(" ").toLowerCase();
+    if (lot === "__none" ? item.lot_id : lot && item.lot_id !== lot) return false;
+    if (type && typeKey(item) !== type) return false;
+    if (!q) return true;
+    const haystack = [item.item_name, item.sku, item.size, item.condition, item.lots?.lot_name, item.lot_groups?.group_name]
+      .filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(q);
   });
   render(filtered);
 }
+
+// Dropdown กรองตาม Lot (นับจำนวนที่พร้อมขายต่อ Lot) — จำค่าล่าสุดไว้
+function populateLotFilter() {
+  const sel = document.getElementById("lotFilter");
+  const prev = sel.value || lsGet(LS.lot) || "";
+  const counts = new Map();
+  inStockItems.forEach((i) => counts.set(i.lot_id || "__none", (counts.get(i.lot_id || "__none") || 0) + 1));
+  const names = new Map(inStockItems.map((i) => [i.lot_id || "__none", i.lots?.lot_name || "ไม่ระบุ Lot"]));
+  sel.innerHTML = `<option value="">ทุก Lot (${inStockItems.length})</option>` +
+    [...counts.entries()].sort((a, b) => names.get(a[0]).localeCompare(names.get(b[0]), "th"))
+      .map(([id, n]) => `<option value="${escapeHtml(id)}">${escapeHtml(names.get(id))} (${n})</option>`).join("");
+  sel.value = counts.has(prev) ? prev : "";
+  populateTypeFilter();
+}
+document.getElementById("lotFilter").addEventListener("change", (e) => { lsSet(LS.lot, e.target.value); populateTypeFilter(); applySearch(); });
+
+// Dropdown ประเภทสินค้า = ชื่อกลุ่มราคา (lot_groups.group_name เช่น งานหัว / งานหาง) รวมชื่อเดียวกันข้าม Lot
+// เปลี่ยนตาม Lot ที่เลือก: เลือก Lot แล้วจะเห็นเฉพาะประเภทที่มีใน Lot นั้น พร้อมจำนวน
+function typeKey(item) { return item.lot_groups?.group_name || "__none"; }
+function populateTypeFilter() {
+  const sel = document.getElementById("typeFilter");
+  const lot = document.getElementById("lotFilter").value;
+  const prev = sel.value || lsGet(LS.type) || "";
+  const counts = new Map();
+  inStockItems
+    .filter((i) => !lot || (lot === "__none" ? !i.lot_id : i.lot_id === lot))
+    .forEach((i) => counts.set(typeKey(i), (counts.get(typeKey(i)) || 0) + 1));
+  const label = (k) => (k === "__none" ? "ไม่มีกลุ่ม" : k);
+  const total = [...counts.values()].reduce((t, n) => t + n, 0);
+  sel.innerHTML = `<option value="">ทุกประเภท (${total})</option>` +
+    [...counts.entries()].sort((a, b) => label(a[0]).localeCompare(label(b[0]), "th"))
+      .map(([k, n]) => `<option value="${escapeHtml(k)}">${escapeHtml(label(k))} (${n})</option>`).join("");
+  sel.value = counts.has(prev) ? prev : "";
+}
+document.getElementById("typeFilter").addEventListener("change", (e) => { lsSet(LS.type, e.target.value); applySearch(); });
 
 document.getElementById("searchBox").addEventListener("input", applySearch);
 
@@ -205,8 +241,8 @@ async function openItemSaleDetail(itemId, context = "available") {
   document.getElementById("openSellConfirm").classList.toggle("hidden", context === "sold");
 
   const images = (context === "sold" ? soldImagesById : itemImagesById)[item.id] || [];
-  document.getElementById("detailImage1").innerHTML = images[0] ? `<img src="${images[0].image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>';
-  document.getElementById("detailImage2").innerHTML = images[1] ? `<img src="${images[1].image_url}" alt="">` : "＋";
+  document.getElementById("detailImage1").innerHTML = images[0] ? `<img src="${safeImgUrl(images[0].image_url)}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>';
+  document.getElementById("detailImage2").innerHTML = images[1] ? `<img src="${safeImgUrl(images[1].image_url)}" alt="">` : "＋";
   document.getElementById("detailName").textContent = item.item_name;
   document.getElementById("detailMeta").textContent = `${item.size || "ไม่ระบุไซซ์"} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}`;
   document.getElementById("detailLot").textContent = item.lots?.lot_name || "-";
@@ -237,7 +273,7 @@ function renderSaleHistory(sales) {
     const voided = !!sale.voided_at;
     return `<div class="sale-history-row ${voided ? "voided" : ""}">
       <div><b>${formatBaht(sale.sale_price)}</b><span>${formatDateTime(sale.sale_date)}</span></div>
-      <div><span>${paymentLabel(sale.payment_method)}</span><span>${channelLabel(sale.channel)}</span></div>
+      <div><span>${escapeHtml(paymentLabel(sale.payment_method))}</span><span>${escapeHtml(channelLabel(sale.channel))}</span></div>
       <strong class="${profit >= 0 ? "profit" : "loss"}">${profit >= 0 ? "+" : ""}${formatBaht(profit)}</strong>
       ${voided
         ? `<span class="voided-tag" title="${sale.void_reason ? escapeHtml(sale.void_reason) : ""}">ยกเลิกแล้ว</span>`
@@ -320,6 +356,7 @@ document.getElementById("sellForm").addEventListener("submit", async (e) => {
     return;
   }
 
+  lsSet(LS.pay, paymentMethod); lsSet(LS.chan, channel);
   closeModal("sellModal");
   selectedItem = null;
   showToast(`ขาย “${item.item_name}” สำเร็จ`);
@@ -351,6 +388,129 @@ function showToast(msg) {
 }
 
 
+
+
+// ==========================================================
+// ตะกร้า + ราคารวมที่ตกลง + ปุ่มส่วนลดเร็ว + จำวิธีจ่ายล่าสุด
+// ==========================================================
+const payEl = document.getElementById("paymentMethod");
+const chanEl = document.getElementById("channel");
+const cartPayEl = document.getElementById("cartPay");
+const cartChanEl = document.getElementById("cartChannel");
+cartPayEl.innerHTML = payEl.innerHTML;
+cartChanEl.innerHTML = chanEl.innerHTML;
+[[payEl, cartPayEl, LS.pay], [chanEl, cartChanEl, LS.chan]].forEach(([a, b, key]) => {
+  const v = lsGet(key);
+  if (v && [...a.options].some((o) => o.value === v)) { a.value = v; b.value = v; }
+});
+
+// ส่วนลดจากราคาตั้ง: "5"/"10"/"20" = ลด %, "floor10" = ปัดลงหลักสิบ, "reset" = ราคาตั้ง
+function discounted(listTotal, mode) {
+  if (mode === "reset") return listTotal;
+  if (mode === "floor10") return Math.floor(listTotal / 10) * 10;
+  return Math.round(listTotal * (1 - Number(mode) / 100));
+}
+document.getElementById("singleChips").addEventListener("click", (e) => {
+  const mode = e.target.closest("[data-disc]")?.dataset.disc;
+  if (!mode || !selectedItem) return;
+  const base = Number(selectedItem.current_price ?? 0);
+  document.getElementById("salePrice").value = discounted(base, mode);
+});
+
+function toggleCart(id) {
+  if (cart.has(id)) cart.delete(id);
+  else { const it = inStockItems.find((i) => i.id === id); if (it) cart.set(id, it); }
+  updateCartBar();
+  applySearch();
+}
+function updateCartBar() {
+  const n = cart.size;
+  document.getElementById("cartBar").classList.toggle("hidden", n === 0);
+  const sum = [...cart.values()].reduce((t, i) => t + Number(i.current_price || 0), 0);
+  document.getElementById("cartBarText").textContent = `ตะกร้า ${n} ชิ้น · ราคาตั้ง ${formatBaht(sum)}`;
+  if (n === 0) closeModal("cartModal");
+}
+
+// กระจายราคารวมตามสัดส่วนราคาตั้ง (หน่วยเป็นบาทเต็ม ถ้ายอดรวมมีสตางค์ใช้สตางค์) เศษทั้งหมดตกที่ชิ้นแพงสุด → ผลรวมตรงยอดที่ตกลงเป๊ะ
+function allocate(total, items) {
+  const unit = Number.isInteger(total) ? 1 : 0.01;
+  const U = Math.round(total / unit);
+  const L = items.reduce((t, i) => t + Number(i.current_price || 0), 0);
+  const w = items.map((i) => (L > 0 ? Number(i.current_price || 0) / L : 1 / items.length));
+  const units = w.map((x) => Math.floor(U * x));
+  let rest = U - units.reduce((t, x) => t + x, 0);
+  const top = w.indexOf(Math.max(...w));
+  units[top] += rest;
+  return units.map((x) => Math.round(x * unit * 100) / 100);
+}
+
+function openCart() {
+  if (!cart.size) return;
+  const listTotal = [...cart.values()].reduce((t, i) => t + Number(i.current_price || 0), 0);
+  document.getElementById("cartTotal").value = listTotal;
+  document.getElementById("cartModal").classList.remove("hidden");
+  renderCart();
+}
+function cartTotalValue() { return Number(document.getElementById("cartTotal").value); }
+function renderCart() {
+  const items = [...cart.values()];
+  const total = cartTotalValue();
+  const ok = Number.isFinite(total) && total >= 0;
+  const shares = ok ? allocate(total, items) : items.map(() => 0);
+  const cost = items.reduce((t, i) => t + Number(i.cost_price || 0), 0);
+  document.getElementById("cartCount").textContent = `(${items.length} ชิ้น)`;
+  document.getElementById("cartLines").innerHTML = items.map((i, idx) => {
+    const profit = shares[idx] - Number(i.cost_price || 0);
+    return `<div class="cart-line"><div><b>${escapeHtml(i.item_name)}</b><span>${escapeHtml(i.size || "-")} · ตั้ง ${formatBaht(i.current_price)}</span></div>
+      <div class="cart-line-price"><b>${formatBaht(shares[idx])}</b><span class="${profit >= 0 ? "profit" : "loss"}">${profit >= 0 ? "+" : ""}${formatBaht(profit)}</span></div>
+      <button type="button" class="btn btn-ghost btn-sm" data-remove="${i.id}" aria-label="เอาออก">✕</button></div>`;
+  }).join("");
+  const profit = total - cost;
+  document.getElementById("cartSummary").innerHTML =
+    `ต้นทุนรวม ${formatBaht(cost)} · กำไรบิลนี้ <b class="${profit >= 0 ? "profit" : "loss"}">${profit >= 0 ? "+" : ""}${formatBaht(profit)}</b>` +
+    (ok && profit < 0 ? `<div class="loss">⚠ ราคารวมต่ำกว่าต้นทุน — ขายแล้วจะขาดทุน</div>` : "");
+}
+document.getElementById("cartTotal").addEventListener("input", renderCart);
+document.getElementById("cartChips").addEventListener("click", (e) => {
+  const mode = e.target.closest("[data-disc]")?.dataset.disc;
+  if (!mode) return;
+  const listTotal = [...cart.values()].reduce((t, i) => t + Number(i.current_price || 0), 0);
+  document.getElementById("cartTotal").value = discounted(listTotal, mode);
+  renderCart();
+});
+document.getElementById("cartLines").addEventListener("click", (e) => {
+  const id = e.target.closest("[data-remove]")?.dataset.remove;
+  if (!id) return;
+  cart.delete(id); updateCartBar(); applySearch();
+  if (cart.size) renderCart();
+});
+document.getElementById("openCart").addEventListener("click", openCart);
+document.getElementById("cartClose").addEventListener("click", () => closeModal("cartModal"));
+document.getElementById("cartClear").addEventListener("click", () => { cart.clear(); updateCartBar(); applySearch(); });
+
+document.getElementById("cartConfirm").addEventListener("click", async () => {
+  const items = [...cart.values()];
+  const total = cartTotalValue();
+  if (!items.length) return;
+  if (!Number.isFinite(total) || total < 0) return showToast("ราคารวมไม่ถูกต้อง");
+  const btn = document.getElementById("cartConfirm");
+  btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+  const shares = allocate(total, items);
+  const { error } = await supabaseClient.rpc("sell_cart", {
+    p_lines: items.map((i, idx) => ({ item_id: i.id, sale_price: shares[idx] })),
+    p_payment_method: cartPayEl.value,
+    p_channel: cartChanEl.value,
+    p_note: null,
+  });
+  btn.disabled = false; btn.textContent = "ยืนยันการขาย";
+  if (error) { console.error(error); return showToast("บันทึกการขายไม่สำเร็จ: " + error.message); }
+  lsSet(LS.pay, cartPayEl.value); lsSet(LS.chan, cartChanEl.value);
+  payEl.value = cartPayEl.value; chanEl.value = cartChanEl.value;
+  cart.clear(); soldLoaded = false;
+  closeModal("cartModal");
+  showToast(`ขายสำเร็จ ${items.length} ชิ้น รวม ${formatBaht(total)}`);
+  await loadSellGrid();
+});
 
 // ==========================================================
 // REALTIME — SELL PAGE
