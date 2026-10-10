@@ -249,10 +249,35 @@ function renderGroupOptions() {
 function renderGroups() {
   const el = $('groupList'); if (!el) return;
   if (!allGroups.length) { el.innerHTML = '<div class="empty-state">Lot นี้ยังไม่มีกลุ่ม กดเพิ่มกลุ่มด้านบนได้เลย</div>'; return; }
-  el.innerHTML = allGroups.map(g => `<div class="group-row"><div><b>${escapeHtml(g.group_name)}</b><span>${g.tier==='head'?'งานหัว':'ปกติ'} · ราคาเริ่ม ${formatBaht(g.base_price)}</span></div><div class="group-actions"><button class="btn btn-primary btn-sm" data-photo-group="${g.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><polygon points="13 2 4 14 11 14 10 22 20 10 13 10 13 2"/></svg>ถ่ายรูปแล้วลงทั้งกอง</button><button class="btn btn-ghost btn-sm" data-start-group="${g.id}">ลงทีละชิ้น</button></div></div>`).join('');
+  el.innerHTML = allGroups.map(g => `<div class="group-row"><div><b>${escapeHtml(g.group_name)}</b><span>${g.tier==='head'?'งานหัว':'ปกติ'} · ราคาเริ่ม ${formatBaht(g.base_price)}</span></div><div class="group-actions"><button class="btn btn-primary btn-sm" data-photo-group="${g.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><polygon points="13 2 4 14 11 14 10 22 20 10 13 10 13 2"/></svg>ถ่ายรูปแล้วลงทั้งกอง</button><button class=\"btn btn-ghost btn-sm\" data-nophoto-group=\"${g.id}\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\" style=\"width:15px;height:15px;vertical-align:-3px;margin-right:5px\"><rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"2\"/><line x1=\"3\" y1=\"3\" x2=\"21\" y2=\"21\"/></svg>ลงทั้งกองไม่มีรูป</button><button class="btn btn-ghost btn-sm" data-start-group="${g.id}">ลงทีละชิ้น</button></div></div>`).join('');
   el.querySelectorAll('[data-start-group]').forEach(btn => btn.onclick = () => startGroup(btn.dataset.startGroup));
   // ปุ่มนี้เปิด Photo Queue เพื่อจัดรูปก่อนกรอกรายละเอียดสินค้า
   el.querySelectorAll('[data-photo-group]').forEach(btn => btn.onclick = () => openPhotoQueue(btn.dataset.photoGroup));
+  // V18: ลงทั้งกองแบบไม่มีรูป — modal ธีมเดียวกับหน้านี้ ถามจำนวนแล้วเปิด Bulk Table ว่าง
+  el.querySelectorAll('[data-nophoto-group]').forEach(btn => btn.onclick = () => {
+    const groupId = btn.dataset.nophotoGroup;
+    const group = allGroups.find(g => g.id === groupId);
+    const wrap = document.createElement('div');
+    wrap.className = 'modal-backdrop';
+    wrap.innerHTML = `<div class="modal-sheet" style="max-width:420px">
+      <div class="modal-head"><div><h3 style="margin:0">ลงทั้งกองไม่มีรูป</h3><p style="margin:4px 0 0;color:var(--color-ink-soft);font-size:13px">${escapeHtml(group?.group_name || '')} · เพิ่มรูปทีหลังได้จากหน้าแก้ไขสินค้า</p></div></div>
+      <div class="field" style="margin-top:14px"><label for="noPhotoCount">จำนวนสินค้า (สูงสุด 200)</label><input id="noPhotoCount" type="number" min="1" max="200" value="200" /></div>
+      <div class="entry-actions" style="justify-content:flex-end"><button type="button" class="btn btn-ghost" id="noPhotoCancel">ยกเลิก</button><button type="button" class="btn btn-primary" id="noPhotoOk">สร้างตาราง</button></div>
+    </div>`;
+    document.body.appendChild(wrap);
+    const close = () => wrap.remove();
+    wrap.addEventListener('click', e => { if (e.target === wrap) close(); });
+    wrap.querySelector('#noPhotoCancel').onclick = close;
+    wrap.querySelector('#noPhotoOk').onclick = async () => {
+      const n = Math.min(200, Math.floor(Number(wrap.querySelector('#noPhotoCount').value)));
+      if (!n || n < 1) return showToast('ใส่จำนวนอย่างน้อย 1');
+      close();
+      await openPhotoQueue(groupId);
+      $('photoQueueItemCount').value = n;
+      $('startPhotoQueueEntry').click();
+    };
+    wrap.querySelector('#noPhotoCount').focus();
+  });
 }
 
 // ต้นทุน/ชิ้นของฟอร์มเพิ่มสินค้า 1 ตัว: ดึงจากต้นทุนเฉลี่ยของ Lot ให้อัตโนมัติ (แก้ไขเองได้ถ้าจำเป็น)
@@ -447,12 +472,12 @@ $('bulkImages')?.addEventListener('change', previewBulkImages);
 function previewBulkImages(){ const files=Array.from($('bulkImages').files||[]).slice(0,2); $('photoPreview').innerHTML=files.length?files.map(f=>`<img src="${URL.createObjectURL(f)}" alt="">`).join(''):'<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:55%;height:55%"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><small>เลือก 1–2 รูป</small>'; if(files.length>2) showToast('ระบบใช้แค่ 2 รูปแรก'); }
 $('quickEntryForm')?.addEventListener('submit', async e=>{
   e.preventDefault();
-  const files=bulkState.photoPairs ? bulkState.photoPairs[bulkState.index].filter(Boolean) : Array.from($('bulkImages').files||[]).slice(0,2); if(!files.length) return showToast('แนะนำให้ใส่อย่างน้อย 1 รูป');
+  const files=bulkState.photoPairs ? bulkState.photoPairs[bulkState.index].filter(Boolean) : Array.from($('bulkImages').files||[]).slice(0,2); // V18: ไม่มีรูปก็บันทึกได้
   const payload={lot_id:bulkState.lotId,group_id:bulkState.group.id,item_name:$('bulkName').value.trim(),size:$('bulkSize').value.trim(),condition:$('bulkCondition').value,tier:$('bulkTier').value,cost_price:Number($('bulkCost').value||0),base_price:Number(bulkState.group.base_price||0),current_price:Number($('bulkPrice').value||0),status:'available',listed_at:new Date().toISOString()};
   if(!payload.item_name) return showToast('กรุณาใส่ชื่อสินค้า');
   const {data,error}=await supabaseClient.from('items').insert(payload).select().single(); if(error) return showToast('บันทึกไม่สำเร็จ: '+error.message);
   try {
-    await uploadItemImages(data.id,files);
+    if (files.length) await uploadItemImages(data.id,files);
   } catch (imageError) {
     await supabaseClient.from('items').delete().eq('id', data.id);
     return showToast('อัปโหลดรูปไม่สำเร็จ จึงยกเลิก Item นี้: ' + imageError.message);

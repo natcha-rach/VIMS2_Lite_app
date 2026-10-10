@@ -49,7 +49,7 @@ async function loadSellGrid() {
     }
   }
 
-  renderGrid(inStockItems);
+  applySearch();
 }
 
 // โหลดของที่ขายแล้ว (300 รายการล่าสุด) สำหรับแท็บ "ขายแล้ว" — ดูรายงานย้อนหลังทั้งหมดได้ที่หน้ารายงาน
@@ -93,7 +93,7 @@ async function loadSoldGrid() {
   }
 
   soldLoaded = true;
-  renderSoldGrid(soldItems);
+  applySearch();
 }
 
 // สร้างการ์ดของที่ขายแล้ว: คลิกเพื่อดูรายละเอียด/ประวัติการขาย (ขายซ้ำไม่ได้)
@@ -131,8 +131,7 @@ document.querySelectorAll(".sell-tab").forEach((tab) => {
     document.getElementById("sellHintSold").classList.toggle("hidden", activeTab !== "sold");
     document.getElementById("searchBox").value = "";
     if (activeTab === "sold" && !soldLoaded) await loadSoldGrid();
-    else if (activeTab === "sold") renderSoldGrid(soldItems);
-    else renderGrid(inStockItems);
+    else applySearch();
   });
 });
 
@@ -174,10 +173,30 @@ function renderGrid(items) {
 }
 
 // ค้นหาแบบทันทีจากชื่อสินค้า / size / group / lot เพื่อให้ใช้หน้าร้านได้เร็ว — ใช้ได้ทั้งแท็บพร้อมขายและขายแล้ว
+// V18: Dropdown เลือก Lot — สร้างจากสินค้าที่โหลดมาจริง (Lot ใหม่ที่เพิ่ม/ลงของแล้วจะโผล่เองทุกครั้งที่ข้อมูลรีเฟรช)
+function refreshLotOptions(source) {
+  const select = document.getElementById("lotFilter");
+  const lots = new Map(); // key = lot_id, เรียงตามลำดับที่เจอ (ของใหม่สุดขึ้นก่อน)
+  source.forEach((item) => {
+    const key = item.lot_id || "none";
+    const entry = lots.get(key) || { name: item.lots?.lot_name || "ไม่ระบุ Lot", count: 0 };
+    entry.count += 1;
+    lots.set(key, entry);
+  });
+  const previous = select.value;
+  select.innerHTML =
+    `<option value="">ทุก Lot (${source.length})</option>` +
+    [...lots].map(([id, l]) => `<option value="${id}">${escapeHtml(l.name)} (${l.count})</option>`).join("");
+  select.value = lots.has(previous) ? previous : ""; // ถ้า Lot ที่เลือกไว้ไม่มีของเหลือแล้ว กลับไปทุก Lot
+}
+
 function applySearch() {
   const q = document.getElementById("searchBox").value.trim().toLowerCase();
-  const source = activeTab === "sold" ? soldItems : inStockItems;
+  const allSource = activeTab === "sold" ? soldItems : inStockItems;
   const render = activeTab === "sold" ? renderSoldGrid : renderGrid;
+  refreshLotOptions(allSource);
+  const lotId = document.getElementById("lotFilter").value;
+  const source = lotId ? allSource.filter((item) => (item.lot_id || "none") === lotId) : allSource;
   if (!q) return render(source);
   const filtered = source.filter((item) => {
     const haystack = [
@@ -194,6 +213,7 @@ function applySearch() {
 }
 
 document.getElementById("searchBox").addEventListener("input", applySearch);
+document.getElementById("lotFilter").addEventListener("change", applySearch);
 
 // เปิดหน้ารายละเอียด: เป็นจุดกลางระหว่าง “ค้นหา” และ “ยืนยันการขาย”
 // context = "available" (มาจากแท็บพร้อมขาย ขายได้) หรือ "sold" (มาจากแท็บขายแล้ว ดูอย่างเดียว)

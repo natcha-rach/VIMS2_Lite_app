@@ -10,14 +10,15 @@ function escapeHtml(v = "") {
 document.getElementById("expenseDate").valueAsDate = new Date();
 
 /* ---------- เงินทุน / ปรับยอดเงิน ---------- */
-const CAP_SIGN = { capital_in: 1, old_stock_income: 1, adjust_up: 1, withdraw: -1, adjust_down: -1 };
-const CAP_LABELS = { capital_in: "เพิ่มเงินทุน", old_stock_income: "เงินขายของเก่า", withdraw: "ถอนเงิน", adjust_up: "ปรับยอด(+)", adjust_down: "ปรับยอด(−)" };
+const CAP_SIGN = { opening: 0, capital_in: 1, old_stock_income: 1, adjust_up: 1, withdraw: -1, adjust_down: -1 };
+const CAP_LABELS = { opening: "ตั้งยอดเงินจริง", capital_in: "เพิ่มเงินทุน", old_stock_income: "เงินขายของเก่า", withdraw: "ถอนเงิน", adjust_up: "ปรับยอด(+)", adjust_down: "ปรับยอด(−)" };
 let currentBalance = 0;
+let hasAnchor = false;
 document.getElementById("capDate").valueAsDate = new Date();
 
 async function addCapitalEntry(entry_type, amount, reason, entry_date) {
   reason = (reason || "").trim();
-  if (!(amount > 0)) return showToast("กรุณาใส่จำนวนเงินมากกว่า 0");
+  if (!(amount > 0) && !(entry_type === "opening" && amount >= 0)) return showToast("กรุณาใส่จำนวนเงินมากกว่า 0");
   if (reason.length < 3) return showToast("ต้องใส่เหตุผล/รายละเอียดทุกครั้ง");
   const { error } = await supabaseClient.from("capital_entries").insert({ entry_type, amount, reason, entry_date });
   if (error) { console.error(error); return showToast("บันทึกไม่สำเร็จ: " + error.message); }
@@ -43,7 +44,7 @@ function updateCountPreview() {
   if (c === "" && t === "") { el.textContent = ""; return; }
   const real = (Number(c) || 0) + (Number(t) || 0);
   const diff = Math.round((real - currentBalance) * 100) / 100;
-  el.textContent = `รวมนับได้ ${formatBaht(real)} · ระบบคำนวณ ${formatBaht(currentBalance)} · ส่วนต่าง ${diff > 0 ? "+" : ""}${formatBaht(diff)}`;
+  el.textContent = !hasAnchor ? `รวมนับได้ ${formatBaht(real)}` : `รวมนับได้ ${formatBaht(real)} · ระบบคำนวณ ${formatBaht(currentBalance)} · ส่วนต่าง ${diff > 0 ? "+" : ""}${formatBaht(diff)}`;
 }
 ["realCashOnHand", "realTransfer"].forEach((id) => document.getElementById(id).addEventListener("input", updateCountPreview));
 
@@ -51,18 +52,21 @@ document.getElementById("adjBtn").addEventListener("click", async () => {
   const c = document.getElementById("realCashOnHand").value, t = document.getElementById("realTransfer").value;
   if (c === "" || t === "") return showToast("ใส่ทั้งเงินสดและเงินโอน (ไม่มีให้ใส่ 0)");
   const cash = Number(c), transfer = Number(t), real = cash + transfer;
-  const diff = Math.round((real - currentBalance) * 100) / 100;
-  const reason = document.getElementById("adjReason").value;
-  if (diff !== 0 && !confirm(`ระบบคำนวณ ${formatBaht(currentBalance)} / นับจริง ${formatBaht(real)}\nสร้างรายการปรับยอด ${diff > 0 ? "+" : "−"}${formatBaht(Math.abs(diff))} ใช่ไหม?`)) return;
+  let reason = document.getElementById("adjReason").value.trim();
+  if (reason.length < 3) return showToast("ต้องใส่เหตุผลทุกครั้ง");
+  if (hasAnchor) {
+    const diff = Math.round((real - currentBalance) * 100) / 100;
+    if (diff !== 0) {
+      if (!confirm(`ระบบคำนวณ ${formatBaht(currentBalance)} / นับจริง ${formatBaht(real)}\nส่วนต่าง ${diff > 0 ? "+" : "−"}${formatBaht(Math.abs(diff))} — บันทึกยอดที่นับจริงเป็นจุดตั้งต้นใหม่ใช่ไหม?`)) return;
+      reason += ` (ส่วนต่างจากระบบ ${diff > 0 ? "+" : "−"}${Math.abs(diff).toFixed(2)})`;
+    }
+  }
   const today = new Date().toISOString().slice(0, 10);
-  const ok = diff === 0
-    ? (reason.trim().length >= 3 || showToast("ต้องใส่เหตุผลทุกครั้ง")) && true
-    : await addCapitalEntry(diff > 0 ? "adjust_up" : "adjust_down", Math.abs(diff), reason, today);
+  const ok = await addCapitalEntry("opening", real, reason, today);
   if (!ok) return;
   await supabaseClient.from("app_settings").upsert({ key: "cash_count", value: { cash, transfer, date: today }, updated_at: new Date().toISOString() }, { onConflict: "key" });
-  document.getElementById("realCashOnHand").value = ""; document.getElementById("realTransfer").value = ""; document.getElementById("adjReason").value = "";
+  ["realCashOnHand", "realTransfer", "adjReason"].forEach((id) => (document.getElementById(id).value = ""));
   document.getElementById("countPreview").textContent = "";
-  loadAll();
 });
 
 /* ---------- ระบบแบ่งถังเงิน ---------- */
@@ -279,23 +283,37 @@ async function loadAll() {
   const totalRevenue = sales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0);
   const totalCostSold = sales.reduce((sum, s) => sum + Number(s.cost_price || 0), 0);
 
-  const capIn = capital.filter((c) => CAP_SIGN[c.entry_type] > 0).reduce((s, c) => s + Number(c.amount), 0);
-  const capOut = capital.filter((c) => CAP_SIGN[c.entry_type] < 0).reduce((s, c) => s + Number(c.amount), 0);
-  currentBalance = capIn - capOut + totalRevenue - totalCapital - totalExpenses;
+  // ยอดเงินจริง = ยอดที่นับได้ล่าสุด (anchor) + รายการที่เกิดหลังจากนั้น — ของก่อนหน้านั้นถือว่ารวมอยู่ในยอดที่นับแล้ว
+  const anchor = capital.filter((c) => c.entry_type === "opening").sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
+  let newFlow = { cap: 0, sales: 0, lots: 0, exp: 0 };
+  if (anchor) {
+    const aDate = anchor.entry_date, aTs = new Date(anchor.created_at);
+    newFlow.cap = capital
+      .filter((c) => c.entry_type !== "opening" && (c.entry_date > aDate || (c.entry_date === aDate && new Date(c.created_at) > aTs)))
+      .reduce((s, c) => s + CAP_SIGN[c.entry_type] * Number(c.amount), 0);
+    newFlow.sales = sales.filter((s) => new Date(s.sale_date) > aTs).reduce((s, x) => s + Number(x.sale_price || 0), 0);
+    newFlow.lots = lots.filter((l) => l.purchase_date > aDate).reduce((s, l) => s + Number(l.total_cost || 0), 0);
+    newFlow.exp = expenses.filter((e) => e.expense_date > aDate).reduce((s, e) => s + Number(e.amount || 0), 0);
+    currentBalance = Number(anchor.amount) + newFlow.cap + newFlow.sales - newFlow.lots - newFlow.exp;
+  } else currentBalance = 0;
+  hasAnchor = !!anchor;
+
   const balEl = document.getElementById("accCashBalance");
-  const noBase = capital.length === 0;
+  const noBase = !anchor;
   balEl.textContent = noBase ? "ยังไม่ได้ตั้งเงินตั้งต้น" : formatBaht(currentBalance);
   balEl.style.fontSize = noBase ? "20px" : "";
   balEl.classList.toggle("loss", !noBase && currentBalance < 0);
   document.getElementById("cashFormula").textContent = noBase
-    ? "ใส่เงินสดและเงินโอนที่มีจริงตอนนี้ในช่อง \"นับเงินจริง\" ด้านล่าง ระบบจะใช้เป็นจุดเริ่มต้นแล้วคำนวณต่อจากการขาย/ซื้อล็อต/ค่าใช้จ่าย"
-    : `เงินทุน/ปรับยอด ${formatBaht(capIn - capOut)} + ยอดขาย ${formatBaht(totalRevenue)} − ซื้อล็อต ${formatBaht(totalCapital)} − ค่าใช้จ่าย ${formatBaht(totalExpenses)}`;
+    ? "ใส่เงินสดและเงินโอนที่มีจริงตอนนี้ในช่อง \"นับเงินจริง\" ด้านล่าง ระบบจะใช้เป็นจุดเริ่มต้น แล้วบวก/ลบเฉพาะรายการที่เกิดหลังจากนั้น"
+    : `ยอดที่นับ ${formatBaht(anchor.amount)} (${formatDate(anchor.entry_date)}) + ขายใหม่ ${formatBaht(newFlow.sales)} ± เงินทุนใหม่ ${formatBaht(newFlow.cap)} − ซื้อล็อตใหม่ ${formatBaht(newFlow.lots)} − ค่าใช้จ่ายใหม่ ${formatBaht(newFlow.exp)}`;
   if (noBase) document.getElementById("countBox").open = true;
-  const gov = sales.filter((s) => s.payment_method === "government").reduce((s, x) => s + Number(x.sale_price || 0), 0);
+  const govSales = anchor ? sales.filter((s) => new Date(s.sale_date) > new Date(anchor.created_at)) : [];
+  const gov = govSales.filter((s) => s.payment_method === "government").reduce((s, x) => s + Number(x.sale_price || 0), 0);
   const { data: cc } = await supabaseClient.from("app_settings").select("value").eq("key", "cash_count").maybeSingle();
   document.getElementById("cashCountNote").textContent =
     (cc && cc.value ? `นับล่าสุด ${formatDate(cc.value.date)}: เงินสด ${formatBaht(cc.value.cash)} · เงินโอน ${formatBaht(cc.value.transfer)}. ` : "") +
     (gov > 0 ? `ยอดขายโครงการรัฐรวม ${formatBaht(gov)} (ถ้ายังไม่เข้าบัญชี ยอดนี้จะสูงกว่าเงินจริง)` : "");
+  document.getElementById("cashCountNote").style.display = document.getElementById("cashCountNote").textContent ? "" : "none";
 
   const netProfit = totalRevenue - totalCostSold - totalExpenses;
   const cashflow = totalRevenue - totalCapital - totalExpenses;
@@ -375,6 +393,10 @@ function renderLedger(lots, expenses, sales, capital = []) {
   const events = [];
   capital.forEach((c) => {
     const sign = CAP_SIGN[c.entry_type];
+    if (c.entry_type === "opening") {
+      events.push({ date: new Date(c.created_at), desc: `ตั้งยอดเงินจริง ${formatBaht(c.amount)}: ${c.reason}`, in: 0, out: 0, reset: Number(c.amount) });
+      return;
+    }
     events.push({
       date: new Date(c.entry_date),
       desc: `${CAP_LABELS[c.entry_type]}: ${c.reason}`,
@@ -417,7 +439,7 @@ function renderLedger(lots, expenses, sales, capital = []) {
   events.sort((a, b) => a.date - b.date);
   let running = 0;
   events.forEach((ev) => {
-    running += ev.in - ev.out;
+    running = ev.reset != null ? ev.reset : running + ev.in - ev.out;
     ev.balance = running;
   });
 
