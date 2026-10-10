@@ -10,7 +10,7 @@
    ========================================================== */
 
 (function () {
-  const TABLES = ['lots', 'lot_groups', 'items', 'item_images', 'sales', 'expenses'];
+  const TABLES = ['lots', 'lot_groups', 'items', 'item_images', 'sales', 'expenses', 'capital_entries'];
   let channel = null;
   let subscribed = false;
   let reloadTimer = null;

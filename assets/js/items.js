@@ -671,6 +671,8 @@ function buildPhotoPairsFromQueue() {
   const files = photoQueueState.files;
   const mode = photoQueueState.pairMode || 'auto-single';
   const pairs = Array.from({ length: count }, () => [null, null]);
+  // ไม่เลือกรูปเลย = ลงสินค้าแบบไม่มีรูป (สร้างแถวว่างตามจำนวนที่ใส่)
+  if (!files.length) return pairs;
 
   if (mode === 'auto-single') {
     if (files.length < count) return null;
@@ -970,12 +972,10 @@ function validateBulkTable() {
   if (!rows.length) return 'ยังไม่มีรายการในตาราง';
 
   const noName = rows.filter(row => !String(row.item_name || '').trim()).length;
-  const noPhoto = rows.filter(row => (row.files?.length || 0) < 1).length;
   const tooManyPhoto = rows.filter(row => (row.files?.length || 0) > 2).length;
 
   const parts = [];
   if (noName) parts.push(`ไม่มีชื่อ ${noName} รายการ`);
-  if (noPhoto) parts.push(`ไม่มีรูป ${noPhoto} รายการ`);
   if (tooManyPhoto) parts.push(`รูปเกิน 2 รูป ${tooManyPhoto} รายการ`);
 
   return parts.join(' · ');
@@ -996,7 +996,7 @@ async function runBulkImageUpload(lotId, group, itemRowPairs) {
     const chunk = itemRowPairs.slice(i, i + 4);
     await Promise.all(chunk.map(async ({ item, row }) => {
       try {
-        await uploadItemImages(item.id, row.files);
+        if (row.files?.length) await uploadItemImages(item.id, row.files); // ไม่มีรูป = ข้ามการอัปโหลด
         await supabaseClient.from('items').update({ intake_status: 'listed', listed_at: new Date().toISOString() }).eq('id', item.id);
       } catch (imageError) {
         console.warn(`แถว "${row.item_name}" อัปโหลดไม่สำเร็จ ยังคงเป็น draft:`, imageError);
@@ -1150,7 +1150,7 @@ $('excelInput')?.addEventListener('change', async event => {
     condition: ['A','B'].includes(String(row.condition || '').toUpperCase()) ? String(row.condition).toUpperCase() : 'A',
     tier: String(row.tier || '').toLowerCase() === 'head' ? 'head' : 'normal',
     price: Number(row.price || row.sell_price || 0),
-    photo_count: Math.max(1, Math.min(2, Number(row.photo_count || 1)))
+    photo_count: Math.max(0, Math.min(2, row.photo_count === '' || row.photo_count == null ? 1 : Number(row.photo_count) || 0))
   })).filter(row => row.item_name);
   // จำกัด Bulk operation ไม่เกิน 200 Item ตาม Requirement ของร้าน
   if (importedRows.length > 200) return showToast('ครั้งละไม่เกิน 200 รายการ');

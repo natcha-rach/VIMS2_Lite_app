@@ -9,6 +9,62 @@ function escapeHtml(v = "") {
 
 document.getElementById("expenseDate").valueAsDate = new Date();
 
+/* ---------- เงินทุน / ปรับยอดเงิน ---------- */
+const CAP_SIGN = { capital_in: 1, old_stock_income: 1, adjust_up: 1, withdraw: -1, adjust_down: -1 };
+const CAP_LABELS = { capital_in: "เพิ่มเงินทุน", old_stock_income: "เงินขายของเก่า", withdraw: "ถอนเงิน", adjust_up: "ปรับยอด(+)", adjust_down: "ปรับยอด(−)" };
+let currentBalance = 0;
+document.getElementById("capDate").valueAsDate = new Date();
+
+async function addCapitalEntry(entry_type, amount, reason, entry_date) {
+  reason = (reason || "").trim();
+  if (!(amount > 0)) return showToast("กรุณาใส่จำนวนเงินมากกว่า 0");
+  if (reason.length < 3) return showToast("ต้องใส่เหตุผล/รายละเอียดทุกครั้ง");
+  const { error } = await supabaseClient.from("capital_entries").insert({ entry_type, amount, reason, entry_date });
+  if (error) { console.error(error); return showToast("บันทึกไม่สำเร็จ: " + error.message); }
+  showToast("บันทึกเรียบร้อย");
+  loadAll();
+  return true;
+}
+
+document.getElementById("capitalForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const ok = await addCapitalEntry(
+    document.getElementById("capType").value,
+    Number(document.getElementById("capAmount").value),
+    document.getElementById("capReason").value,
+    document.getElementById("capDate").value
+  );
+  if (ok) { document.getElementById("capAmount").value = ""; document.getElementById("capReason").value = ""; }
+});
+
+function updateCountPreview() {
+  const c = document.getElementById("realCashOnHand").value, t = document.getElementById("realTransfer").value;
+  const el = document.getElementById("countPreview");
+  if (c === "" && t === "") { el.textContent = ""; return; }
+  const real = (Number(c) || 0) + (Number(t) || 0);
+  const diff = Math.round((real - currentBalance) * 100) / 100;
+  el.textContent = `รวมนับได้ ${formatBaht(real)} · ระบบคำนวณ ${formatBaht(currentBalance)} · ส่วนต่าง ${diff > 0 ? "+" : ""}${formatBaht(diff)}`;
+}
+["realCashOnHand", "realTransfer"].forEach((id) => document.getElementById(id).addEventListener("input", updateCountPreview));
+
+document.getElementById("adjBtn").addEventListener("click", async () => {
+  const c = document.getElementById("realCashOnHand").value, t = document.getElementById("realTransfer").value;
+  if (c === "" || t === "") return showToast("ใส่ทั้งเงินสดและเงินโอน (ไม่มีให้ใส่ 0)");
+  const cash = Number(c), transfer = Number(t), real = cash + transfer;
+  const diff = Math.round((real - currentBalance) * 100) / 100;
+  const reason = document.getElementById("adjReason").value;
+  if (diff !== 0 && !confirm(`ระบบคำนวณ ${formatBaht(currentBalance)} / นับจริง ${formatBaht(real)}\nสร้างรายการปรับยอด ${diff > 0 ? "+" : "−"}${formatBaht(Math.abs(diff))} ใช่ไหม?`)) return;
+  const today = new Date().toISOString().slice(0, 10);
+  const ok = diff === 0
+    ? (reason.trim().length >= 3 || showToast("ต้องใส่เหตุผลทุกครั้ง")) && true
+    : await addCapitalEntry(diff > 0 ? "adjust_up" : "adjust_down", Math.abs(diff), reason, today);
+  if (!ok) return;
+  await supabaseClient.from("app_settings").upsert({ key: "cash_count", value: { cash, transfer, date: today }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  document.getElementById("realCashOnHand").value = ""; document.getElementById("realTransfer").value = ""; document.getElementById("adjReason").value = "";
+  document.getElementById("countPreview").textContent = "";
+  loadAll();
+});
+
 /* ---------- ระบบแบ่งถังเงิน ---------- */
 const pctInputs = {
   cost: document.getElementById("pctCost"),
@@ -200,16 +256,17 @@ let ledgerRowsForExport = [];
 
 async function loadAll() {
   // fetchAllRows กัน sales/expenses ตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
-  const [{ data: lots, error: lotsErr }, { data: expenses, error: expErr }, { data: sales, error: salesErr }, { data: items, error: itemsErr }] =
+  const [{ data: lots, error: lotsErr }, { data: expenses, error: expErr }, { data: sales, error: salesErr }, { data: items, error: itemsErr }, { data: capital, error: capErr }] =
     await Promise.all([
       fetchAllRows(() => supabaseClient.from("lots").select("*")),
       fetchAllRows(() => supabaseClient.from("expenses").select("*")),
       fetchAllRows(() => supabaseClient.from("sales").select("*, items(item_name)").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
       fetchAllRows(() => supabaseClient.from("items").select("id,lot_id")),
+      fetchAllRows(() => supabaseClient.from("capital_entries").select("*")),
     ]);
 
-  if (lotsErr || expErr || salesErr || itemsErr) {
-    console.error(lotsErr || expErr || salesErr || itemsErr);
+  if (lotsErr || expErr || salesErr || itemsErr || capErr) {
+    console.error(lotsErr || expErr || salesErr || itemsErr || capErr);
     showToast("โหลดข้อมูลไม่สำเร็จ");
     return;
   }
@@ -221,6 +278,24 @@ async function loadAll() {
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const totalRevenue = sales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0);
   const totalCostSold = sales.reduce((sum, s) => sum + Number(s.cost_price || 0), 0);
+
+  const capIn = capital.filter((c) => CAP_SIGN[c.entry_type] > 0).reduce((s, c) => s + Number(c.amount), 0);
+  const capOut = capital.filter((c) => CAP_SIGN[c.entry_type] < 0).reduce((s, c) => s + Number(c.amount), 0);
+  currentBalance = capIn - capOut + totalRevenue - totalCapital - totalExpenses;
+  const balEl = document.getElementById("accCashBalance");
+  const noBase = capital.length === 0;
+  balEl.textContent = noBase ? "ยังไม่ได้ตั้งเงินตั้งต้น" : formatBaht(currentBalance);
+  balEl.style.fontSize = noBase ? "20px" : "";
+  balEl.classList.toggle("loss", !noBase && currentBalance < 0);
+  document.getElementById("cashFormula").textContent = noBase
+    ? "ใส่เงินสดและเงินโอนที่มีจริงตอนนี้ในช่อง \"นับเงินจริง\" ด้านล่าง ระบบจะใช้เป็นจุดเริ่มต้นแล้วคำนวณต่อจากการขาย/ซื้อล็อต/ค่าใช้จ่าย"
+    : `เงินทุน/ปรับยอด ${formatBaht(capIn - capOut)} + ยอดขาย ${formatBaht(totalRevenue)} − ซื้อล็อต ${formatBaht(totalCapital)} − ค่าใช้จ่าย ${formatBaht(totalExpenses)}`;
+  if (noBase) document.getElementById("countBox").open = true;
+  const gov = sales.filter((s) => s.payment_method === "government").reduce((s, x) => s + Number(x.sale_price || 0), 0);
+  const { data: cc } = await supabaseClient.from("app_settings").select("value").eq("key", "cash_count").maybeSingle();
+  document.getElementById("cashCountNote").textContent =
+    (cc && cc.value ? `นับล่าสุด ${formatDate(cc.value.date)}: เงินสด ${formatBaht(cc.value.cash)} · เงินโอน ${formatBaht(cc.value.transfer)}. ` : "") +
+    (gov > 0 ? `ยอดขายโครงการรัฐรวม ${formatBaht(gov)} (ถ้ายังไม่เข้าบัญชี ยอดนี้จะสูงกว่าเงินจริง)` : "");
 
   const netProfit = totalRevenue - totalCostSold - totalExpenses;
   const cashflow = totalRevenue - totalCapital - totalExpenses;
@@ -245,7 +320,7 @@ async function loadAll() {
   cashflowEl.classList.add(cashflow >= 0 ? "profit" : "loss");
 
   renderLotAccounting(lots, items, sales);
-  renderLedger(lots, expenses, sales);
+  renderLedger(lots, expenses, sales, capital);
 }
 
 // สรุปทุน/ยอดขาย/กำไรของแต่ละ Lot สำหรับหน้าบัญชี
@@ -296,8 +371,17 @@ function renderLotAccounting(lots, items, sales) {
     </tr>`).join("") : `<tr><td colspan="10" class="empty-state">ยังไม่มีข้อมูล Lot</td></tr>`;
 }
 
-function renderLedger(lots, expenses, sales) {
+function renderLedger(lots, expenses, sales, capital = []) {
   const events = [];
+  capital.forEach((c) => {
+    const sign = CAP_SIGN[c.entry_type];
+    events.push({
+      date: new Date(c.entry_date),
+      desc: `${CAP_LABELS[c.entry_type]}: ${c.reason}`,
+      in: sign > 0 ? Number(c.amount) : 0,
+      out: sign < 0 ? Number(c.amount) : 0,
+    });
+  });
 
   // desc เก็บเป็นข้อความดิบ (ไม่ escape) เพราะใช้ทั้งแสดงผลและ export CSV
   // การ escape สำหรับ HTML ทำตอน render เท่านั้น (ดู renderLedger ด้านล่าง)

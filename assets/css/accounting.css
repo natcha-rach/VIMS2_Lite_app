@@ -98,3 +98,10 @@
   font-size: 17px;
   color: var(--color-tan-dark);
 }
+
+/* V18: การ์ดเงินคงเหลือจริง */
+.cash-hero .label{font-size:12px;font-weight:600;color:var(--color-ink-soft)!important}
+.cash-hero #accCashBalance{font-family:var(--font-display);font-size:34px;font-weight:700;line-height:1.15;margin-top:4px;color:var(--color-profit)}
+.cash-hero #accCashBalance.loss{color:var(--color-loss)}
+.cash-formula{font-size:12px;color:var(--color-ink-soft);margin:8px 0 16px;padding-bottom:14px;border-bottom:1px solid var(--color-line);line-height:1.6}
+.cash-form .req,.cash-hero .req{color:var(--color-loss);font-weight:500;font-size:11px;margin-left:4px}
