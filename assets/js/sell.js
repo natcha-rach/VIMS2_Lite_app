@@ -215,6 +215,12 @@ function applySearch() {
 document.getElementById("searchBox").addEventListener("input", applySearch);
 document.getElementById("lotFilter").addEventListener("change", applySearch);
 
+// V18: ย้าย modal ไปไว้ใต้ <body> เพื่อให้อยู่เหนือ Navbar ด้านล่างบนมือถือ (กันถูก stacking context ของ #mainWrap ครอบไว้)
+["sellModal", "saleDetailModal"].forEach((id) => {
+  const el = document.getElementById(id);
+  if (el && el.parentElement !== document.body) document.body.appendChild(el);
+});
+
 // เปิดหน้ารายละเอียด: เป็นจุดกลางระหว่าง “ค้นหา” และ “ยืนยันการขาย”
 // context = "available" (มาจากแท็บพร้อมขาย ขายได้) หรือ "sold" (มาจากแท็บขายแล้ว ดูอย่างเดียว)
 async function openItemSaleDetail(itemId, context = "available") {
