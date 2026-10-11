@@ -14,6 +14,7 @@ const CAP_SIGN = { opening: 0, capital_in: 1, old_stock_income: 1, adjust_up: 1,
 const CAP_LABELS = { opening: "ตั้งยอดเงินจริง", capital_in: "เพิ่มเงินทุน", old_stock_income: "เงินขายของเก่า", withdraw: "ถอนเงิน", adjust_up: "ปรับยอด(+)", adjust_down: "ปรับยอด(−)" };
 let currentBalance = 0;
 let hasAnchor = false;
+let hasCapitalEntries = false;
 document.getElementById("capDate").valueAsDate = new Date();
 
 async function addCapitalEntry(entry_type, amount, reason, entry_date) {
@@ -29,8 +30,16 @@ async function addCapitalEntry(entry_type, amount, reason, entry_date) {
 
 document.getElementById("capitalForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+  let type = document.getElementById("capType").value;
+  // ยังไม่เคยตั้งเงินตั้งต้น: เงินทุนที่ใส่ = เงินจริงที่มีอยู่ตอนนี้ ใช้เป็นจุดเริ่มต้นเลย (ไม่หักต้นทุน Lot ที่จ่ายไปก่อนหน้า)
+  if (!hasAnchor && !hasCapitalEntries && type === "capital_in") {
+    const amt = Number(document.getElementById("capAmount").value);
+    if (!(amt > 0)) return showToast("กรุณาใส่จำนวนเงินมากกว่า 0");
+    if (!confirm(`ยังไม่ได้ตั้งเงินตั้งต้น\nใช้ ${formatBaht(amt)} เป็นเงินจริงที่มีอยู่ตอนนี้ (เงินสด + เงินโอน) ใช่ไหม?`)) return;
+    type = "opening";
+  }
   const ok = await addCapitalEntry(
-    document.getElementById("capType").value,
+    type,
     Number(document.getElementById("capAmount").value),
     document.getElementById("capReason").value,
     document.getElementById("capDate").value
@@ -284,7 +293,18 @@ async function loadAll() {
   const totalCostSold = sales.reduce((sum, s) => sum + Number(s.cost_price || 0), 0);
 
   // ยอดเงินจริง = ยอดที่นับได้ล่าสุด (anchor) + รายการที่เกิดหลังจากนั้น — ของก่อนหน้านั้นถือว่ารวมอยู่ในยอดที่นับแล้ว
-  const anchor = capital.filter((c) => c.entry_type === "opening").sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
+  let anchor = capital.filter((c) => c.entry_type === "opening").sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
+  // ยังไม่เคยนับเงินจริง แต่มีเงินทุนที่บันทึกไว้: ใช้ยอดเงินทุนรวมเป็นยอดตั้งต้นชั่วคราว (นับเฉพาะรายการหลังจากเงินทุนล่าสุด)
+  const provisional = !anchor && capital.length > 0;
+  hasCapitalEntries = capital.length > 0;
+  if (provisional) {
+    const last = [...capital].sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
+    anchor = {
+      amount: capital.reduce((s, c) => s + CAP_SIGN[c.entry_type] * Number(c.amount), 0),
+      entry_date: last.entry_date,
+      created_at: last.created_at,
+    };
+  }
   let newFlow = { cap: 0, sales: 0, lots: 0, exp: 0 };
   if (anchor) {
     const aDate = anchor.entry_date, aTs = new Date(anchor.created_at);
@@ -296,7 +316,7 @@ async function loadAll() {
     newFlow.exp = expenses.filter((e) => e.expense_date > aDate).reduce((s, e) => s + Number(e.amount || 0), 0);
     currentBalance = Number(anchor.amount) + newFlow.cap + newFlow.sales - newFlow.lots - newFlow.exp;
   } else currentBalance = 0;
-  hasAnchor = !!anchor;
+  hasAnchor = !!anchor && !provisional;
 
   const balEl = document.getElementById("accCashBalance");
   const noBase = !anchor;
@@ -305,13 +325,14 @@ async function loadAll() {
   balEl.classList.toggle("loss", !noBase && currentBalance < 0);
   document.getElementById("cashFormula").textContent = noBase
     ? "ใส่เงินสดและเงินโอนที่มีจริงตอนนี้ในช่อง \"นับเงินจริง\" ด้านล่าง ระบบจะใช้เป็นจุดเริ่มต้น แล้วบวก/ลบเฉพาะรายการที่เกิดหลังจากนั้น"
-    : `ยอดที่นับ ${formatBaht(anchor.amount)} (${formatDate(anchor.entry_date)}) + ขายใหม่ ${formatBaht(newFlow.sales)} ± เงินทุนใหม่ ${formatBaht(newFlow.cap)} − ซื้อล็อตใหม่ ${formatBaht(newFlow.lots)} − ค่าใช้จ่ายใหม่ ${formatBaht(newFlow.exp)}`;
+    : `${provisional ? "เงินทุนที่บันทึกไว้" : "ยอดที่นับ"} ${formatBaht(anchor.amount)} (${formatDate(anchor.entry_date)}) + ขายใหม่ ${formatBaht(newFlow.sales)} ± เงินทุนใหม่ ${formatBaht(newFlow.cap)} − ซื้อล็อตใหม่ ${formatBaht(newFlow.lots)} − ค่าใช้จ่ายใหม่ ${formatBaht(newFlow.exp)}`;
   if (noBase) document.getElementById("countBox").open = true;
   const govSales = anchor ? sales.filter((s) => new Date(s.sale_date) > new Date(anchor.created_at)) : [];
   const gov = govSales.filter((s) => s.payment_method === "government").reduce((s, x) => s + Number(x.sale_price || 0), 0);
   const { data: cc } = await supabaseClient.from("app_settings").select("value").eq("key", "cash_count").maybeSingle();
   document.getElementById("cashCountNote").textContent =
     (cc && cc.value ? `นับล่าสุด ${formatDate(cc.value.date)}: เงินสด ${formatBaht(cc.value.cash)} · เงินโอน ${formatBaht(cc.value.transfer)}. ` : "") +
+    (provisional ? "ยังไม่ได้นับเงินจริง — ใช้เงินทุนที่บันทึกไว้เป็นยอดตั้งต้นชั่วคราว ตั้งยอดนับจริงเพื่อให้ตรงกับเงินในมือ. " : "") +
     (gov > 0 ? `ยอดขายโครงการรัฐรวม ${formatBaht(gov)} (ถ้ายังไม่เข้าบัญชี ยอดนี้จะสูงกว่าเงินจริง)` : "");
   document.getElementById("cashCountNote").style.display = document.getElementById("cashCountNote").textContent ? "" : "none";
 
