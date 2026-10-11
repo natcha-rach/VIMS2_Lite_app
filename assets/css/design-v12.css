@@ -256,6 +256,7 @@ tbody tr:hover{background:#f8f9fd!important}
 @media(max-width:859.98px){
   #mainWrap{margin-left:0!important;padding-bottom:76px!important}
   .sidebar{width:100%!important}
+  .sidebar-footer{display:none!important} /* V18: มือถือไม่แสดงแถบชื่อร้านใต้ Navbar */
   .topbar{padding:12px 16px!important;min-height:58px}
   .topbar::after{display:none}
   .page,.dashboard-page,.lot-page{padding:20px 14px 38px!important}
