@@ -312,8 +312,9 @@ async function loadAll() {
       .filter((c) => c.entry_type !== "opening" && (c.entry_date > aDate || (c.entry_date === aDate && new Date(c.created_at) > aTs)))
       .reduce((s, c) => s + CAP_SIGN[c.entry_type] * Number(c.amount), 0);
     newFlow.sales = sales.filter((s) => new Date(s.sale_date) > aTs).reduce((s, x) => s + Number(x.sale_price || 0), 0);
-    newFlow.lots = lots.filter((l) => l.purchase_date > aDate).reduce((s, l) => s + Number(l.total_cost || 0), 0);
-    newFlow.exp = expenses.filter((e) => e.expense_date > aDate).reduce((s, e) => s + Number(e.amount || 0), 0);
+    const afterCount = (d, row) => d > aDate || (d === aDate && new Date(row.created_at) > aTs); // วันเดียวกับวันนับ: ถ้าลงในระบบหลังเวลานับ ถือว่าเป็นรายการใหม่
+    newFlow.lots = lots.filter((l) => afterCount(l.purchase_date, l)).reduce((s, l) => s + Number(l.total_cost || 0), 0);
+    newFlow.exp = expenses.filter((e) => afterCount(e.expense_date, e)).reduce((s, e) => s + Number(e.amount || 0), 0);
     currentBalance = Number(anchor.amount) + newFlow.cap + newFlow.sales - newFlow.lots - newFlow.exp;
   } else currentBalance = 0;
   hasAnchor = !!anchor && !provisional;
