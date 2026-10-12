@@ -7,7 +7,7 @@ function escapeHtml(v = "") {
   return String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
 }
 
-document.getElementById("expenseDate").valueAsDate = new Date();
+document.getElementById("expenseDate").valueAsDate = new Date(); document.getElementById("expenseTime").value = nowTime();
 
 /* ---------- เงินทุน / ปรับยอดเงิน ---------- */
 const CAP_SIGN = { opening: 0, capital_in: 1, old_stock_income: 1, adjust_up: 1, withdraw: -1, adjust_down: -1 };
@@ -155,11 +155,17 @@ bucketBaseAmountEl.addEventListener("input", () => {
 });
 
 /* ---------- ฟอร์มเพิ่ม/แก้ไขค่าใช้จ่าย ---------- */
+function nowTime() { return new Date().toTimeString().slice(0, 5); }
+
 document.getElementById("expenseForm").addEventListener("submit", async (e) => {
   e.preventDefault();
 
   const payload = {
     expense_date: document.getElementById("expenseDate").value,
+    // เวลาที่จ่ายจริง (เว้นว่างได้) — ใช้เทียบกับเวลานับเงินจริง
+    expense_at: document.getElementById("expenseTime").value
+      ? new Date(`${document.getElementById("expenseDate").value}T${document.getElementById("expenseTime").value}`).toISOString()
+      : null,
     amount: Number(document.getElementById("expenseAmount").value),
     category: document.getElementById("expenseCategory").value.trim(),
     note: document.getElementById("expenseNote").value.trim(),
@@ -183,7 +189,7 @@ document.getElementById("expenseForm").addEventListener("submit", async (e) => {
     }
     showToast("บันทึกค่าใช้จ่ายเรียบร้อย");
     document.getElementById("expenseForm").reset();
-    document.getElementById("expenseDate").valueAsDate = new Date();
+    document.getElementById("expenseDate").valueAsDate = new Date(); document.getElementById("expenseTime").value = nowTime();
   }
 
   loadAll();
@@ -194,7 +200,7 @@ document.getElementById("cancelExpenseEdit").addEventListener("click", exitEditM
 function exitEditMode() {
   editingExpenseId = null;
   document.getElementById("expenseForm").reset();
-  document.getElementById("expenseDate").valueAsDate = new Date();
+  document.getElementById("expenseDate").valueAsDate = new Date(); document.getElementById("expenseTime").value = nowTime();
   document.getElementById("expenseSubmitBtn").textContent = "บันทึกค่าใช้จ่าย";
   document.getElementById("cancelExpenseEdit").classList.add("hidden");
 }
@@ -202,6 +208,7 @@ function exitEditMode() {
 function enterEditMode(expense) {
   editingExpenseId = expense.id;
   document.getElementById("expenseDate").value = expense.expense_date;
+  document.getElementById("expenseTime").value = expense.expense_at ? new Date(expense.expense_at).toTimeString().slice(0, 5) : "";
   document.getElementById("expenseAmount").value = expense.amount;
   document.getElementById("expenseCategory").value = expense.category || "";
   document.getElementById("expenseNote").value = expense.note || "";
@@ -238,7 +245,7 @@ function renderExpenseList() {
       <div class="tag-card expense-row">
         <div>
           <div class="expense-category">${escapeHtml(exp.category)}</div>
-          <div class="expense-meta">${formatDate(exp.expense_date)}${exp.note ? " · " + escapeHtml(exp.note) : ""}</div>
+          <div class="expense-meta">${formatDate(exp.expense_date)}${exp.expense_at ? " " + new Date(exp.expense_at).toTimeString().slice(0, 5) + " น." : ""}${exp.note ? " · " + escapeHtml(exp.note) : ""}</div>
         </div>
         <div class="expense-actions">
           <div class="expense-amount">${formatBaht(exp.amount)}</div>
@@ -314,7 +321,7 @@ async function loadAll() {
     newFlow.sales = sales.filter((s) => new Date(s.sale_date) > aTs).reduce((s, x) => s + Number(x.sale_price || 0), 0);
     const afterCount = (d, row) => d > aDate || (d === aDate && new Date(row.created_at) > aTs); // วันเดียวกับวันนับ: ถ้าลงในระบบหลังเวลานับ ถือว่าเป็นรายการใหม่
     newFlow.lots = lots.filter((l) => afterCount(l.purchase_date, l)).reduce((s, l) => s + Number(l.total_cost || 0), 0);
-    newFlow.exp = expenses.filter((e) => afterCount(e.expense_date, e)).reduce((s, e) => s + Number(e.amount || 0), 0);
+    newFlow.exp = expenses.filter((e) => (e.expense_at ? new Date(e.expense_at) > aTs : afterCount(e.expense_date, e))).reduce((s, e) => s + Number(e.amount || 0), 0);
     currentBalance = Number(anchor.amount) + newFlow.cap + newFlow.sales - newFlow.lots - newFlow.exp;
   } else currentBalance = 0;
   hasAnchor = !!anchor && !provisional;
@@ -440,7 +447,7 @@ function renderLedger(lots, expenses, sales, capital = []) {
 
   expenses.forEach((e) => {
     events.push({
-      date: new Date(e.expense_date),
+      date: e.expense_at ? new Date(e.expense_at) : new Date(e.expense_date),
       desc: `ค่าใช้จ่าย: ${e.category}${e.note ? " (" + e.note + ")" : ""}`,
       in: 0,
       out: Number(e.amount || 0),
