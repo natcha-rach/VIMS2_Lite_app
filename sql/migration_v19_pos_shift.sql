@@ -156,6 +156,9 @@ create policy "allow all - reservations" on reservations for all using (true) wi
 --   ถ้า p_bill_id เคยบันทึกแล้ว → คืนบิลเดิม (duplicate=true) ไม่สร้างซ้ำ
 --   ถ้าชิ้นไหนขายไม่ได้ → rollback ทั้งบิล
 -- ---------------------------------------------------------------------------
+-- V21: ตัวเดียวกับ migration_v21 (มี p_sold_at) — รัน v19 ซ้ำหลัง v21 จะได้ไม่เกิด sell_bill 2 ตัวชื่อซ้ำ
+drop function if exists public.sell_bill(uuid, jsonb, text, text, numeric, text, boolean);
+
 create or replace function public.sell_bill(
   p_bill_id uuid,
   p_lines jsonb,
@@ -163,7 +166,8 @@ create or replace function public.sell_bill(
   p_channel text default 'street_market',
   p_cash_received numeric default null,
   p_note text default null,
-  p_sell_reserved boolean default false
+  p_sell_reserved boolean default false,
+  p_sold_at timestamptz default null
 )
 returns jsonb
 language plpgsql
@@ -178,6 +182,7 @@ declare
   v_price numeric;
   v_total numeric := 0;
   v_list numeric := 0;
+  v_at timestamptz;
 begin
   if p_bill_id is null then raise exception 'ไม่มีเลขบิล'; end if;
 
@@ -196,10 +201,14 @@ begin
     raise exception 'มีสินค้าซ้ำในบิล';
   end if;
 
-  select id into v_shift from shifts where closed_at is null limit 1; -- ผูกกับรอบร้านที่เปิดอยู่ (ถ้ามี)
+  -- เวลาขาย: ไม่ส่งมา = ตอนนี้ · ห้ามเป็นอนาคต (นาฬิกามือถือเพี้ยน) · ย้อนได้ไม่เกิน 7 วัน
+  v_at := least(coalesce(p_sold_at, now()), now());
+  if v_at < now() - interval '7 days' then raise exception 'บิลค้างส่งเกิน 7 วัน — ตรวจสอบแล้วลงขายใหม่ด้วยมือ'; end if;
 
-  insert into bills(id, shift_id, channel, payment_method, cash_received, note)
-  values (p_bill_id, v_shift, coalesce(p_channel, 'street_market'), p_payment_method, p_cash_received, p_note)
+  select id into v_shift from shifts where closed_at is null and opened_at <= v_at limit 1;
+
+  insert into bills(id, shift_id, channel, payment_method, cash_received, note, created_at)
+  values (p_bill_id, v_shift, coalesce(p_channel, 'street_market'), p_payment_method, p_cash_received, p_note, v_at)
   returning * into v_bill;
 
   for v_line in select * from jsonb_array_elements(p_lines) loop
@@ -213,14 +222,14 @@ begin
 
     if exists (select 1 from reservations where item_id = v_item.id and status = 'active') then
       if not p_sell_reserved then raise exception '"%" ถูกจองไว้แล้ว', v_item.item_name; end if;
-      update reservations set status = 'sold', bill_id = p_bill_id, closed_at = now()
+      update reservations set status = 'sold', bill_id = p_bill_id, closed_at = v_at
        where item_id = v_item.id and status = 'active';
     end if;
 
-    insert into sales(item_id, bill_id, sale_price, list_price, cost_price, payment_method, channel, note)
-    values (v_item.id, p_bill_id, v_price, v_item.current_price, v_item.cost_price, p_payment_method,
+    insert into sales(item_id, bill_id, sale_date, sale_price, list_price, cost_price, payment_method, channel, note)
+    values (v_item.id, p_bill_id, v_at, v_price, v_item.current_price, v_item.cost_price, p_payment_method,
             coalesce(p_channel, 'street_market'), p_note);
-    update items set status = 'sold', sold_at = now() where id = v_item.id;
+    update items set status = 'sold', sold_at = v_at where id = v_item.id;
 
     v_total := v_total + v_price;
     v_list := v_list + v_item.current_price;
@@ -478,7 +487,7 @@ do $$
 declare f text;
 begin
   foreach f in array array[
-    'sell_bill(uuid,jsonb,text,text,numeric,text,boolean)',
+    'sell_bill(uuid,jsonb,text,text,numeric,text,boolean,timestamptz)',
     'void_bill(uuid,text)',
     'void_sale(uuid,text)',
     'open_shift(numeric,text)',

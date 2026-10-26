@@ -9,7 +9,7 @@
 <link rel="stylesheet" href="assets/css/base.css" />
 <link rel="stylesheet" href="assets/css/accounting.css" />
   <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
-    <link rel="stylesheet" href="assets/css/polish.css?v=195" />
+    <link rel="stylesheet" href="assets/css/polish.css?v=200" />
   </head>
 <body>
 
@@ -244,6 +244,13 @@
     </div>
   </div>
 
+  <!-- V20: ประวัติรอบร้าน (shift-history.js) — ตัวเลขจาก snapshot ตอนปิดร้าน -->
+  <div class="tag-card">
+    <h2 style="margin:0 0 4px">ประวัติรอบร้าน</h2>
+    <p class="muted" style="margin:0 0 12px">ทุกครั้งที่ปิดร้าน · ดูว่าทำเลไหนขายดี และลิ้นชักขาด/เกินบ่อยแค่ไหน (ยอดขาด/เกินถูกรวมใน "เงินสด + เงินโอน ที่มีจริงตอนนี้" แล้ว)</p>
+    <div id="shiftHistory"><div class="empty-state">กำลังโหลด...</div></div>
+  </div>
+
   <div class="ledger-header">
     <h2 style="margin:0;">สมุดบัญชี (เงินเข้า-ออกทั้งหมด)</h2>
     <button id="exportCsvBtn" class="btn btn-ghost btn-sm">⬇ ส่งออก CSV</button>
@@ -271,6 +278,8 @@
   <h2 style="margin:0 0 4px">พื้นที่ที่ใช้ไป</h2>
   <p class="muted" style="margin:0 0 12px">ข้อมูลที่ขายแล้วไม่ต้องลบ (1 ชิ้น ≈ 3 KB) — ที่กินพื้นที่จริงคือรูป</p>
   <div id="storageBody" class="muted">กำลังโหลด...</div>
+  <!-- V20: ปุ่มลดพื้นที่รูป (storage-tools.js) -->
+  <div id="storageTools"></div>
 </div>
 
 </div>
@@ -280,10 +289,12 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/supabaseClient.js"></script>
-    <script src="assets/js/notify.js?v=191"></script>
+    <script src="assets/js/notify.js?v=200"></script>
 <script src="assets/js/auth.js"></script>
 <script src="assets/js/nav.js?v=195"></script>
-<script src="assets/js/accounting.js?v=22"></script>
+<script src="assets/js/accounting.js?v=23"></script>
+<script src="assets/js/shift-history.js?v=20"></script>
+<script src="assets/js/storage-tools.js?v=20"></script>
 <script>
   // V19: เรียก RPC storage_usage() — ถ้ายังไม่ได้รัน migration_v19 จะแจ้งไว้เฉยๆ
   (async () => {

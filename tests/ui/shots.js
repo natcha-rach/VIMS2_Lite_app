@@ -21,7 +21,7 @@ const server = http.createServer((req, res) => {
   const browser = await chromium.launch();
   const errors = [];
   for (const [w, h, tag] of [[390, 844, "m"], [1280, 820, "d"]]) {
-    const ctx = await browser.newContext({ viewport: { width: w, height: h } });
+    const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: w, height: h } });
     const pg = await ctx.newPage();
     await pg.route("**/*", (r) => { const u = r.request().url();
       if (u.includes("supabase-js")) return r.fulfill({ body: MOCK, contentType: "application/javascript" });

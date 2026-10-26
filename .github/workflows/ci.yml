@@ -1,0 +1,17 @@
+# รัน unit test (money.js) ทุกครั้งที่ push / เปิด PR — ถ้าแดง อย่าเพิ่ง merge เข้า master
+# (master = เว็บจริงบน Cloudflare Pages)
+name: Tests
+on:
+  push:
+  pull_request:
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tests/*.test.js
+      - name: ตรวจว่า build โฟลเดอร์เว็บได้
+        run: sh scripts/build-site.sh

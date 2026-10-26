@@ -188,8 +188,21 @@
   // นับเงิน & ปิดร้าน
   // ==========================================================
   const modal = document.getElementById("closeShiftModal");
-  function openCloseModal() {
+  async function openCloseModal() {
     if (!shift || !totals || !modal) return;
+    // V20: มีบิลที่ขายตอนเน็ตหลุดยังไม่ได้ส่ง → ยอดยังไม่ครบ ห้ามปิดร้าน (ตัวเลขปิดร้านต้องไม่เปลี่ยนย้อนหลัง)
+    const pending = window.OfflineSales ? await OfflineSales.count() : 0;
+    if (pending) {
+      await OfflineSales.flush();
+      const left = await OfflineSales.count();
+      if (left) return Notify.warning(`ยังมี ${left} บิลรอส่ง — ปิดร้านไม่ได้`, "บิลที่ขายตอนเน็ตหลุดยังไม่เข้าระบบ ยอดเงินในลิ้นชักจะไม่ตรง", {
+        hint: "ต่อเน็ตแล้วรอให้ส่งครบ หรือเปิดหน้าขาย → ป้าย 'รอส่ง' เพื่อจัดการ",
+        actions: [{ label: "ไปหน้าขาย", onClick: () => (location.href = "sell.html") }],
+      });
+      Notify.info("ส่งบิลที่ค้างครบแล้ว", "ตัวเลขในการ์ดอัปเดตแล้ว — กด 'นับเงิน & ปิดร้าน' อีกครั้ง");
+      load();
+      return;
+    }
     modal.querySelector("#csExpected").textContent = thb(S(totals.expected_cash));
     modal.querySelector("#csCounted").value = "";
     modal.querySelector("#csReason").value = "";

@@ -9,8 +9,8 @@
     <link rel="stylesheet" href="assets/css/base.css" />
     <link rel="stylesheet" href="assets/css/sell.css?v=20" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
-    <link rel="stylesheet" href="assets/css/pos.css?v=19" />
-    <link rel="stylesheet" href="assets/css/polish.css?v=195" />
+    <link rel="stylesheet" href="assets/css/pos.css?v=21" />
+    <link rel="stylesheet" href="assets/css/polish.css?v=200" />
   </head>
   <body>
     <nav id="sidebar" class="sidebar">
@@ -57,9 +57,13 @@
       </div>
 
       <div class="page pos-page">
-        <!-- แท็บ: พร้อมขาย (ตะกร้า) / บิล (ยกเลิก-คืนของ) / ขายแล้ว (ดูย้อนหลัง) -->
+        <!-- V20: บิลที่ขายตอนเน็ตหลุด รอส่ง (offline.js) — กดดู/ลองใหม่ -->
+        <button type="button" class="offline-queue hidden" id="offlineQueueBtn"></button>
+
+        <!-- แท็บ: พร้อมขาย (ตะกร้า) / จอง (IG/FB) / บิล (ยกเลิก-คืนของ) / ขายแล้ว (ดูย้อนหลัง) -->
         <div class="sell-tabs" id="sellTabs">
           <button type="button" class="sell-tab active" data-tab="available">พร้อมขาย</button>
+          <button type="button" class="sell-tab" data-tab="reservations">จอง <span class="tab-badge hidden" id="resBadge"></span></button>
           <button type="button" class="sell-tab" data-tab="bills">บิล &amp; คืนของ</button>
           <button type="button" class="sell-tab" data-tab="sold">ขายแล้ว</button>
           <button type="button" class="pos-icon-btn" id="openPosSettings" title="ตั้งค่าพร้อมเพย์/ใบเสร็จ" aria-label="ตั้งค่าพร้อมเพย์และใบเสร็จ">
@@ -78,6 +82,12 @@
           </div>
           <div class="pos-count" id="gridCount"></div>
           <div class="pos-grid cols-2" id="sellGrid"><div class="empty-state">กำลังโหลด...</div></div>
+        </div>
+
+        <!-- ===== แท็บจอง (V20): รายการจองที่ยังไม่ปิด เรียงตามวันนัด เกินกำหนดขึ้นก่อน ===== -->
+        <div id="reservationsView" class="hidden">
+          <div class="sell-hint">ของที่จองไว้ให้ลูกค้า IG/FB · "ขายเลย" = ใส่ตะกร้าแล้วไปชำระเงิน · เกินวันนัดแล้วจะขึ้นสีแดง</div>
+          <div id="reservationsList"><div class="empty-state">กำลังโหลด...</div></div>
         </div>
 
         <!-- ===== แท็บบิล: ยกเลิกทั้งบิล / คืนทีละชิ้น ===== -->
@@ -230,6 +240,15 @@
     </div>
 
     <!-- ===== ตั้งค่าหน้าร้าน ===== -->
+    <!-- ===== V20: บิลรอส่ง (ขายตอนเน็ตหลุด) ===== -->
+    <div class="modal-backdrop hidden" id="offlineQueueModal">
+      <div class="modal-sheet pos-sheet" role="dialog" aria-labelledby="offlineQueueTitle">
+        <div class="modal-head"><h2 id="offlineQueueTitle">บิลรอส่ง</h2><button type="button" class="icon-btn" id="closeOfflineQueue" aria-label="ปิด">×</button></div>
+        <div class="sell-hint">ขายไปแล้วตอนเน็ตหลุด เก็บไว้ในเครื่องนี้ · มีเน็ตเมื่อไหร่ระบบส่งให้เอง · อย่าล้างข้อมูลเบราว์เซอร์จนกว่าจะส่งครบ</div>
+        <div id="offlineQueueList"></div>
+      </div>
+    </div>
+
     <div class="modal-backdrop hidden" id="posSettingsModal">
       <form class="modal-sheet" id="posSettingsForm">
         <div class="modal-head"><h2>ตั้งค่าหน้าร้าน</h2><button type="button" class="icon-btn" id="closePosSettings" aria-label="ปิด">×</button></div>
@@ -244,12 +263,13 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
-    <script src="assets/js/notify.js?v=191"></script>
+    <script src="assets/js/notify.js?v=200"></script>
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
     <script src="assets/js/money.js?v=19"></script>
-    <script src="assets/js/sell.js?v=21"></script>
+    <script src="assets/js/offline.js?v=20"></script>
+    <script src="assets/js/sell.js?v=22"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

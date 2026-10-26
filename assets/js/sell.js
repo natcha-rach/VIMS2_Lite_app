@@ -27,6 +27,8 @@ let detailContext = "available";
 const cart = new Map();         // item_id → { price: satang }
 let deal = { mode: "none", total: null }; // none | 10 | 20 | total | lines(แก้รายชิ้นเอง)
 let pendingBillId = null;       // UUID ของบิลที่กำลังจะส่ง — ใช้ค่าเดิมเมื่อกดซ้ำ/ลองใหม่
+let pendingSoldAt = null;       // เวลาขายจริงของบิลนั้น (ส่งทีหลังตอนเน็ตกลับมา เวลาก็ยังถูก)
+let queuedIds = new Set();      // V20: ชิ้นที่ขายตอนเน็ตหลุด รอส่ง → ซ่อนจากกริด กันขายซ้ำ
 let payMethod = "cash";
 let channel = safeGet("vims_pos_channel") || "street_market";
 let lastBill = null;            // บิลล่าสุดสำหรับใบเสร็จ/เลิกทำ
@@ -55,6 +57,14 @@ async function loadSellGrid() {
 
   if (error) {
     console.error(error);
+    // V20: เน็ตหลุด → ใช้ข้อมูลกริดชุดล่าสุดที่เก็บไว้ในเครื่อง ขายต่อได้ (บิลเข้าคิวรอส่ง)
+    const snap = window.OfflineSales && OfflineSales.isNetworkError(error) ? await OfflineSales.loadSnapshot() : null;
+    if (snap?.items) {
+      inStockItems = snap.items; imagesById = snap.images || {}; reservationsByItem = snap.reservations || {};
+      Notify.warning("ไม่มีเน็ต — ใช้รายการสินค้าที่เก็บไว้ในเครื่อง", `ข้อมูล ณ ${formatDateTime(snap.saved_at)} · ขายต่อได้ บิลจะส่งเองเมื่อเน็ตกลับมา`);
+      refreshFilterOptions(); applySearch(); renderCartBar(); renderResBadge();
+      return;
+    }
     $("sellGrid").innerHTML = `<div class="empty-state">โหลดสินค้าไม่สำเร็จ <button type="button" class="btn btn-ghost btn-sm" onclick="loadSellGrid()">ลองใหม่</button></div>`;
     Notify.error("โหลดสินค้าพร้อมขายไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: loadSellGrid }] });
     return;
@@ -64,6 +74,9 @@ async function loadSellGrid() {
   const ids = inStockItems.map((i) => i.id);
   imagesById = await loadImages(ids);
   reservationsByItem = await loadReservations();
+  window.OfflineSales?.saveSnapshot({ items: inStockItems, images: imagesById, reservations: reservationsByItem });
+  renderResBadge();
+  warnOverdueOnce();
 
   // ของในตะกร้าที่ถูกขาย/หายไปจากอีกเครื่อง → เอาออกจากตะกร้าอัตโนมัติ
   const live = new Set(ids);
@@ -148,6 +161,7 @@ function applySearch() {
   const lotId = $("lotFilter").value;
   const size = $("sizeFilter").value;
   const list = inStockItems.filter((it) =>
+    !queuedIds.has(it.id) &&
     (!lotId || (it.lot_id || "none") === lotId) &&
     (!size || (it.size || "").trim().toUpperCase() === size) &&
     (!showReservedOnly || reservationsByItem[it.id]) &&
@@ -207,6 +221,7 @@ async function toggleCart(itemId) {
 
 function onCartChanged() {
   pendingBillId = null;           // ตะกร้าเปลี่ยน = บิลใหม่
+  pendingSoldAt = null;
   if (deal.mode !== "none") applyDeal(deal.mode, deal.total, true);
   applySearch();
   renderCartBar();
@@ -402,12 +417,12 @@ async function confirmSale() {
   const btn = $("confirmSale");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
 
-  pendingBillId ||= crypto.randomUUID(); // ลองใหม่ด้วย id เดิม = ไม่เกิดบิลซ้ำ
+  // ลองใหม่ด้วย id เดิม = ไม่เกิดบิลซ้ำ · เวลาขายจดไว้ตั้งแต่กดครั้งแรก
+  if (!pendingBillId) { pendingBillId = crypto.randomUUID(); pendingSoldAt = new Date().toISOString(); }
   const received = payMethod === "cash" && $("cashReceived").value !== "" ? Money.toBaht(S($("cashReceived").value)) : null;
   const snapshot = lines.map((l) => ({ name: l.item.item_name, sku: l.item.sku, price: l.price, list: S(l.item.current_price) }));
   const hasReserved = lines.some((l) => reservationsByItem[l.item.id]);
-
-  const { data, error } = await supabaseClient.rpc("sell_bill", {
+  const params = {
     p_bill_id: pendingBillId,
     p_lines: lines.map((l) => ({ item_id: l.item.id, price: Money.toBaht(l.price) })),
     p_payment_method: payMethod,
@@ -415,11 +430,26 @@ async function confirmSale() {
     p_cash_received: received,
     p_note: null,
     p_sell_reserved: hasReserved,
-  });
+    p_sold_at: pendingSoldAt,
+  };
+
+  const { data, error } = window.OfflineSales ? await OfflineSales.sellBill(params) : await supabaseClient.rpc("sell_bill", params);
   btn.disabled = false; btn.textContent = "ยืนยันขาย";
 
   if (error) {
     console.error(error);
+    // V20: เน็ตหลุด → เก็บบิลในเครื่อง ขายต่อได้เลย (offline.js ส่งให้เองด้วย UUID เดิม)
+    if (window.OfflineSales && OfflineSales.isNetworkError(error)) {
+      const queued = await OfflineSales.enqueue({
+        bill_id: pendingBillId, params, sold_at: pendingSoldAt, item_ids: lines.map((l) => l.item.id),
+        snapshot: { lines: snapshot, total: cartTotal(), list: cartListTotal(), pay: payMethod, channel, received },
+      });
+      if (queued) {
+        lines.forEach((l) => queuedIds.add(l.item.id));
+        Notify.warning("เน็ตหลุด — เก็บบิลไว้ในเครื่องแล้ว", `${lines.length} ชิ้น ${thb(cartTotal())} · ระบบจะส่งให้เองเมื่อเน็ตกลับมา ขายลูกค้าคนต่อไปได้เลย`, { hint: "อย่าล้างข้อมูลเบราว์เซอร์จนกว่าป้าย 'รอส่ง' จะหายไป" });
+        return finishSale({ id: pendingBillId, no: null, total: cartTotal(), list: cartListTotal(), queued: true }, snapshot, received);
+      }
+    }
     // ถ้าเป็นปัญหาเน็ต เก็บ pendingBillId ไว้ กดยืนยันอีกครั้งจะไม่เกิดบิลซ้ำ
     const f = Notify.friendlyError(error);
     return Notify.error("บันทึกการขายไม่สำเร็จ", f.detail, {
@@ -428,19 +458,25 @@ async function confirmSale() {
     });
   }
 
+  finishSale({ id: data.bill_id, no: data.bill_no, total: S(data.total), list: S(data.list_total), queued: false }, snapshot, received);
+  if (data.duplicate) Notify.info(`บิล #${data.bill_no} บันทึกไว้แล้วตั้งแต่ครั้งก่อน`, "ระบบไม่ได้สร้างบิลซ้ำ ยอดขายนับครั้งเดียว");
+  loadSellGrid();
+}
+
+// ขายเสร็จ (ส่งขึ้นระบบแล้ว หรือเก็บในเครื่องรอส่ง) → ล้างตะกร้า + เปิดใบเสร็จ
+function finishSale(bill, snapshot, received) {
   lastBill = {
-    id: data.bill_id, no: data.bill_no, total: S(data.total), list: S(data.list_total),
-    lines: snapshot, pay: payMethod, channel, received: received === null ? null : S(received), at: new Date(),
+    ...bill, lines: snapshot, pay: payMethod, channel, received: received === null ? null : S(received), at: new Date(),
   };
   cart.clear();
   deal = { mode: "none", total: null };
   pendingBillId = null;
+  pendingSoldAt = null;
   $("dealTotal").value = "";
   closeModal("checkoutModal");
   renderCartBar();
+  applySearch();
   openReceipt();
-  if (data.duplicate) Notify.info(`บิล #${data.bill_no} บันทึกไว้แล้วตั้งแต่ครั้งก่อน`, "ระบบไม่ได้สร้างบิลซ้ำ ยอดขายนับครั้งเดียว");
-  loadSellGrid();
 }
 
 // ==========================================================
@@ -449,7 +485,7 @@ async function confirmSale() {
 function openReceipt() {
   const b = lastBill;
   const change = b.received !== null ? b.received - b.total : null;
-  $("receiptTitle").textContent = `ขายแล้ว · บิล #${b.no}`;
+  $("receiptTitle").textContent = b.queued ? "ขายแล้ว · เก็บในเครื่อง รอส่ง" : `ขายแล้ว · บิล #${b.no}`;
   $("receiptBody").innerHTML = `
     ${b.lines.map((l) => `<div class="rc-line"><span>${escapeHtml(l.name)}</span><span>${l.price !== l.list ? `<s>${thb(l.list)}</s> ` : ""}${thb(l.price)}</span></div>`).join("")}
     <div class="rc-total"><span>รวม</span><b>${thb(b.total)}</b></div>
@@ -477,9 +513,17 @@ $("undoSale").addEventListener("click", async () => {
   clearInterval(undoTimer);
   const btn = $("undoSale");
   btn.disabled = true; btn.textContent = "กำลังยกเลิก...";
+  // บิลที่ยังรอส่งอยู่ในเครื่อง → แค่เอาออกจากคิว (ยังไม่เคยเข้าระบบ) · ถ้าส่งไปแล้วระหว่างนี้ ใช้ void_bill ตามปกติ
+  if (lastBill.queued && (await OfflineSales.list()).some((x) => x.bill_id === lastBill.id)) {
+    await OfflineSales.discard(lastBill.id);
+    Notify.success("ยกเลิกบิลที่รอส่งแล้ว", `${lastBill.lines.length} ชิ้นกลับมาขายได้ · ไม่นับยอด ${thb(lastBill.total)}`);
+    lastBill = null;
+    closeModal("receiptModal");
+    return;
+  }
   const { error } = await supabaseClient.rpc("void_bill", { p_bill_id: lastBill.id, p_reason: "เลิกทำทันทีหลังขาย" });
-  if (error) { btn.disabled = false; btn.textContent = "เลิกทำ"; return Notify.error(`ยกเลิกบิล #${lastBill.no} ไม่สำเร็จ`, error, { hint: "บิลยังถูกบันทึกอยู่ — ไปยกเลิกได้ที่แท็บ 'บิล & คืนของ'" }); }
-  Notify.success(`ยกเลิกบิล #${lastBill.no} แล้ว`, `${lastBill.lines.length} ชิ้นกลับเข้าสต็อก · ไม่นับยอด ${thb(lastBill.total)}`);
+  if (error) { btn.disabled = false; btn.textContent = "เลิกทำ"; return Notify.error(`ยกเลิกบิล ${billLabel(lastBill)} ไม่สำเร็จ`, error, { hint: "บิลยังถูกบันทึกอยู่ — ไปยกเลิกได้ที่แท็บ 'บิล & คืนของ'" }); }
+  Notify.success(`ยกเลิกบิล ${billLabel(lastBill)} แล้ว`, `${lastBill.lines.length} ชิ้นกลับเข้าสต็อก · ไม่นับยอด ${thb(lastBill.total)}`);
   lastBill = null;
   closeModal("receiptModal");
   loadSellGrid();
@@ -490,11 +534,11 @@ $("nextCustomer").addEventListener("click", () => { clearInterval(undoTimer); cl
 $("shareReceipt").addEventListener("click", async () => {
   if (!lastBill) return;
   const blob = await drawReceipt(lastBill);
-  const file = new File([blob], `receipt-${lastBill.no}.png`, { type: "image/png" });
+  const file = new File([blob], `receipt-${lastBill.no || "pending"}.png`, { type: "image/png" });
   try {
     if (navigator.canShare?.({ files: [file] })) {
-      await navigator.share({ files: [file], title: `ใบเสร็จ #${lastBill.no}` });
-      Notify.success("แชร์ใบเสร็จแล้ว", `บิล #${lastBill.no}`);
+      await navigator.share({ files: [file], title: `ใบเสร็จ ${billLabel(lastBill)}` });
+      Notify.success("แชร์ใบเสร็จแล้ว", `บิล ${billLabel(lastBill)}`);
       return;
     }
   } catch (err) {
@@ -520,7 +564,7 @@ async function drawReceipt(b) {
   g.font = "600 28px Prompt, sans-serif"; g.textAlign = "center";
   g.fillText(posSettings.shop_name || "Bubbles Gumps", W / 2, 56);
   g.font = "400 18px Prompt, sans-serif"; g.fillStyle = "#5b6178";
-  g.fillText(`ใบเสร็จ #${b.no} · ${b.at.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`, W / 2, 88);
+  g.fillText(`ใบเสร็จ ${billLabel(b)} · ${b.at.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`, W / 2, 88);
   let y = 132;
   g.textAlign = "left"; g.fillStyle = "#161923"; g.font = "400 20px Prompt, sans-serif";
   b.lines.forEach((l) => {
@@ -770,6 +814,8 @@ document.querySelectorAll(".sell-tab").forEach((tab) => {
     document.querySelectorAll(".sell-tab").forEach((t) => t.classList.toggle("active", t === tab));
     $("availableView").classList.toggle("hidden", activeTab !== "available");
     $("billsView").classList.toggle("hidden", activeTab !== "bills");
+    $("reservationsView").classList.toggle("hidden", activeTab !== "reservations");
+    if (activeTab === "reservations") renderReservations();
     $("soldView").classList.toggle("hidden", activeTab !== "sold");
     $("cartBar").classList.toggle("tab-hidden", activeTab !== "available");
     if (activeTab === "bills") await loadBills();
@@ -797,6 +843,7 @@ applyCols(gridCols);
 $("colsToggle").addEventListener("click", () => { gridCols = gridCols === 2 ? 3 : 2; safeSet("vims_pos_cols", String(gridCols)); applyCols(gridCols); });
 
 // ปิด modal
+const billLabel = (b) => (b.no ? "#" + b.no : "(รอส่ง)");
 function closeModal(id) { $(id)?.classList.add("hidden"); }
 $("closeCheckout").addEventListener("click", () => closeModal("checkoutModal"));
 $("closeSaleDetail").addEventListener("click", () => closeModal("saleDetailModal"));
@@ -804,11 +851,128 @@ $("closeReserve").addEventListener("click", () => closeModal("reserveModal"));
 $("closePosSettings").addEventListener("click", () => closeModal("posSettingsModal"));
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  ["posSettingsModal", "reserveModal", "saleDetailModal", "checkoutModal"].some((id) => {
+  ["offlineQueueModal", "posSettingsModal", "reserveModal", "saleDetailModal", "checkoutModal"].some((id) => {
     if (!$(id).classList.contains("hidden")) { closeModal(id); return true; }
     return false;
   });
 });
+
+// ==========================================================
+// V20: แท็บจอง — ใช้ reservationsByItem + inStockItems ที่โหลดมากับกริดแล้ว (ไม่ query เพิ่ม)
+// ==========================================================
+const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+function reservationRows() {
+  const today = dayStart(new Date());
+  return Object.values(reservationsByItem).map((r) => {
+    const due = r.due_date ? dayStart(r.due_date + "T00:00:00") : null;
+    const daysLeft = due ? Math.round((due - today) / 86400000) : null;
+    return { r, item: inStockItems.find((i) => i.id === r.item_id), daysLeft };
+  }).sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999));
+}
+function renderResBadge() {
+  const rows = reservationRows();
+  const overdue = rows.filter((x) => x.daysLeft !== null && x.daysLeft < 0).length;
+  const badge = $("resBadge");
+  if (!badge) return;
+  badge.textContent = overdue ? `${overdue} เลยนัด` : String(rows.length);
+  badge.classList.toggle("hidden", !rows.length);
+  badge.classList.toggle("danger", overdue > 0);
+  if (activeTab === "reservations") renderReservations();
+}
+function renderReservations() {
+  const rows = reservationRows();
+  if (!rows.length) { $("reservationsList").innerHTML = `<div class="empty-state">ยังไม่มีของที่จองไว้ — จองได้จากปุ่ม i บนรูปสินค้า</div>`; return; }
+  $("reservationsList").innerHTML = rows.map(({ r, item, daysLeft }) => {
+    const img = item ? thumbOf(item) : null;
+    const state = daysLeft === null ? "" : daysLeft < 0 ? "overdue" : daysLeft === 0 ? "today" : "";
+    const dueText = daysLeft === null ? "ไม่กำหนดวัน" : daysLeft < 0 ? `เลยนัด ${-daysLeft} วัน` : daysLeft === 0 ? "นัดวันนี้" : `อีก ${daysLeft} วัน (${formatDate(r.due_date)})`;
+    return `<div class="res-card ${state}">
+      <span class="co-thumb">${img ? `<img src="${img}" alt="">` : SHIRT_SVG}</span>
+      <div class="res-info">
+        <b>${escapeHtml(r.customer_name)}</b> <small>${channelLabel(r.channel)}</small>
+        <span>${escapeHtml(item?.item_name || "สินค้า")} · ${item ? thb(S(item.current_price)) : "-"}${Number(r.deposit) ? ` · มัดจำ ${formatBaht(r.deposit)}` : ""}</span>
+        <span class="res-due">${dueText}${r.note ? " · " + escapeHtml(r.note) : ""}</span>
+      </div>
+      <div class="res-actions">
+        ${item ? `<button type="button" class="btn btn-primary btn-sm" data-res-sell="${r.item_id}">ขายเลย</button>` : ""}
+        <button type="button" class="btn btn-ghost btn-sm" data-res-release="${r.id}">ยกเลิกจอง</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+$("reservationsList").addEventListener("click", (e) => {
+  const sell = e.target.closest("[data-res-sell]");
+  const rel = e.target.closest("[data-res-release]");
+  if (sell) {
+    const item = inStockItems.find((i) => i.id === sell.dataset.resSell);
+    if (!item) return;
+    if (!cart.has(item.id)) cart.set(item.id, { price: S(item.current_price) }); // กดจากแท็บจอง = ตั้งใจขายให้คนจองแล้ว ไม่ถามซ้ำ
+    onCartChanged();
+    document.querySelector('.sell-tab[data-tab="available"]').click();
+    openCheckout();
+  }
+  if (rel) {
+    const res = Object.values(reservationsByItem).find((x) => x.id === rel.dataset.resRelease);
+    if (res) releaseReservation(res);
+  }
+});
+// เปิดหน้าขายแล้วมีของเลยนัด → เตือนครั้งเดียว
+let overdueWarned = false;
+function warnOverdueOnce() {
+  if (overdueWarned) return;
+  const late = reservationRows().filter((x) => x.daysLeft !== null && x.daysLeft < 0);
+  if (!late.length) return;
+  overdueWarned = true;
+  Notify.warning(`ของจองเลยวันนัด ${late.length} รายการ`, late.slice(0, 3).map((x) => `${x.r.customer_name} (${-x.daysLeft} วัน)`).join(", ") + (late.length > 3 ? " …" : ""), {
+    hint: "ทักลูกค้า หรือยกเลิกจองให้ของกลับมาขายได้",
+    actions: [{ label: "ดูรายการจอง", onClick: () => document.querySelector('.sell-tab[data-tab="reservations"]').click() }],
+  });
+}
+
+// ==========================================================
+// V20: ป้าย "รอส่ง" + รายการบิลที่ขายตอนเน็ตหลุด (offline.js)
+// ==========================================================
+function renderOfflineQueue(q) {
+  queuedIds = new Set(q.flatMap((x) => x.item_ids || []));
+  const failed = q.filter((x) => x.failed).length;
+  const btn = $("offlineQueueBtn");
+  btn.classList.toggle("hidden", !q.length);
+  btn.classList.toggle("failed", failed > 0);
+  btn.textContent = q.length ? `☁ รอส่ง ${q.length} บิล${failed ? ` · ส่งไม่ผ่าน ${failed}` : ""} — แตะเพื่อดู` : "";
+  $("offlineQueueList").innerHTML = q.length ? q.map((x) => `<div class="bill-card${x.failed ? " voided" : ""}">
+      <div class="bill-head"><b>${x.failed ? "ส่งไม่ผ่าน" : "รอส่ง"}</b><span>${formatDateTime(x.sold_at)} · ${paymentLabel(x.snapshot?.pay)} · ${channelLabel(x.snapshot?.channel)}</span><strong>${thb(x.snapshot?.total || 0)}</strong></div>
+      ${(x.snapshot?.lines || []).map((l) => `<div class="bill-line"><span>${escapeHtml(l.name)} <small>${escapeHtml(l.sku || "")}</small></span><span>${thb(l.price)}</span></div>`).join("")}
+      ${x.last_error ? `<div class="bill-void-note">${escapeHtml(x.last_error)}</div>` : ""}
+      <div class="res-actions"><button type="button" class="btn btn-primary btn-sm" data-q-retry="${x.bill_id}">ส่งตอนนี้</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-q-discard="${x.bill_id}">ทิ้งบิลนี้</button></div>
+    </div>`).join("") : `<div class="empty-state">ส่งครบทุกบิลแล้ว</div>`;
+  applySearch();
+}
+$("offlineQueueBtn").addEventListener("click", () => $("offlineQueueModal").classList.remove("hidden"));
+$("closeOfflineQueue").addEventListener("click", () => closeModal("offlineQueueModal"));
+$("offlineQueueList").addEventListener("click", async (e) => {
+  const retry = e.target.closest("[data-q-retry]");
+  const discard = e.target.closest("[data-q-discard]");
+  if (retry) {
+    const { sent } = await OfflineSales.retry(retry.dataset.qRetry);
+    if (!sent && navigator.onLine === false) Notify.warning("ยังไม่มีเน็ต", "ระบบจะส่งให้เองเมื่อเน็ตกลับมา");
+  }
+  if (discard) {
+    const entry = (await OfflineSales.list()).find((x) => x.bill_id === discard.dataset.qDiscard);
+    if (!entry) return;
+    const reason = await Notify.prompt({
+      title: "ทิ้งบิลที่รอส่ง?", message: `${OfflineSales.describe(entry)}\nบิลนี้จะไม่ถูกนับยอดขาย และของกลับมาขายได้ — ใช้เมื่อคืนเงินลูกค้าแล้ว หรือจะลงขายใหม่เอง`,
+      placeholder: "เหตุผล เช่น ชิ้นนี้ขายซ้ำ คืนเงินแล้ว", required: true, requiredText: "ต้องใส่เหตุผลทุกครั้ง", confirmText: "ทิ้งบิล",
+    });
+    if (!reason) return;
+    await OfflineSales.discard(entry.bill_id);
+    console.info("ทิ้งบิลรอส่ง", entry.bill_id, reason);
+    Notify.success("ทิ้งบิลที่รอส่งแล้ว", `${OfflineSales.describe(entry)} · เหตุผล: ${reason}`);
+  }
+});
+window.addEventListener("vims:offline-queue", (e) => renderOfflineQueue(e.detail.queue));
+window.addEventListener("vims:offline-flushed", () => { soldLoaded = false; loadSellGrid(); });
+window.OfflineSales?.list().then(renderOfflineQueue);
 
 // ---------- helpers ----------
 function paymentLabel(v) { return ({ cash: "เงินสด", transfer: "โอน", government: "โครงการรัฐ" })[v] || v || "-"; }

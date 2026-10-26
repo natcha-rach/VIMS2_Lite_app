@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="assets/css/base.css" />
     <link rel="stylesheet" href="assets/css/reports.css" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
-    <link rel="stylesheet" href="assets/css/polish.css?v=195" />
+    <link rel="stylesheet" href="assets/css/polish.css?v=200" />
   </head>
   <body>
     <nav id="sidebar" class="sidebar">
@@ -137,6 +137,12 @@
           </div>
         </div>
 
+        <!-- V20: อะไรขายดี (insights.js) — ช่วงเวลาแยกจากตัวเลือกด้านบน -->
+        <div class="tag-card">
+          <h2>อะไรขายดี</h2>
+          <p class="muted">ไว้ตัดสินใจซื้อกระสอบ/คัดของรอบหน้า · "กี่วันขายออก" = ครึ่งหนึ่งของที่ขายได้ ขายภายในกี่วันหลังลงของ</p>
+          <div id="insights"></div>
+        </div>
         <div class="tag-card">
           <h2>Performance ตาม Lot</h2>
           <p class="muted">ยอดขายและกำไรด้านบนเป็นตามช่วงเวลาที่เลือก ส่วนตารางนี้เป็นยอดสะสมตลอดอายุของแต่ละ Lot</p>
@@ -204,11 +210,12 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
-    <script src="assets/js/notify.js?v=191"></script>
+    <script src="assets/js/notify.js?v=200"></script>
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="assets/js/reports.js"></script>
+    <script src="assets/js/insights.js?v=20"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

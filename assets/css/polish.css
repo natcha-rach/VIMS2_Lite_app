@@ -244,3 +244,72 @@ a.btn, a.btn:hover { text-decoration: none !important; display: inline-flex; ali
 .stock-tabs a { min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 9px; font: 500 14px var(--v11-thai); color: var(--v11-text); text-decoration: none !important; }
 .stock-tabs a[aria-current="page"] { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(16, 24, 40, .1); }
 @media (max-width: 639.98px) { .stock-tabs { max-width: none; } }
+
+/* ---------- V20: อะไรขายดี (reports.html · insights.js) ---------- */
+.ins-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.ins-dims { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--v11-surface-3); border-radius: 12px; }
+.ins-dims button { min-height: 40px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; font: 500 13px var(--v11-thai); color: var(--v11-text); cursor: pointer; }
+.ins-dims button.active { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(16, 24, 40, .1); }
+.ins-range { min-height: 44px; }
+.ins-table .num { text-align: right; white-space: nowrap; }
+.ins-bar { display: inline-block; width: 48px; height: 6px; margin-right: 6px; vertical-align: middle; border-radius: 3px; background: var(--v11-surface-3); overflow: hidden; }
+.ins-bar i { display: block; height: 100%; background: var(--v11-purple); }
+.ins-tips { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; padding: 10px 12px; border-radius: 12px; background: #f3f5ff; font-size: 14px; }
+.ins-sub { margin: 18px 0 8px; font-size: 16px; }
+.ins-sub small { font-weight: 400; font-size: 12px; color: var(--v11-muted); }
+
+/* ---------- V20: ของค้าง (items.html · stale.js) ---------- */
+.stale-card { margin-bottom: 16px; }
+.stale-summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; list-style: none; }
+.stale-summary::-webkit-details-marker { display: none; }
+.stale-summary::after { content: "▾"; color: var(--v11-muted); }
+.stale-card[open] .stale-summary::after { content: "▴"; }
+.stale-summary .stale-days { min-height: 36px; margin-left: 6px; }
+.stale-count { margin-left: auto; color: var(--v11-muted); font-size: 14px; }
+.stale-body { margin-top: 12px; }
+.stale-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.stale-mode { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: var(--v11-surface-3); border-radius: 12px; }
+.stale-mode button { min-height: 40px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; font: 500 13px var(--v11-thai); color: var(--v11-text); cursor: pointer; }
+.stale-mode button.active { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(16, 24, 40, .1); }
+.stale-price { width: 160px; min-height: 44px; }
+.stale-preview { margin: 10px 0; font-size: 14px; }
+.stale-apply { min-height: 44px; margin-bottom: 12px; }
+.stale-group { border: 1px solid var(--v11-border); border-radius: 12px; margin-bottom: 10px; overflow: hidden; }
+.stale-ghead { display: flex; gap: 8px; align-items: center; min-height: 44px; padding: 8px 12px; background: var(--v11-surface-2); cursor: pointer; }
+.stale-ghead small { color: var(--v11-muted); }
+.stale-item { display: grid; grid-template-columns: 24px 1fr auto; gap: 8px; align-items: center; min-height: 48px; padding: 6px 12px; border-top: 1px solid var(--v11-border); cursor: pointer; }
+.stale-item input, .stale-ghead input { width: 20px; height: 20px; }
+.stale-name { display: flex; flex-direction: column; font-size: 14px; min-width: 0; }
+.stale-name small { color: var(--v11-muted); font-size: 12px; }
+.stale-p { font-size: 14px; white-space: nowrap; }
+.stale-p s { color: var(--v11-muted); }
+
+/* ---------- V20: เครื่องมือลดพื้นที่รูป (accounting.html · storage-tools.js) ---------- */
+.st-tool { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--v11-border); }
+.st-tool > div { display: flex; flex-direction: column; font-size: 14px; }
+.st-tool small { color: var(--v11-muted); font-size: 12px; }
+.st-tool .btn { min-height: 44px; white-space: nowrap; }
+.st-progress { display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.st-bar { flex: 1; height: 8px; border-radius: 4px; background: #eef0f7; overflow: hidden; }
+.st-bar i { display: block; height: 100%; width: 0; background: var(--v11-purple); transition: width .2s; }
+
+/* ---------- V20: ประวัติรอบร้าน (accounting.html · shift-history.js) ---------- */
+.sh-toolbar { display: flex; justify-content: flex-end; margin-bottom: 10px; }
+.sh-toolbar select { min-height: 44px; }
+.sh-loc .num { text-align: right; white-space: nowrap; }
+.sh-list { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.sh-row { border: 1px solid var(--v11-border); border-radius: 12px; background: #fff; }
+.sh-row summary { display: grid; grid-template-columns: 1fr auto auto; gap: 10px; align-items: center; min-height: 52px; padding: 10px 12px; cursor: pointer; list-style: none; }
+.sh-row summary::-webkit-details-marker { display: none; }
+.sh-date, .sh-num { display: flex; flex-direction: column; font-size: 14px; }
+.sh-date small, .sh-num small { color: var(--v11-muted); font-size: 12px; }
+.sh-num { text-align: right; }
+.sh-diff { font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 999px; background: var(--v11-surface-3); white-space: nowrap; }
+.sh-diff.short { background: #fde2e2; color: #b42318; }
+.sh-diff.over { background: #fff1d6; color: #8a5300; }
+.sh-diff.ok { background: #e3f6ea; color: #157f3c; }
+.sh-detail { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; border-top: 1px dashed var(--v11-border); }
+.sh-detail > div { display: flex; justify-content: space-between; gap: 12px; }
+.sh-detail > div span { color: var(--v11-muted); }
+.sh-detail > div.sub { padding-left: 12px; font-size: 13px; }
+@media (max-width: 639.98px) { .sh-row summary { grid-template-columns: 1fr auto; } .sh-diff { grid-column: 1 / -1; justify-self: start; } }

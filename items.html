@@ -10,7 +10,7 @@
   <link rel="stylesheet" href="assets/css/base.css" />
   <link rel="stylesheet" href="assets/css/items.css" />
   <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
-    <link rel="stylesheet" href="assets/css/polish.css?v=195" />
+    <link rel="stylesheet" href="assets/css/polish.css?v=200" />
   </head>
 <body>
 <nav id="sidebar" class="sidebar">
@@ -50,6 +50,15 @@
         <div class="form-actions"><button type="submit" class="btn btn-primary">บันทึกสินค้า</button></div>
       </form>
     </section>
+
+    <!-- V20: ของค้าง → ลดราคาหลายชิ้นทีเดียว (stale.js · RPC markdown_items) -->
+    <details class="tag-card stale-card" id="staleCard">
+      <summary class="stale-summary">
+        <span><b>ของค้าง</b> <select class="stale-days" aria-label="ค้างกี่วัน" onclick="event.stopPropagation()"><option value="60">60+ วัน</option><option value="90">90+ วัน</option><option value="120">120+ วัน</option></select></span>
+        <span class="stale-count">กำลังโหลด...</span>
+      </summary>
+      <div class="stale-body"></div>
+    </details>
 
     <section class="tag-card">
       <div class="section-title"><div><h2>สต็อก</h2></div><div class="toolbar"><input id="searchBox" placeholder="ค้นหาสินค้า / SKU..."/><select id="filterStatus"><option value="available">พร้อมขาย</option><option value="sold">ขายแล้ว</option><option value="damaged">เสีย</option><option value="all">ทั้งหมด</option></select><select id="filterExtra"><option value="">ตัวกรองเพิ่มเติม</option><option value="no_photo">ไม่มีรูป</option><option value="no_price">ยังไม่ตั้งราคา</option><option value="age30">ค้างสต็อก 30+ วัน</option><option value="age60">ค้างสต็อก 60+ วัน</option><option value="age90">ค้างสต็อก 90+ วัน</option></select></div></div>
@@ -194,7 +203,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="assets/js/supabaseClient.js"></script>
-    <script src="assets/js/notify.js?v=191"></script>
-<script src="assets/js/auth.js"></script><script src="assets/js/vimsContext.js"></script><script src="assets/js/nav.js?v=195"></script><script src="assets/js/items.js?v=18"></script><script src="assets/js/realtime.js?v=192"></script>
+    <script src="assets/js/notify.js?v=200"></script>
+<script src="assets/js/auth.js"></script><script src="assets/js/vimsContext.js"></script><script src="assets/js/nav.js?v=195"></script><script src="assets/js/items.js?v=18"></script><script src="assets/js/money.js?v=19"></script><script src="assets/js/stale.js?v=20"></script><script src="assets/js/realtime.js?v=192"></script>
 </body>
 </html>

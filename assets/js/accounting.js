@@ -295,6 +295,11 @@ async function loadAll() {
   expensesCache = expenses;
   renderExpenseList();
 
+  // V20: เงินขาด/เกินตอนปิดร้าน (shifts.cash_diff) = เงินจริงที่หาย/เกินจากที่ระบบคิด → ต้องรวมในยอดเงินจริงด้วย
+  // ตาราง shifts มาจาก migration_v19 — ยังไม่ได้รัน ก็ข้ามไป (ไม่ทำให้หน้าบัญชีพัง)
+  const { data: closedShifts } = await supabaseClient.from("shifts").select("closed_at,cash_diff").not("closed_at", "is", null);
+  const shiftDiffs = closedShifts || [];
+
   const totalCapital = lots.reduce((sum, l) => sum + Number(l.total_cost || 0), 0);
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
   const totalRevenue = sales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0);
@@ -313,7 +318,7 @@ async function loadAll() {
       created_at: last.created_at,
     };
   }
-  let newFlow = { cap: 0, sales: 0, lots: 0, exp: 0 };
+  let newFlow = { cap: 0, sales: 0, lots: 0, exp: 0, drawer: 0 };
   if (anchor) {
     const aDate = anchor.entry_date, aTs = new Date(anchor.created_at);
     newFlow.cap = capital
@@ -323,7 +328,8 @@ async function loadAll() {
     const afterCount = (d, row) => d > aDate || (d === aDate && new Date(row.created_at) > aTs); // วันเดียวกับวันนับ: ถ้าลงในระบบหลังเวลานับ ถือว่าเป็นรายการใหม่
     newFlow.lots = lots.filter((l) => afterCount(l.purchase_date, l)).reduce((s, l) => s + Number(l.total_cost || 0), 0);
     newFlow.exp = expenses.filter((e) => (e.expense_at ? new Date(e.expense_at) > aTs : afterCount(e.expense_date, e))).reduce((s, e) => s + Number(e.amount || 0), 0);
-    currentBalance = Number(anchor.amount) + newFlow.cap + newFlow.sales - newFlow.lots - newFlow.exp;
+    newFlow.drawer = shiftDiffs.filter((s) => new Date(s.closed_at) > aTs).reduce((s, x) => s + Number(x.cash_diff || 0), 0);
+    currentBalance = Number(anchor.amount) + newFlow.cap + newFlow.sales - newFlow.lots - newFlow.exp + newFlow.drawer;
   } else currentBalance = 0;
   hasAnchor = !!anchor && !provisional;
 
@@ -334,7 +340,7 @@ async function loadAll() {
   balEl.classList.toggle("loss", !noBase && currentBalance < 0);
   document.getElementById("cashFormula").textContent = noBase
     ? "ใส่เงินสดและเงินโอนที่มีจริงตอนนี้ในช่อง \"นับเงินจริง\" ด้านล่าง ระบบจะใช้เป็นจุดเริ่มต้น แล้วบวก/ลบเฉพาะรายการที่เกิดหลังจากนั้น"
-    : `${provisional ? "เงินทุนที่บันทึกไว้" : "ยอดที่นับ"} ${formatBaht(anchor.amount)} (${formatDate(anchor.entry_date)}) + ขายใหม่ ${formatBaht(newFlow.sales)} ± เงินทุนใหม่ ${formatBaht(newFlow.cap)} − ซื้อล็อตใหม่ ${formatBaht(newFlow.lots)} − ค่าใช้จ่ายใหม่ ${formatBaht(newFlow.exp)}`;
+    : `${provisional ? "เงินทุนที่บันทึกไว้" : "ยอดที่นับ"} ${formatBaht(anchor.amount)} (${formatDate(anchor.entry_date)}) + ขายใหม่ ${formatBaht(newFlow.sales)} ± เงินทุนใหม่ ${formatBaht(newFlow.cap)} − ซื้อล็อตใหม่ ${formatBaht(newFlow.lots)} − ค่าใช้จ่ายใหม่ ${formatBaht(newFlow.exp)}${newFlow.drawer ? ` ${newFlow.drawer > 0 ? "+" : "−"} เงิน${newFlow.drawer > 0 ? "เกิน" : "ขาด"}ตอนปิดร้าน ${formatBaht(Math.abs(newFlow.drawer))}` : ""}`;
   if (noBase) document.getElementById("countBox").open = true;
   const govSales = anchor ? sales.filter((s) => new Date(s.sale_date) > new Date(anchor.created_at)) : [];
   const gov = govSales.filter((s) => s.payment_method === "government").reduce((s, x) => s + Number(x.sale_price || 0), 0);

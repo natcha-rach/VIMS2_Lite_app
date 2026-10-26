@@ -187,3 +187,31 @@
   /* --nav-h วัดความสูงเมนูล่างจริงจาก sell.js (เผื่อชื่อเมนูตกบรรทัดบนจอเล็ก) */
   .cart-bar { bottom: calc(var(--nav-h, 64px) + 8px); }
 }
+
+/* ---------- V20: ป้ายบิลรอส่ง (ขายตอนเน็ตหลุด) ---------- */
+.offline-queue { display: block; width: 100%; min-height: 44px; margin: 0 0 10px; padding: 10px 14px; border: 1px solid #f5c26b; border-radius: 12px; background: #fff7e6; color: #8a5300; font: 600 14px var(--v11-thai); text-align: left; cursor: pointer; }
+.offline-queue.failed { border-color: #f1a7a7; background: #fff0f0; color: #a12020; }
+
+/* ---------- V20: แท็บจอง ---------- */
+.tab-badge { display: inline-block; min-width: 20px; padding: 1px 6px; margin-left: 4px; border-radius: 999px; background: var(--v11-surface-3); font-size: 11px; font-weight: 600; }
+.tab-badge.danger { background: #fde2e2; color: #b42318; }
+.res-card { display: grid; grid-template-columns: 56px 1fr; gap: 10px 12px; align-items: center; padding: 12px; margin-bottom: 10px; border: 1px solid var(--v11-border); border-radius: 14px; background: #fff; }
+.res-card.overdue { border-color: #f1a7a7; background: #fff6f6; }
+.res-card.today { border-color: #f5c26b; background: #fffaf0; }
+.res-card .co-thumb { width: 56px; height: 56px; }
+.res-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 14px; }
+.res-info small { color: var(--v11-muted); }
+.res-due { font-size: 13px; color: var(--v11-muted); }
+.res-card.overdue .res-due { color: #b42318; font-weight: 600; }
+.res-card.today .res-due { color: #8a5300; font-weight: 600; }
+.res-actions { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.res-actions .btn { min-height: 44px; }
+.bill-card .res-actions { margin-top: 8px; }
+
+/* V20: มีแท็บ "จอง" เพิ่ม — มือถือให้แท็บอยู่แถวเดียวแล้วเลื่อนข้างได้ แทนการตกบรรทัด */
+@media (max-width: 639.98px) {
+  .sell-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .sell-tabs::-webkit-scrollbar { display: none; }
+  .sell-tab { flex: none; padding: 8px 12px !important; white-space: nowrap; }
+  .sell-tabs .pos-icon-btn { flex: none; }
+}

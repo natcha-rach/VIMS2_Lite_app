@@ -24,19 +24,24 @@
     const r = { ...row };
     if (table === "items") { r.lots = db.lots.find((l) => l.id === row.lot_id) || null; r.lot_groups = null; }
     if (table === "sales") r.items = embed("items", db.items.find((i) => i.id === row.item_id) || {});
+    if (table === "item_images") r.items = db.items.find((i) => i.id === row.item_id) || null;
     if (table === "bills") r.sales = db.sales.filter((s) => s.bill_id === row.id).map((s) => embed("sales", s));
     return r;
   }
 
+  // คอลัมน์แบบ "items.status" (filter บนตารางที่ join มา)
+  const get = (r, c) => c.split(".").reduce((o, k) => (o == null ? o : o[k]), r);
+
   class Q {
     constructor(t) { this.t = t; this.f = []; this.op = "select"; this.ord = null; this.lim = null; this.one = false; }
     select() { return this; }
-    eq(c, v) { this.f.push((r) => r[c] == v); return this; }
+    eq(c, v) { this.f.push((r) => get(r, c) == v); return this; }
+    not(c, op, v) { this.f.push((r) => (op === "is" ? (get(r, c) ?? null) !== v : get(r, c) != v)); return this; }
     is(c, v) { this.f.push((r) => (r[c] ?? null) === v); return this; }
     in(c, v) { this.f.push((r) => v.includes(r[c])); return this; }
     gte(c, v) { this.f.push((r) => String(r[c]) >= String(v)); return this; }
     lte(c, v) { this.f.push((r) => String(r[c]) <= String(v)); return this; }
-    lt(c, v) { this.f.push((r) => String(r[c]) < String(v)); return this; }
+    lt(c, v) { this.f.push((r) => String(get(r, c)) < String(v)); return this; }
     or() { return this; }
     order(c, o = {}) { this.ord = [c, o.ascending !== false]; return this; }
     limit(n) { this.lim = n; return this; }
@@ -52,7 +57,7 @@
       const T = (db[this.t] ||= []);
       if (this.op === "insert") { [].concat(this.row).forEach((r) => T.push({ id: uid(), created_at: now(), ...r })); save(); return { data: null, error: null }; }
       if (this.op === "upsert") { [].concat(this.row).forEach((r) => { const i = T.findIndex((x) => x.key === r.key); if (i >= 0) T[i] = r; else T.push(r); }); save(); return { data: null, error: null }; }
-      let rows = T.filter((r) => this.f.every((f) => f(r)));
+      let rows = T.filter((r) => { const e = embed(this.t, r); return this.f.every((f) => f(e)); });
       if (this.op === "delete") { db[this.t] = T.filter((r) => !rows.includes(r)); save(); return { data: null, error: null }; }
       if (this.op === "update") { rows.forEach((r) => Object.assign(r, this.row)); save(); return { data: null, error: null }; }
       rows = rows.map((r) => embed(this.t, r));
@@ -101,10 +106,16 @@
     open_shift(p) { const s = { id: uid(), opening_cash: p.p_opening_cash, location: p.p_location, opened_at: now(), closed_at: null }; db.shifts.push(s); save(); return { data: s, error: null }; },
     shift_totals(p) { return { data: totals(p.p_shift_id), error: null }; },
     close_shift(p) { const t = totals(p.p_shift_id); const diff = p.p_counted_cash - t.expected_cash; if (diff && !p.p_reason) return err("ต้องใส่เหตุผล");
-      const s = db.shifts.find((x) => x.id === p.p_shift_id); s.closed_at = now(); save();
-      return { data: { ...t, counted_cash: p.p_counted_cash, cash_diff: diff, diff_reason: p.p_reason }, error: null }; },
+      const s = db.shifts.find((x) => x.id === p.p_shift_id); const out = { ...t, counted_cash: p.p_counted_cash, cash_diff: diff, diff_reason: p.p_reason };
+      Object.assign(s, { closed_at: now(), expected_cash: t.expected_cash, counted_cash: p.p_counted_cash, cash_diff: diff, diff_reason: p.p_reason, summary: out }); save();
+      return { data: out, error: null }; },
     reserve_item(p) { const r = { id: uid(), item_id: p.p_item_id, customer_name: p.p_customer_name, channel: p.p_channel, deposit: p.p_deposit, due_date: p.p_due_date, status: "active" }; db.reservations.push(r); save(); return { data: r, error: null }; },
     release_reservation(p) { db.reservations.find((r) => r.id === p.p_reservation_id).status = "released"; save(); return { data: {}, error: null }; },
+    markdown_items(p) { let n = 0, b = 0, a = 0;
+      db.items.filter((i) => p.p_item_ids.includes(i.id) && i.status === "available").forEach((i) => {
+        const nv = p.p_price != null ? Math.round(p.p_price) : Math.round(i.current_price * (100 - p.p_percent) / 100);
+        if (nv === i.current_price) return; b += i.current_price; a += nv; i.current_price = nv; n++; });
+      save(); return { data: { updated: n, before_total: b, after_total: a }, error: null }; },
     storage_usage() { return { data: { db_bytes: 31457280, image_bytes: 412000000, image_files: 2310, items: 1290, sold_items: 870 }, error: null }; },
   };
   const ch = { on() { return ch; }, subscribe(cb) { cb && cb("SUBSCRIBED"); return ch; } };
