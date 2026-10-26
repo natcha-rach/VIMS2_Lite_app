@@ -4,6 +4,7 @@
    บิลจะถูกเก็บในเครื่อง (IndexedDB) แล้วส่งให้เองเมื่อเน็ตกลับมา
 
    เชื่อมต่อ:
+     ส่งบิล    → SalesRepo.sellBill (data/salesRepo.js) — ต้องโหลด salesRepo.js ก่อนไฟล์นี้
      sell.js   → OfflineSales.enqueue() ตอนส่งบิลไม่ได้, saveSnapshot/loadSnapshot ของกริดสินค้า
      shift.js  → OfflineSales.count() กันปิดร้านทั้งที่ยังมีบิลค้างส่ง
      RPC sell_bill(p_bill_id, …, p_sold_at)  ← UUID เดิม + เวลาขายจริง → ส่งซ้ำกี่ครั้งก็ไม่เกิดบิลซ้ำ
@@ -60,16 +61,6 @@
     return /Failed to fetch|NetworkError|Load failed|network|timeout|ERR_INTERNET|ECONN/i.test(msg);
   }
 
-  // เรียก sell_bill — ถ้า Supabase ยังไม่ได้รัน migration_v21 (ไม่รู้จัก p_sold_at) ส่งใหม่แบบไม่มีเวลาขาย
-  async function sellBill(params) {
-    let res = await supabaseClient.rpc("sell_bill", params);
-    if (res.error && params.p_sold_at && /p_sold_at|PGRST202|Could not find the function/i.test(`${res.error.message} ${res.error.code}`)) {
-      const { p_sold_at, ...rest } = params;
-      res = await supabaseClient.rpc("sell_bill", rest);
-    }
-    return res;
-  }
-
   // ---------- คิวบิล ----------
   // entry: { bill_id, params (ส่ง sell_bill ได้เลย), snapshot (ไว้แสดง/ใบเสร็จ), item_ids, sold_at, tries, last_error, failed }
   async function list() { return (await kvGet(QUEUE_KEY)) || []; }
@@ -88,14 +79,14 @@
   // ส่งบิลที่ค้างทีละบิลตามลำดับเวลา — เรียกตอนโหลดหน้า, เน็ตกลับมา, ทุก 30 วิ
   let flushing = false;
   async function flush() {
-    if (flushing || !window.supabaseClient) return { sent: 0 };
+    if (flushing || !window.SalesRepo) return { sent: 0 };
     if (navigator.onLine === false) return { sent: 0 };
     flushing = true;
     let sent = 0;
     try {
       const q = await list();
       for (const entry of q.filter((x) => !x.failed)) {
-        const { data, error } = await sellBill(entry.params);
+        const { data, error } = await SalesRepo.sellBill(entry.params); // ชั้น Data (data/salesRepo.js)
         if (error && isNetworkError(error)) break; // ยังไม่มีเน็ต → รอรอบหน้า
         const cur = await list();
         const idx = cur.findIndex((x) => x.bill_id === entry.bill_id);
@@ -144,7 +135,7 @@
   const saveSnapshot = (data) => kvSet("sell_snapshot", { ...data, saved_at: new Date().toISOString() });
   const loadSnapshot = () => kvGet("sell_snapshot");
 
-  window.OfflineSales = { isNetworkError, sellBill, enqueue, list, count, flush, retry, discard, describe, saveSnapshot, loadSnapshot };
+  window.OfflineSales = { isNetworkError, enqueue, list, count, flush, retry, discard, describe, saveSnapshot, loadSnapshot };
 
   // sw.js: เปิดหน้าขายได้แม้ไม่มีเน็ต (ใช้ได้เฉพาะ https / localhost)
   if ("serviceWorker" in navigator && location.protocol !== "file:") {

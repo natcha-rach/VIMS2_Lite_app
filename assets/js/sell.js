@@ -1,14 +1,13 @@
 /* ==========================================================
-   SELL (sell.html) — หน้าร้าน V19: แตะรูป → ตะกร้า → ชำระเงิน → ใบเสร็จ
-   เชื่อมต่อ:
-     sell.html → sell.js → Supabase
-       items / item_images (thumb_url) / reservations   ← โหลดกริด
-       RPC sell_bill    ← ขายทั้งตะกร้าใน transaction เดียว (กดซ้ำไม่เกิดบิลซ้ำ)
-       RPC void_bill    ← "เลิกทำ" / ยกเลิกทั้งบิล
-       RPC void_sale    ← คืนทีละชิ้น
-       RPC reserve_item / release_reservation ← จองจาก IG/FB
-     money.js → กระจายส่วนลด, เงินทอน, QR พร้อมเพย์ (คิดเป็นสตางค์)
-   ต้องรัน sql/migration_v19_pos_shift.sql ก่อนใช้งาน
+   sell.js — ชั้น UI ของหน้าขาย (sell.html): แตะรูป → ตะกร้า → ชำระเงิน → ใบเสร็จ
+   หน้าที่: อ่าน/เขียน DOM, ผูก event, แจ้งเตือน — ไม่เรียก Supabase ตรง (ดู docs/ARCHITECTURE.md)
+   เรียกต่อ:
+     Data   CatalogRepo  ← ของพร้อมขาย/รูป/การจอง/ตั้งค่าพร้อมเพย์   (data/catalogRepo.js)
+            SalesRepo    ← sell_bill / void_bill / void_sale / บิล / ขายแล้ว (data/salesRepo.js)
+     Domain Cart         ← รวมยอด, ดีล %/เหมา                          (domain/cart.js)
+            Reservations ← อีกกี่วันถึงนัด/เลยนัด                       (domain/reservations.js)
+            Money        ← สตางค์, เงินทอน, QR พร้อมเพย์                 (money.js)
+     Infra  OfflineSales ← คิวบิลตอนเน็ตหลุด (offline.js) · Notify · realtime.js (event vims:realtime)
    ========================================================== */
 
 // ---------- state ----------
@@ -48,12 +47,7 @@ function safeSet(key, v) { try { localStorage.setItem(key, v); } catch (_) {} }
 // โหลดข้อมูล
 // ==========================================================
 async function loadSellGrid() {
-  const { data: items, error } = await supabaseClient
-    .from("items")
-    .select("*, lots(lot_name), lot_groups(group_name)")
-    .eq("status", "available")
-    .eq("intake_status", "listed")
-    .order("created_at", { ascending: false });
+  const { data: items, error } = await CatalogRepo.listSellable();
 
   if (error) {
     console.error(error);
@@ -89,28 +83,19 @@ async function loadSellGrid() {
   renderCartBar();
 }
 
-// รูป: ใช้รูปย่อ (thumb_url) ถ้ามี — ถ้าฐานข้อมูลยังไม่มีคอลัมน์นี้ ให้ถอยไปใช้แบบเดิม
+// รูป: { item_id: [รูป] } — โหลดไม่ครบยังขายได้ แค่แจ้งเตือน
 async function loadImages(ids) {
-  const map = {};
-  if (!ids.length) return map;
-  const run = (cols) => fetchAllRows(() => supabaseClient.from("item_images").select(cols).in("item_id", ids).order("sort_order", { ascending: true }));
-  let { data, error } = await run("item_id, image_url, thumb_url, sort_order");
-  if (error) ({ data, error } = await run("item_id, image_url, sort_order"));
+  const { data, error } = await CatalogRepo.imagesByItem(ids);
   if (error) Notify.warning("โหลดรูปสินค้าไม่ครบ", error, { hint: "สินค้ายังขายได้ตามปกติ แค่ไม่มีรูปให้ดู — ลองรีเฟรชหน้า" });
-  (data || []).forEach((img) => { (map[img.item_id] ||= []).push(img); });
-  return map;
+  return data;
 }
 
 async function loadReservations() {
-  const map = {};
-  const { data, error } = await supabaseClient.from("reservations").select("*").eq("status", "active");
-  if (error) return map; // ยังไม่ได้รัน migration → ทำงานแบบไม่มีระบบจอง
-  (data || []).forEach((r) => { map[r.item_id] = r; });
-  return map;
+  return (await CatalogRepo.activeReservations()).data; // ยังไม่รัน migration = map ว่าง
 }
 
 async function loadPosSettings() {
-  const { data, error } = await supabaseClient.from("app_settings").select("value").eq("key", "pos_settings").maybeSingle();
+  const { data, error } = await CatalogRepo.getPosSettings();
   if (error) Notify.warning("โหลดการตั้งค่าพร้อมเพย์ไม่สำเร็จ", error, { hint: "QR อาจยังไม่ขึ้น — รีเฟรชหน้า หรือเปิดปุ่มเฟืองตั้งใหม่" });
   if (data?.value) posSettings = { ...posSettings, ...data.value };
 }
@@ -231,8 +216,10 @@ function onCartChanged() {
 function cartLines() {
   return [...cart.entries()].map(([id, line]) => ({ item: inStockItems.find((i) => i.id === id), ...line })).filter((l) => l.item);
 }
-const cartTotal = () => cartLines().reduce((s, l) => s + l.price, 0);
-const cartListTotal = () => cartLines().reduce((s, l) => s + S(l.item.current_price), 0);
+// ยอดรวมคำนวณที่ Domain (Cart.totals) — UI ส่งแค่ ราคาป้าย/ราคาที่ตกลง (สตางค์)
+const cartSum = () => Cart.totals(cartLines().map((l) => ({ list: S(l.item.current_price), price: l.price })));
+const cartTotal = () => cartSum().total;
+const cartListTotal = () => cartSum().list;
 
 function renderCartBar() {
   const lines = cartLines();
@@ -323,11 +310,8 @@ $("checkoutLines").addEventListener("click", (e) => {
 // ดีลทั้งบิล → กระจายลงแต่ละชิ้นตามสัดส่วน "ราคาป้าย"
 function applyDeal(mode, totalBaht, silent) {
   const lines = cartLines();
-  const listPrices = lines.map((l) => S(l.item.current_price));
-  let prices = listPrices;
-  if (mode === "10" || mode === "20") prices = Money.percentOffTotal(listPrices, Number(mode));
-  if (mode === "total" && totalBaht !== null && totalBaht !== "" && Number(totalBaht) >= 0) prices = Money.distributeToTotal(listPrices, S(totalBaht));
-  if (mode === "lines") return; // แก้รายชิ้นเองแล้ว ไม่ทับ
+  const prices = Cart.dealPrices(lines.map((l) => S(l.item.current_price)), mode, totalBaht);
+  if (!prices) return; // แก้รายชิ้นเองแล้ว ไม่ทับ
   lines.forEach((l, i) => { cart.get(l.item.id).price = prices[i]; });
   deal = { mode, total: mode === "total" ? totalBaht : null };
   pendingBillId = null;
@@ -424,7 +408,7 @@ async function confirmSale() {
   const hasReserved = lines.some((l) => reservationsByItem[l.item.id]);
   const params = {
     p_bill_id: pendingBillId,
-    p_lines: lines.map((l) => ({ item_id: l.item.id, price: Money.toBaht(l.price) })),
+    p_lines: Cart.toRpcLines(lines.map((l) => ({ itemId: l.item.id, price: l.price }))),
     p_payment_method: payMethod,
     p_channel: channel,
     p_cash_received: received,
@@ -433,7 +417,7 @@ async function confirmSale() {
     p_sold_at: pendingSoldAt,
   };
 
-  const { data, error } = window.OfflineSales ? await OfflineSales.sellBill(params) : await supabaseClient.rpc("sell_bill", params);
+  const { data, error } = await SalesRepo.sellBill(params);
   btn.disabled = false; btn.textContent = "ยืนยันขาย";
 
   if (error) {
@@ -521,7 +505,7 @@ $("undoSale").addEventListener("click", async () => {
     closeModal("receiptModal");
     return;
   }
-  const { error } = await supabaseClient.rpc("void_bill", { p_bill_id: lastBill.id, p_reason: "เลิกทำทันทีหลังขาย" });
+  const { error } = await SalesRepo.voidBill(lastBill.id, "เลิกทำทันทีหลังขาย");
   if (error) { btn.disabled = false; btn.textContent = "เลิกทำ"; return Notify.error(`ยกเลิกบิล ${billLabel(lastBill)} ไม่สำเร็จ`, error, { hint: "บิลยังถูกบันทึกอยู่ — ไปยกเลิกได้ที่แท็บ 'บิล & คืนของ'" }); }
   Notify.success(`ยกเลิกบิล ${billLabel(lastBill)} แล้ว`, `${lastBill.lines.length} ชิ้นกลับเข้าสต็อก · ไม่นับยอด ${thb(lastBill.total)}`);
   lastBill = null;
@@ -589,11 +573,7 @@ async function drawReceipt(b) {
 // แท็บบิล: ยกเลิกทั้งบิล / คืนทีละชิ้น
 // ==========================================================
 async function loadBills() {
-  const { data, error } = await supabaseClient
-    .from("bills")
-    .select("id, bill_no, created_at, channel, payment_method, total, list_total, voided_at, void_reason, sales(id, sale_price, list_price, voided_at, void_reason, items(item_name, sku))")
-    .order("created_at", { ascending: false })
-    .limit(60);
+  const { data, error } = await SalesRepo.recentBills(60);
   if (error) {
     $("billsList").innerHTML = `<div class="empty-state">โหลดบิลไม่สำเร็จ</div>`;
     Notify.error("โหลดรายการบิลไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: loadBills }] });
@@ -634,8 +614,8 @@ $("billsList").addEventListener("click", async (e) => {
   });
   if (!reason) return;
   const { error } = refund
-    ? await supabaseClient.rpc("void_sale", { p_sale_id: refund.dataset.refund, p_reason: reason })
-    : await supabaseClient.rpc("void_bill", { p_bill_id: voidBtn.dataset.voidBill, p_reason: reason });
+    ? await SalesRepo.voidSale(refund.dataset.refund, reason)
+    : await SalesRepo.voidBill(voidBtn.dataset.voidBill, reason);
   if (error) return Notify.error(refund ? "คืนสินค้าไม่สำเร็จ" : `ยกเลิกบิล #${voidBtn.dataset.no} ไม่สำเร็จ`, error);
   Notify.success(refund ? "คืนสินค้าแล้ว" : `ยกเลิกบิล #${voidBtn.dataset.no} แล้ว`, refund ? `${lineName} กลับเข้าสต็อก · เหตุผล: ${reason}` : `ทุกชิ้นกลับเข้าสต็อก · เหตุผล: ${reason}`);
   soldLoaded = false;
@@ -647,12 +627,7 @@ $("billsList").addEventListener("click", async (e) => {
 // แท็บขายแล้ว (ของเดิม)
 // ==========================================================
 async function loadSoldGrid() {
-  const { data: sales, error } = await supabaseClient
-    .from("sales")
-    .select("item_id, sale_price, sale_date, items(id, item_name, size, condition, tier, cost_price, base_price, sku, lot_id, group_id, lots(lot_name), lot_groups(group_name))")
-    .is("voided_at", null)
-    .order("sale_date", { ascending: false })
-    .limit(300);
+  const { data: sales, error } = await SalesRepo.recentSold(300);
   if (error) {
     console.error(error);
     $("soldGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ</div>`;
@@ -718,11 +693,7 @@ async function openItemDetail(itemId, context) {
     $("releaseReserve").addEventListener("click", () => releaseReservation(res));
   }
 
-  const { data: sales } = await supabaseClient
-    .from("sales")
-    .select("id, sale_date, sale_price, cost_price, payment_method, channel, voided_at, void_reason")
-    .eq("item_id", item.id)
-    .order("sale_date", { ascending: false });
+  const { data: sales } = await SalesRepo.historyOfItem(item.id);
   renderSaleHistory(sales || []);
   $("saleDetailModal").classList.remove("hidden");
 }
@@ -759,13 +730,13 @@ $("detailReserve").addEventListener("click", () => {
 $("reserveForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!detailItem) return;
-  const { error } = await supabaseClient.rpc("reserve_item", {
-    p_item_id: detailItem.id,
-    p_customer_name: $("reserveName").value.trim(),
-    p_channel: $("reserveChannel").value,
-    p_deposit: Number($("reserveDeposit").value) || 0,
-    p_due_date: $("reserveDue").value || null,
-    p_note: $("reserveNote").value.trim() || null,
+  const { error } = await CatalogRepo.reserve({
+    itemId: detailItem.id,
+    customerName: $("reserveName").value.trim(),
+    channel: $("reserveChannel").value,
+    deposit: Number($("reserveDeposit").value) || 0,
+    dueDate: $("reserveDue").value || null,
+    note: $("reserveNote").value.trim() || null,
   });
   if (error) return Notify.error("จองไม่สำเร็จ", error);
   Notify.success(`จองให้ ${$("reserveName").value.trim()} แล้ว`, `${detailItem.item_name}${$("reserveDue").value ? " · ภายใน " + formatDate($("reserveDue").value) : ""} — ชิ้นนี้จะขายให้คนอื่นไม่ได้จนกว่าจะยกเลิกจอง`);
@@ -775,7 +746,7 @@ $("reserveForm").addEventListener("submit", async (e) => {
 });
 async function releaseReservation(res) {
   if (!(await Notify.confirm({ title: `ยกเลิกการจองของ ${res.customer_name}?`, message: "สินค้าจะกลับมาขายให้ทุกคนได้ตามปกติ", confirmText: "ยกเลิกจอง", danger: true }))) return;
-  const { error } = await supabaseClient.rpc("release_reservation", { p_reservation_id: res.id });
+  const { error } = await CatalogRepo.releaseReservation(res.id);
   if (error) return Notify.error("ยกเลิกการจองไม่สำเร็จ", error);
   Notify.success("ยกเลิกการจองแล้ว", `${res.customer_name} · สินค้ากลับมาขายได้ปกติ`);
   closeModal("saleDetailModal");
@@ -797,7 +768,7 @@ $("posSettingsForm").addEventListener("submit", async (e) => {
   const id = $("setPromptPay").value.trim();
   if (id && !Money.normalizePromptPayId(id)) return Notify.warning("เลขพร้อมเพย์ไม่ถูกต้อง", `ใส่มา ${id.replace(/\D/g, "").length} หลัก — ต้องเป็นเบอร์มือถือ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก`);
   const value = { promptpay_id: id, shop_name: $("setShopName").value.trim() || "Bubbles Gumps", receipt_note: $("setReceiptNote").value.trim() };
-  const { error } = await supabaseClient.from("app_settings").upsert({ key: "pos_settings", value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  const { error } = await CatalogRepo.savePosSettings(value);
   if (error) return Notify.error("บันทึกการตั้งค่าไม่สำเร็จ", error);
   posSettings = value;
   Notify.success("บันทึกการตั้งค่าหน้าร้านแล้ว", value.promptpay_id ? `QR พร้อมเพย์จะใช้เลขลงท้าย ${value.promptpay_id.replace(/\D/g, "").slice(-4)}` : "ยังไม่ได้ใส่พร้อมเพย์ — หน้าชำระเงินจะไม่แสดง QR");
@@ -860,18 +831,14 @@ document.addEventListener("keydown", (e) => {
 // ==========================================================
 // V20: แท็บจอง — ใช้ reservationsByItem + inStockItems ที่โหลดมากับกริดแล้ว (ไม่ query เพิ่ม)
 // ==========================================================
-const dayStart = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
+// เรียง/คำนวณวันนัดที่ Domain (Reservations) แล้วแนบสินค้าที่ตรงกันจากกริด
 function reservationRows() {
-  const today = dayStart(new Date());
-  return Object.values(reservationsByItem).map((r) => {
-    const due = r.due_date ? dayStart(r.due_date + "T00:00:00") : null;
-    const daysLeft = due ? Math.round((due - today) / 86400000) : null;
-    return { r, item: inStockItems.find((i) => i.id === r.item_id), daysLeft };
-  }).sort((a, b) => (a.daysLeft ?? 9999) - (b.daysLeft ?? 9999));
+  return Reservations.sortByDue(Object.values(reservationsByItem))
+    .map((x) => ({ ...x, item: inStockItems.find((i) => i.id === x.r.item_id) }));
 }
 function renderResBadge() {
   const rows = reservationRows();
-  const overdue = rows.filter((x) => x.daysLeft !== null && x.daysLeft < 0).length;
+  const overdue = rows.filter(Reservations.isOverdue).length;
   const badge = $("resBadge");
   if (!badge) return;
   badge.textContent = overdue ? `${overdue} เลยนัด` : String(rows.length);
@@ -920,7 +887,7 @@ $("reservationsList").addEventListener("click", (e) => {
 let overdueWarned = false;
 function warnOverdueOnce() {
   if (overdueWarned) return;
-  const late = reservationRows().filter((x) => x.daysLeft !== null && x.daysLeft < 0);
+  const late = reservationRows().filter(Reservations.isOverdue);
   if (!late.length) return;
   overdueWarned = true;
   Notify.warning(`ของจองเลยวันนัด ${late.length} รายการ`, late.slice(0, 3).map((x) => `${x.r.customer_name} (${-x.daysLeft} วัน)`).join(", ") + (late.length > 3 ? " …" : ""), {
