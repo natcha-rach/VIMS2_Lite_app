@@ -1,16 +1,18 @@
 /* ==========================================================
-   shift.js — การ์ด "ร้านวันนี้" บนหน้าภาพรวม (index.html) V19
+   shift.js — ชั้น UI ของการ์ด "ร้านวันนี้" บนหน้าภาพรวม (index.html)
    เปิดร้าน → ลงค่าใช้จ่ายด่วน → ดู "เหลือวันนี้" → นับเงิน & ปิดร้าน → แชร์สรุปไป LINE
+   หน้าที่: DOM + event + แจ้งเตือน เท่านั้น (ดู docs/ARCHITECTURE.md)
 
-   เชื่อมต่อ:
-     RPC open_shift / shift_totals / close_shift  (sql/migration_v19_pos_shift.sql)
-     table expenses (shift_id, paid_from)          ← ค่าใช้จ่ายระหว่างวัน
-     money.js                                      ← คิดเงินเป็นสตางค์
+   เรียกต่อ:
+     Data   ShiftRepo    ← รอบร้าน, shift_totals, ค่าใช้จ่าย, เปิด/ปิดร้าน   (data/shiftRepo.js)
+     Domain ShiftCalc    ← เหลือวันนี้/กำไรจริง, ขาด-เกิน, ข้อความสรุป   (domain/shiftCalc.js)
+            Money        ← สตางค์ ↔ บาท                                   (money.js)
+     Infra  OfflineSales ← กันปิดร้านถ้ายังมีบิลรอส่ง (offline.js)
    ถ้ายังไม่ได้รัน migration: การ์ดจะบอกให้รัน และหน้าภาพรวมส่วนอื่นยังใช้ได้ตามเดิม
    ========================================================== */
 (function () {
   const card = document.getElementById("shiftCard");
-  if (!card || !window.supabaseClient || !window.Money) return;
+  if (!card || !window.ShiftRepo || !window.ShiftCalc || !window.Money) return;
 
   // หมวดค่าใช้จ่ายวันตลาด (ปุ่มด่วน) — ชื่อตรงกับหมวดในหน้าบัญชีเพื่อให้รายงานรวมกันได้
   const QUICK = [
@@ -36,7 +38,7 @@
   let expenseForm = null; // หมวดที่กำลังกรอก
 
   async function load() {
-    const { data, error } = await supabaseClient.from("shifts").select("*").is("closed_at", null).maybeSingle();
+    const { data, error } = await ShiftRepo.openShift();
     if (error && !/shifts|relation|schema cache|PGRST205|42P01/i.test(`${error.message} ${error.code}`)) {
       card.innerHTML = `<div class="shift-missing"><b>โหลดร้านวันนี้ไม่สำเร็จ</b><span>${esc(Notify.friendlyError(error).detail)}</span></div>`;
       Notify.error("โหลดร้านวันนี้ไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: load }] });
@@ -48,10 +50,7 @@
     }
     shift = data;
     if (shift) {
-      const [t, e] = await Promise.all([
-        supabaseClient.rpc("shift_totals", { p_shift_id: shift.id }),
-        supabaseClient.from("expenses").select("id,category,amount,paid_from,note,expense_at,created_at").eq("shift_id", shift.id).order("created_at"),
-      ]);
+      const [t, e] = await Promise.all([ShiftRepo.totals(shift.id), ShiftRepo.expensesOfShift(shift.id)]);
       totals = t.data;
       expenses = e.data || [];
     } else {
@@ -63,25 +62,17 @@
   // ยังไม่เปิดร้าน: สรุปจากวันที่ตามปฏิทิน
   async function loadTodayWithoutShift() {
     const start = new Date(); start.setHours(0, 0, 0, 0);
-    const [s, e] = await Promise.all([
-      fetchAllRows(() => supabaseClient.from("sales").select("sale_price,cost_price").is("voided_at", null).gte("sale_date", start.toISOString())),
-      supabaseClient.from("expenses").select("id,category,amount,paid_from,note,shift_id,created_at").eq("expense_date", todayStr()).order("created_at"),
-    ]);
-    const sales = s.data || [];
+    const [s, e] = await Promise.all([ShiftRepo.salesSince(start.toISOString()), ShiftRepo.expensesOfDate(todayStr())]);
     expenses = e.data || [];
-    const revenue = sales.reduce((a, x) => a + S(x.sale_price), 0);
-    const cogs = sales.reduce((a, x) => a + S(x.cost_price), 0);
-    const exp = expenses.reduce((a, x) => a + S(x.amount), 0);
-    today = { revenue, cogs, exp, items: sales.length };
+    today = ShiftCalc.todayFromRows(s.data || [], expenses);
   }
 
   function render(focusAmount = false) {
     const open = !!shift;
     const revenue = open ? S(totals?.revenue) : today.revenue;
     const cogs = open ? S(totals?.cogs) : today.cogs;
-    const exp = expenses.reduce((a, x) => a + S(x.amount), 0);
-    const left = revenue - exp;
-    const profit = revenue - cogs - exp;
+    const exp = ShiftCalc.todayFromRows([], expenses).exp;
+    const { left, profit } = ShiftCalc.figures({ revenue, cogs, exp });
 
     card.innerHTML = `
       <div class="shift-head">
@@ -141,7 +132,7 @@
     if (del) {
       const x = expenses.find((r) => r.id === del.dataset.del);
       if (!x || !(await Notify.confirm({ title: `ลบค่าใช้จ่าย "${x.category}"?`, message: `${thb(S(x.amount))}${x.note ? " · " + x.note : ""}\nยอดเหลือวันนี้และเงินในลิ้นชักจะคำนวณใหม่`, confirmText: "ลบ", danger: true }))) return;
-      const { error } = await supabaseClient.from("expenses").delete().eq("id", x.id);
+      const { error } = await ShiftRepo.deleteExpense(x.id);
       if (error) return Notify.error(`ลบ "${x.category}" ไม่สำเร็จ`, error);
       Notify.success(`ลบ "${x.category}" แล้ว`, `คืนยอด ${thb(S(x.amount))} กลับเข้าเหลือวันนี้`);
       load();
@@ -154,7 +145,7 @@
     if (form.dataset.form === "open") {
       const opening = Number(form.opening.value) || 0;
       const location = form.location.value.trim() || "ถนนคนเดิน";
-      const { error } = await supabaseClient.rpc("open_shift", { p_opening_cash: opening, p_location: location });
+      const { error } = await ShiftRepo.open(opening, location);
       if (error) return Notify.error("เปิดร้านไม่สำเร็จ", error);
       set("vims_shift_opening", String(opening));
       set("vims_shift_location", location);
@@ -175,7 +166,7 @@
         shift_id: shift?.id || null,
         paid_from: shift ? expenseForm.paid : "other",
       };
-      const { error } = await supabaseClient.from("expenses").insert(row);
+      const { error } = await ShiftRepo.addExpense(row);
       if (error) return Notify.error(`บันทึก ${category} ไม่สำเร็จ`, error);
       set("vims_exp_last_" + expenseForm.cat, String(amount)); // ครั้งหน้ากรอกยอดเดิมให้
       Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, row.paid_from === "drawer" ? "หักจากเงินในลิ้นชักที่ควรมีแล้ว" : row.paid_from === "transfer" ? "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)" : "นับเป็นค่าใช้จ่ายของวันนี้");
@@ -216,7 +207,7 @@
     const raw = modal.querySelector("#csCounted").value;
     const el = modal.querySelector("#csDiff");
     if (raw === "") { el.textContent = ""; return; }
-    const diff = S(raw) - S(totals.expected_cash);
+    const diff = ShiftCalc.drawerDiff(raw, totals.expected_cash);
     el.className = "cs-diff " + (diff === 0 ? "ok" : diff < 0 ? "short" : "over");
     el.textContent = diff === 0 ? "ตรงพอดี" : diff < 0 ? `ขาด ${thb(-diff)} — ใส่เหตุผลด้วย` : `เกิน ${thb(diff)} — ใส่เหตุผลด้วย`;
   }
@@ -230,11 +221,11 @@
       if (raw === "") return Notify.warning("ยังไม่ได้ใส่ยอดที่นับได้", "นับเงินสดในลิ้นชักทั้งหมด (รวมเงินทอนตั้งต้น) แล้วใส่ยอด");
       const counted = Number(raw);
       const reason = modal.querySelector("#csReason").value.trim();
-      const diff = S(counted) - S(totals.expected_cash);
+      const diff = ShiftCalc.drawerDiff(counted, totals.expected_cash);
       if (diff !== 0 && !reason) return Notify.warning(`เงิน${diff < 0 ? "ขาด" : "เกิน"} ${thb(Math.abs(diff))} ต้องใส่เหตุผล`, "เช่น ทอนผิด / ซื้อน้ำแล้วลืมลง — ไว้ดูย้อนหลัง");
       const btn = modal.querySelector("#csSubmit");
       btn.disabled = true;
-      const { data, error } = await supabaseClient.rpc("close_shift", { p_shift_id: shift.id, p_counted_cash: counted, p_reason: reason || null });
+      const { data, error } = await ShiftRepo.close(shift.id, counted, reason || null);
       btn.disabled = false;
       if (error) return Notify.error("ปิดร้านไม่สำเร็จ", error, { hint: "รอบร้านยังเปิดอยู่ ตัวเลขไม่หาย ลองกดปิดร้านอีกครั้ง" });
       const d = Number(data.cash_diff || 0);
@@ -244,23 +235,8 @@
     });
   }
 
-  function summaryText(t) {
-    const d = new Date(t.opened_at).toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
-    const n = (v) => Money.toBaht(S(v)).toLocaleString("th-TH");
-    const lines = (t.expense_lines || []).map((x) => `${x.category} ${n(x.amount)}`).join(", ");
-    const diff = Number(t.cash_diff || 0);
-    return [
-      `สรุปปิดร้าน ${t.location} ${d}`,
-      `ขาย ${n(t.revenue)} บาท (${t.bills} บิล ${t.items} ชิ้น)`,
-      `สด ${n(t.cash_sales)} · โอน ${n(t.transfer_sales)} · รัฐ ${n(t.government_sales)}`,
-      `ค่าใช้จ่าย ${n(t.expenses)}${lines ? ` (${lines})` : ""}`,
-      `เหลือ ${n(t.left_today)} · กำไรจริง ${n(t.real_profit)}`,
-      `ลิ้นชัก ควรมี ${n(t.expected_cash)} นับได้ ${n(t.counted_cash)}${diff ? ` (${diff < 0 ? "ขาด" : "เกิน"} ${n(Math.abs(diff))}${t.diff_reason ? ": " + t.diff_reason : ""})` : " ตรง"}`,
-    ].join("\n");
-  }
-
   function showCloseResult(t) {
-    const text = summaryText(t);
+    const text = ShiftCalc.summaryText(t); // Domain
     modal.querySelector("#csForm").classList.add("hidden");
     const res = modal.querySelector("#csResult");
     res.classList.remove("hidden");
