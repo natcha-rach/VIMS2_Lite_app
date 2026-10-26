@@ -1,0 +1,17 @@
+{
+  "name": "vims2-ui-tests",
+  "private": true,
+  "description": "UI smoke tests (Playwright + mock Supabase). Not deployed.",
+  "scripts": {
+    "flow": "node run.js",
+    "shots": "node shots.js after",
+    "realtime": "node rt.js"
+  },
+  "dependencies": {
+    "playwright": "^1.47.0",
+    "qrcode-generator": "1.4.4",
+    "@supabase/supabase-js": "^2",
+    "@fontsource/prompt": "^5",
+    "@fontsource/inter": "^5"
+  }
+}
