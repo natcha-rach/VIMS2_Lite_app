@@ -10,7 +10,7 @@
    ========================================================== */
 
 (function () {
-  const TABLES = ['lots', 'lot_groups', 'items', 'item_images', 'sales', 'expenses', 'capital_entries', 'bills', 'shifts', 'reservations']; // V19: + บิล กะ การจอง
+  const TABLES = ['lots', 'lot_groups', 'items', 'item_images', 'sales', 'expenses', 'capital_entries', 'bills', 'shifts', 'reservations']; // V19: + บิล รอบร้าน การจอง
   let channel = null;
   let subscribed = false;
   let reloadTimer = null;

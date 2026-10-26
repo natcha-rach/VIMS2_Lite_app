@@ -1,14 +1,14 @@
 -- ============================================================================
--- VIMS2 Lite V19 — หน้าร้าน (POS): บิลหลายชิ้น · กะขาย · ค่าใช้จ่ายรายวัน · จอง · รูปย่อ
+-- VIMS2 Lite V19 — หน้าร้าน (POS): บิลหลายชิ้น · รอบเปิดร้าน · ค่าใช้จ่ายรายวัน · จอง · รูปย่อ
 --
 -- วิธีรัน: Supabase Dashboard → SQL Editor → วางทั้งไฟล์ → Run
 -- รันซ้ำได้ (if not exists / create or replace) ไม่ลบหรือแก้ข้อมูลเดิม
 -- ต้องรัน "ก่อน" อัปโหลดไฟล์เว็บ V19 ขึ้น hosting เพราะหน้าขายใหม่เรียก sell_bill()
 --
 -- สิ่งที่ไฟล์นี้เพิ่ม
---   1) shifts        กะขาย 1 ครั้งที่ออกตลาด (เงินทอนตั้งต้น → นับเงินตอนปิด)
+--   1) shifts        รอบเปิดร้าน 1 ครั้งที่ออกตลาด (เงินทอนตั้งต้น → นับเงินตอนปิด)
 --   2) bills         หัวบิล 1 บิลมีหลายชิ้น (sales.bill_id ชี้มาที่นี่)
---   3) expenses      ผูกกับกะ + จ่ายจากลิ้นชักหรือโอน
+--   3) expenses      ผูกกับรอบร้าน + จ่ายจากลิ้นชักหรือโอน
 --   4) reservations  จองสินค้าจาก IG/FB กันขายซ้ำ
 --   5) item_images   รูปย่อ 400px สำหรับหน้าขาย (โหลดเร็ว ประหยัด bandwidth)
 --   6) RPC           sell_bill / void_bill / void_sale(อัปเดต) / open_shift / shift_totals
@@ -33,8 +33,8 @@ create policy "allow all - capital_entries" on capital_entries for all using (tr
 alter table expenses add column if not exists expense_at timestamptz;
 
 -- ---------------------------------------------------------------------------
--- 1) shifts — กะขาย
---    business rule: เปิดกะได้ทีละ 1 กะ (unique index บน closed_at is null)
+-- 1) shifts — รอบเปิดร้าน
+--    business rule: เปิดร้านได้ทีละ 1 รอบร้าน (unique index บน closed_at is null)
 -- ---------------------------------------------------------------------------
 create table if not exists shifts (
   id uuid primary key default gen_random_uuid(),
@@ -46,7 +46,7 @@ create table if not exists shifts (
   counted_cash numeric(12,2) check (counted_cash is null or counted_cash >= 0), -- เงินที่นับได้จริง
   cash_diff numeric(12,2),              -- นับได้ − ควรมี (ติดลบ = ขาด)
   diff_reason text,
-  summary jsonb,                        -- snapshot ตัวเลขทั้งกะตอนปิด (ใช้แชร์/ดูย้อนหลัง)
+  summary jsonb,                        -- snapshot ตัวเลขทั้งรอบร้านตอนปิด (ใช้แชร์/ดูย้อนหลัง)
   created_at timestamptz not null default now()
 );
 create unique index if not exists idx_shifts_one_open on shifts ((true)) where closed_at is null;
@@ -79,7 +79,7 @@ alter table sales add column if not exists list_price numeric(12,2); -- รา�
 create index if not exists idx_sales_bill on sales(bill_id);
 
 -- ---------------------------------------------------------------------------
--- 3) expenses — ผูกกับกะ
+-- 3) expenses — ผูกกับรอบร้าน
 --    paid_from: drawer = หยิบจากลิ้นชักเงินสด (หักจากเงินที่ควรมี) / transfer = โอน / other
 -- ---------------------------------------------------------------------------
 alter table expenses add column if not exists shift_id uuid references shifts(id) on delete set null;
@@ -91,7 +91,7 @@ do $$ begin
 end $$;
 create index if not exists idx_expenses_shift on expenses(shift_id);
 
--- business rule: ปิดกะแล้ว ห้ามเพิ่ม/แก้/ลบค่าใช้จ่ายของกะนั้น (ตัวเลขปิดกะต้องไม่เปลี่ยนย้อนหลัง)
+-- business rule: ปิดร้านแล้ว ห้ามเพิ่ม/แก้/ลบค่าใช้จ่ายของรอบร้านนั้น (ตัวเลขปิดร้านต้องไม่เปลี่ยนย้อนหลัง)
 create or replace function public.guard_closed_shift_expense()
 returns trigger language plpgsql as $$
 declare v_shift uuid;
@@ -99,7 +99,7 @@ begin
   v_shift := case when tg_op = 'DELETE' then old.shift_id else new.shift_id end;
   if tg_op = 'UPDATE' and old.shift_id is not null then v_shift := old.shift_id; end if;
   if v_shift is not null and exists (select 1 from shifts where id = v_shift and closed_at is not null) then
-    raise exception 'กะนี้ปิดแล้ว แก้ค่าใช้จ่ายของกะนี้ไม่ได้';
+    raise exception 'รอบร้านนี้ปิดแล้ว แก้ค่าใช้จ่ายของรอบร้านนี้ไม่ได้';
   end if;
   return case when tg_op = 'DELETE' then old else new end;
 end $$;
@@ -196,7 +196,7 @@ begin
     raise exception 'มีสินค้าซ้ำในบิล';
   end if;
 
-  select id into v_shift from shifts where closed_at is null limit 1; -- ผูกกับกะที่เปิดอยู่ (ถ้ามี)
+  select id into v_shift from shifts where closed_at is null limit 1; -- ผูกกับรอบร้านที่เปิดอยู่ (ถ้ามี)
 
   insert into bills(id, shift_id, channel, payment_method, cash_received, note)
   values (p_bill_id, v_shift, coalesce(p_channel, 'street_market'), p_payment_method, p_cash_received, p_note)
@@ -302,7 +302,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- open_shift — เปิดกะ (ใส่เงินทอนตั้งต้น)
+-- open_shift — เปิดร้าน (ใส่เงินทอนตั้งต้น)
 -- ---------------------------------------------------------------------------
 create or replace function public.open_shift(p_opening_cash numeric default 0, p_location text default 'ถนนคนเดิน')
 returns jsonb
@@ -312,7 +312,7 @@ set search_path = public
 as $$
 declare v_shift shifts%rowtype;
 begin
-  if exists (select 1 from shifts where closed_at is null) then raise exception 'มีกะที่เปิดอยู่แล้ว ปิดกะเดิมก่อน'; end if;
+  if exists (select 1 from shifts where closed_at is null) then raise exception 'มีรอบร้านที่เปิดอยู่แล้ว ปิดร้านเดิมก่อน'; end if;
   if coalesce(p_opening_cash, 0) < 0 then raise exception 'เงินทอนตั้งต้นไม่ถูกต้อง'; end if;
   insert into shifts(opening_cash, location) values (coalesce(p_opening_cash, 0), coalesce(nullif(trim(p_location), ''), 'ถนนคนเดิน'))
   returning * into v_shift;
@@ -321,7 +321,7 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- shift_totals — ตัวเลขของกะ (ใช้ทั้งระหว่างกะและตอนปิด)
+-- shift_totals — ตัวเลขของรอบร้าน (ใช้ทั้งระหว่างรอบร้านและตอนปิด)
 --   เงินที่ควรมีในลิ้นชัก = เงินทอนตั้งต้น + ขายเงินสด − ค่าใช้จ่ายที่หยิบจากลิ้นชัก
 --   นับเฉพาะ sales ที่ไม่ถูกยกเลิก
 -- ---------------------------------------------------------------------------
@@ -338,7 +338,7 @@ declare
   e jsonb;
 begin
   select * into v_shift from shifts where id = p_shift_id;
-  if not found then raise exception 'ไม่พบกะ'; end if;
+  if not found then raise exception 'ไม่พบรอบร้าน'; end if;
 
   select jsonb_build_object(
     'revenue', coalesce(sum(s.sale_price), 0),
@@ -374,8 +374,8 @@ end;
 $$;
 
 -- ---------------------------------------------------------------------------
--- close_shift — นับเงินแล้วปิดกะ
---   ขาด/เกิน ต้องมีเหตุผลเสมอ, เก็บ snapshot ตัวเลขทั้งกะไว้ใน summary
+-- close_shift — นับเงินแล้วปิดร้าน
+--   ขาด/เกิน ต้องมีเหตุผลเสมอ, เก็บ snapshot ตัวเลขทั้งรอบร้านไว้ใน summary
 -- ---------------------------------------------------------------------------
 create or replace function public.close_shift(p_shift_id uuid, p_counted_cash numeric, p_reason text default null)
 returns jsonb
@@ -390,8 +390,8 @@ declare
   v_diff numeric;
 begin
   select * into v_shift from shifts where id = p_shift_id for update;
-  if not found then raise exception 'ไม่พบกะ'; end if;
-  if v_shift.closed_at is not null then raise exception 'กะนี้ปิดไปแล้ว'; end if;
+  if not found then raise exception 'ไม่พบรอบร้าน'; end if;
+  if v_shift.closed_at is not null then raise exception 'รอบร้านนี้ปิดไปแล้ว'; end if;
   if p_counted_cash is null or p_counted_cash < 0 then raise exception 'ใส่ยอดเงินที่นับได้'; end if;
 
   t := public.shift_totals(p_shift_id);
@@ -493,7 +493,7 @@ begin
   end loop;
 end $$;
 
--- Realtime: ให้ทุกเครื่องเห็นบิล/กะ/การจองทันที (ข้ามตารางที่เปิดอยู่แล้ว)
+-- Realtime: ให้ทุกเครื่องเห็นบิล/รอบร้าน/การจองทันที (ข้ามตารางที่เปิดอยู่แล้ว)
 do $$
 declare t text;
 begin
