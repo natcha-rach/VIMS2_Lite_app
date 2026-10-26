@@ -110,6 +110,7 @@ async function loadLots() {
   const { data, error } = await supabaseClient.from("lots").select("*").order("purchase_date", { ascending: false });
   if (error) {
     console.error(error);
+    Notify.error("โหลดรายการล็อตไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: () => loadLots() }] });
     $("lotList").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: ${escapeHtml(error.message)}</div>`;
     return;
   }
@@ -222,7 +223,7 @@ async function recostLot(lotId, summary) {
   const lot = lotsCache.find(l => l.id === lotId); if (!lot) return;
   const basisLabel = { received: "จำนวนที่รับเข้าทั้งหมด", sellable: "จำนวนที่ผ่านคัดและลงขาย" };
   const currentBasis = lot.cost_basis || "received";
-  const ok = confirm(`คำนวณต้นทุนเฉลี่ย/ชิ้นใหม่ของ Lot "${lot.lot_name}" จากฐาน: ${basisLabel[currentBasis]}\n\nจะอัปเดตเฉพาะสินค้าที่ยัง "พร้อมขาย" (${summary?.available ?? "-"} ชิ้น) ของที่ขายไปแล้วจะไม่ถูกแก้ย้อนหลัง\n\nกด OK เพื่อดำเนินการ (เปลี่ยนฐานคำนวณได้ที่ "แก้ไข Lot")`);
+  const ok = await Notify.confirm({ title: `คำนวณต้นทุนเฉลี่ยใหม่ของ "${lot.lot_name}"?`, confirmText: "คำนวณใหม่", message: `ฐานคำนวณ: ${basisLabel[currentBasis]}\nจะอัปเดตเฉพาะสินค้าที่ยัง "พร้อมขาย" (${summary?.available ?? "-"} ชิ้น) ของที่ขายไปแล้วจะไม่ถูกแก้ย้อนหลัง\n\nเปลี่ยนฐานคำนวณได้ที่ "แก้ไข Lot"` });
   if (!ok) return;
   const { data, error } = await supabaseClient.rpc("recost_lot", { p_lot_id: lotId, p_basis: currentBasis });
   if (error) return showToast("คำนวณไม่สำเร็จ: " + error.message);
@@ -246,11 +247,11 @@ async function handleDelete(lotId, summary) {
   if (!lot) return;
   const hasHistory = Number(summary?.items_total || 0) > 0 || Number(summary?.sold || 0) > 0;
   if (hasHistory) {
-    const ok = confirm(`ล็อต “${lot.lot_name}” มีสินค้า/ยอดขายอยู่แล้ว จึงลบไม่ได้ (ประวัติจะหลุดจาก Lot performance และ Reports)\n\nกด OK เพื่อ "ปิดล็อต" แทน — Lot จะยังอยู่ในรายงาน แต่จะไม่แสดงเป็น Lot ที่ทำงานอยู่`);
+    const ok = await Notify.confirm({ title: `ลบ “${lot.lot_name}” ไม่ได้`, confirmText: "ปิดล็อตแทน", message: `ล็อตนี้มีสินค้า/ยอดขายแล้ว ถ้าลบ ประวัติจะหลุดจาก Lot performance และรายงาน\n\nกด "ปิดล็อตแทน" — Lot จะยังอยู่ในรายงาน แต่จะไม่แสดงเป็น Lot ที่ทำงานอยู่` });
     if (!ok) return;
     return advanceStatusDirect(lotId, "closed");
   }
-  const ok = confirm(`ลบล็อต “${lot.lot_name}” ใช่ไหม?\n\nLot นี้ยังไม่มีสินค้าหรือยอดขาย ลบได้ปลอดภัย กลุ่มของล็อตจะถูกลบไปด้วย`);
+  const ok = await Notify.confirm({ title: `ลบล็อต “${lot.lot_name}”?`, confirmText: "ลบล็อต", danger: true, message: `Lot นี้ยังไม่มีสินค้าหรือยอดขาย ลบได้ปลอดภัย กลุ่มของล็อตจะถูกลบไปด้วย` });
   if (!ok) return;
   const { error } = await supabaseClient.from("lots").delete().eq("id", lotId);
   if (error) return showToast("ลบไม่สำเร็จ: " + error.message);
@@ -322,7 +323,7 @@ $("groupForm").addEventListener("submit", async e => {
 });
 async function deleteGroup(id) {
   const g = activeGroups.find(x => x.id === id); if (!g) return;
-  if (!confirm(`ลบกลุ่ม “${g.group_name}” ใช่ไหม?`)) return;
+  if (!(await Notify.confirm({ title: `ลบกลุ่ม “${g.group_name}”?`, message: "สินค้าในกลุ่มนี้จะไม่ถูกลบ แต่จะไม่มีกลุ่มราคา", confirmText: "ลบกลุ่ม", danger: true }))) return;
   const { error } = await supabaseClient.from("lot_groups").delete().eq("id", id);
   if (error) return showToast("ลบกลุ่มไม่สำเร็จ: " + error.message);
   showToast("ลบกลุ่มแล้ว"); await loadGroupsForLot(); await loadLots();
@@ -331,7 +332,8 @@ function closeGroupModal() { $("groupModal").classList.add("hidden"); $("groupMo
 document.querySelectorAll("[data-close-group]").forEach(el => el.addEventListener("click", closeGroupModal));
 document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("groupModal").classList.contains("hidden")) closeGroupModal(); });
 
-function showToast(msg) { const t = $("toast"); if (!t) return; t.textContent = msg; t.classList.add("show"); clearTimeout(window.__toast); window.__toast = setTimeout(() => t.classList.remove("show"), 2600); }
+// V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
+function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
 
 loadLots();
 

@@ -44,3 +44,30 @@ Bulk Table metadata ถูกเก็บใน `localStorage`. File object ข�
 - `items.js`: การ upload รูปจะ throw เมื่อ Storage หรือ `item_images` insert ล้มเหลว
 - Single Item: ถ้า upload รูปล้มเหลว Item ที่เพิ่งสร้างจะถูกลบออก
 - Bulk: ถ้า upload รูปกอง 200 ล้มเหลว จะ cleanup รูปที่ upload แล้วและลบ Items ที่เพิ่ง insert ทั้งกอง
+
+
+## V19 — POS / กะ / จอง / ภาษี
+
+```text
+sell.html → sell.js
+  ├── กริดรูป: items + item_images(thumb_url) + reservations(active)
+  ├── ตะกร้า (Map item_id → ราคาที่ตกลง, สตางค์) → money.js กระจายส่วนลด
+  ├── ชำระเงิน → RPC sell_bill(p_bill_id จาก browser) → bills + sales + items.sold
+  ├── ใบเสร็จ → canvas → share/download · เลิกทำ → RPC void_bill
+  ├── แท็บบิล → bills + sales → void_bill / void_sale
+  └── จอง → RPC reserve_item / release_reservation
+
+index.html → shift.js
+  ├── shifts (closed_at is null) → RPC shift_totals
+  ├── ปุ่มค่าใช้จ่ายด่วน → insert expenses(shift_id, paid_from)
+  └── ปิดกะ → RPC close_shift → สรุป → LINE share
+
+tax.html → tax.js → sales + expenses ของปี + app_settings.tax_inputs
+auth.js → ทุกหน้า (ทำงานเมื่อ AUTH_REQUIRED = true)
+```
+
+business rules V19
+- เงินคิดเป็นสตางค์ (int) ฝั่ง browser ทุกครั้งก่อนบวก/หาร (`money.js`)
+- ห้ามลบเงิน: บิล/การขายใช้ void + เหตุผลเสมอ
+- เงินที่ควรมีในลิ้นชัก = เงินทอนตั้งต้น + ขายเงินสด − ค่าใช้จ่ายที่ "หยิบจากลิ้นชัก"
+- ปิดกะแล้วแก้ค่าใช้จ่ายของกะนั้นไม่ได้ (trigger `trg_expenses_closed_shift`)

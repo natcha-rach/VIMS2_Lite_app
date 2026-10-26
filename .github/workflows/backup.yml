@@ -1,0 +1,35 @@
+# สำรองฐานข้อมูล Supabase ทุกคืน (แพ็กเกจฟรีไม่มี backup ให้)
+# ตั้งค่าครั้งเดียว:
+#   1) Supabase → Project Settings → Database → Connection string → "Session pooler" (URI)
+#      แทน [YOUR-PASSWORD] ด้วยรหัสผ่าน DB
+#   2) GitHub repo → Settings → Secrets and variables → Actions → New secret
+#      ชื่อ SUPABASE_DB_URL  ค่า = connection string ข้อ 1
+#   3) ไฟล์สำรองอยู่ที่แท็บ Actions → รันแต่ละครั้ง → Artifacts (เก็บ 30 วัน)
+# ทดสอบกู้คืน: psql "<URL โปรเจกต์ทดสอบ>" -f vims2-backup.sql
+name: Nightly DB backup
+on:
+  schedule:
+    - cron: "0 19 * * *"   # 02:00 เวลาไทย
+  workflow_dispatch: {}
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y -qq postgresql-client-17
+      - name: Dump public schema + data
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          /usr/lib/postgresql/17/bin/pg_dump "$DB_URL" --schema=public --no-owner --no-privileges -f vims2-backup.sql
+          gzip vims2-backup.sql
+          ls -lh vims2-backup.sql.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vims2-backup-${{ github.run_number }}
+          path: vims2-backup.sql.gz
+          retention-days: 30

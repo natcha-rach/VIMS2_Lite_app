@@ -1,404 +1,847 @@
 /* ==========================================================
-   SELL (sell.html) — ค้นหา → ดูรายละเอียด → ขาย → บันทึก
+   SELL (sell.html) — หน้าร้าน V19: แตะรูป → ตะกร้า → ชำระเงิน → ใบเสร็จ
    เชื่อมต่อ:
-   sell.html → sell.js → Supabase items / item_images / sales
-   การเปลี่ยน available → sold ใช้ RPC sell_item เพื่อให้เป็น transaction เดียว
+     sell.html → sell.js → Supabase
+       items / item_images (thumb_url) / reservations   ← โหลดกริด
+       RPC sell_bill    ← ขายทั้งตะกร้าใน transaction เดียว (กดซ้ำไม่เกิดบิลซ้ำ)
+       RPC void_bill    ← "เลิกทำ" / ยกเลิกทั้งบิล
+       RPC void_sale    ← คืนทีละชิ้น
+       RPC reserve_item / release_reservation ← จองจาก IG/FB
+     money.js → กระจายส่วนลด, เงินทอน, QR พร้อมเพย์ (คิดเป็นสตางค์)
+   ต้องรัน sql/migration_v19_pos_shift.sql ก่อนใช้งาน
    ========================================================== */
 
-let inStockItems = [];
-let itemImagesById = {};
+// ---------- state ----------
+let inStockItems = [];          // ของพร้อมขาย (status=available, intake_status=listed)
+let imagesById = {};            // item_id → [{image_url, thumb_url, sort_order}]
+let reservationsByItem = {};    // item_id → การจองที่ active
 let soldItems = [];
 let soldImagesById = {};
 let soldLoaded = false;
-let selectedItem = null;
-let activeTab = "available"; // "available" | "sold" — คุมว่าแท็บไหนกำลังแสดงอยู่
-let detailContext = "available"; // จำไว้ว่า saleDetailModal เปิดมาจากแท็บไหน เพื่อซ่อนปุ่ม "ขายสินค้านี้" ตอนดูของที่ขายแล้ว
+let activeTab = "available";
+let showReservedOnly = false;
+let detailItem = null;
+let detailContext = "available";
 
-// โหลดสินค้าเฉพาะสถานะ available เพื่อไม่ให้สินค้าที่ขายแล้วกลับมาเลือกขายซ้ำ
+// ตะกร้า: เก็บลำดับที่แตะ + ราคาที่ตกลงต่อชิ้น (สตางค์)
+const cart = new Map();         // item_id → { price: satang }
+let deal = { mode: "none", total: null }; // none | 10 | 20 | total | lines(แก้รายชิ้นเอง)
+let pendingBillId = null;       // UUID ของบิลที่กำลังจะส่ง — ใช้ค่าเดิมเมื่อกดซ้ำ/ลองใหม่
+let payMethod = "cash";
+let channel = safeGet("vims_pos_channel") || "street_market";
+let lastBill = null;            // บิลล่าสุดสำหรับใบเสร็จ/เลิกทำ
+let undoTimer = null;
+let posSettings = { promptpay_id: "", shop_name: "Bubbles Gumps", receipt_note: "" };
+
+const $ = (id) => document.getElementById(id);
+const S = (baht) => Money.toSatang(baht);
+const thb = (satang) => "฿" + Money.toBaht(satang).toLocaleString("th-TH", { maximumFractionDigits: 2 });
+const SHIRT_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>';
+
+// localStorage อาจใช้ไม่ได้ (โหมดส่วนตัว) → ห่อ try/catch ทุกครั้ง
+function safeGet(key) { try { return localStorage.getItem(key); } catch (_) { return null; } }
+function safeSet(key, v) { try { localStorage.setItem(key, v); } catch (_) {} }
+
+// ==========================================================
+// โหลดข้อมูล
+// ==========================================================
 async function loadSellGrid() {
   const { data: items, error } = await supabaseClient
     .from("items")
     .select("*, lots(lot_name), lot_groups(group_name)")
     .eq("status", "available")
-    .eq("intake_status", "listed") // V15: ซ่อน Item ที่ยังอยู่ระหว่างอัปโหลดรูป (draft) ไม่ให้ขายได้ตั้งแต่ในรายการ
+    .eq("intake_status", "listed")
     .order("created_at", { ascending: false });
 
   if (error) {
     console.error(error);
-    document.getElementById("sellGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ</div>`;
+    $("sellGrid").innerHTML = `<div class="empty-state">โหลดสินค้าไม่สำเร็จ <button type="button" class="btn btn-ghost btn-sm" onclick="loadSellGrid()">ลองใหม่</button></div>`;
+    Notify.error("โหลดสินค้าพร้อมขายไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: loadSellGrid }] });
     return;
   }
-
   inStockItems = items || [];
 
-  // โหลดรูปหลัก/รูปที่ 2 แยกจาก items เพราะรูปถูกเก็บใน item_images แบบ 1-to-many
-  const ids = inStockItems.map((item) => item.id);
-  itemImagesById = {};
-  if (ids.length) {
-    const { data: images, error: imageError } = await supabaseClient
-      .from("item_images")
-      .select("item_id, image_url, sort_order")
-      .in("item_id", ids)
-      .order("sort_order", { ascending: true });
+  const ids = inStockItems.map((i) => i.id);
+  imagesById = await loadImages(ids);
+  reservationsByItem = await loadReservations();
 
-    if (!imageError) {
-      (images || []).forEach((image) => {
-        if (!itemImagesById[image.item_id]) itemImagesById[image.item_id] = [];
-        itemImagesById[image.item_id].push(image);
-      });
-    }
-  }
+  // ของในตะกร้าที่ถูกขาย/หายไปจากอีกเครื่อง → เอาออกจากตะกร้าอัตโนมัติ
+  const live = new Set(ids);
+  let removed = 0;
+  [...cart.keys()].forEach((id) => { if (!live.has(id)) { cart.delete(id); removed++; } });
+  if (removed) Notify.warning(`เอาออกจากตะกร้า ${removed} ชิ้น`, "ชิ้นนี้ถูกขาย/แก้สถานะจากอีกเครื่องไปแล้ว ยอดในตะกร้าคำนวณใหม่ให้แล้ว");
 
+  refreshFilterOptions();
   applySearch();
+  renderCartBar();
 }
 
-// โหลดของที่ขายแล้ว (300 รายการล่าสุด) สำหรับแท็บ "ขายแล้ว" — ดูรายงานย้อนหลังทั้งหมดได้ที่หน้ารายงาน
-async function loadSoldGrid() {
-  const { data: sales, error } = await supabaseClient
-    .from("sales")
-    .select("item_id, sale_price, sale_date, items(id, item_name, size, condition, tier, cost_price, base_price, lot_id, group_id, lots(lot_name), lot_groups(group_name))")
-    .is("voided_at", null) // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
-    .order("sale_date", { ascending: false })
-    .limit(300);
+// รูป: ใช้รูปย่อ (thumb_url) ถ้ามี — ถ้าฐานข้อมูลยังไม่มีคอลัมน์นี้ ให้ถอยไปใช้แบบเดิม
+async function loadImages(ids) {
+  const map = {};
+  if (!ids.length) return map;
+  const run = (cols) => fetchAllRows(() => supabaseClient.from("item_images").select(cols).in("item_id", ids).order("sort_order", { ascending: true }));
+  let { data, error } = await run("item_id, image_url, thumb_url, sort_order");
+  if (error) ({ data, error } = await run("item_id, image_url, sort_order"));
+  if (error) Notify.warning("โหลดรูปสินค้าไม่ครบ", error, { hint: "สินค้ายังขายได้ตามปกติ แค่ไม่มีรูปให้ดู — ลองรีเฟรชหน้า" });
+  (data || []).forEach((img) => { (map[img.item_id] ||= []).push(img); });
+  return map;
+}
+
+async function loadReservations() {
+  const map = {};
+  const { data, error } = await supabaseClient.from("reservations").select("*").eq("status", "active");
+  if (error) return map; // ยังไม่ได้รัน migration → ทำงานแบบไม่มีระบบจอง
+  (data || []).forEach((r) => { map[r.item_id] = r; });
+  return map;
+}
+
+async function loadPosSettings() {
+  const { data, error } = await supabaseClient.from("app_settings").select("value").eq("key", "pos_settings").maybeSingle();
+  if (error) Notify.warning("โหลดการตั้งค่าพร้อมเพย์ไม่สำเร็จ", error, { hint: "QR อาจยังไม่ขึ้น — รีเฟรชหน้า หรือเปิดปุ่มเฟืองตั้งใหม่" });
+  if (data?.value) posSettings = { ...posSettings, ...data.value };
+}
+
+function thumbOf(item, map = imagesById) {
+  const img = map[item.id]?.[0];
+  return img ? img.thumb_url || img.image_url : null;
+}
+
+// ==========================================================
+// กริดรูป (หน้าขายเน้นรูปก่อน แล้วค่อยดูชื่อยืนยัน)
+// ==========================================================
+function refreshFilterOptions() {
+  const lotSel = $("lotFilter");
+  const sizeSel = $("sizeFilter");
+  const lots = new Map();
+  const sizes = new Map();
+  inStockItems.forEach((it) => {
+    const key = it.lot_id || "none";
+    const e = lots.get(key) || { name: it.lots?.lot_name || "ไม่ระบุ Lot", count: 0 };
+    e.count++; lots.set(key, e);
+    const sz = (it.size || "").trim().toUpperCase();
+    if (sz) sizes.set(sz, (sizes.get(sz) || 0) + 1);
+  });
+  const prevLot = lotSel.value, prevSize = sizeSel.value;
+  lotSel.innerHTML = `<option value="">ทุก Lot (${inStockItems.length})</option>` +
+    [...lots].map(([id, l]) => `<option value="${id}">${escapeHtml(l.name)} (${l.count})</option>`).join("");
+  lotSel.value = lots.has(prevLot) ? prevLot : "";
+  sizeSel.innerHTML = `<option value="">ทุกไซซ์</option>` +
+    [...sizes].sort().map(([sz, n]) => `<option value="${escapeHtml(sz)}">${escapeHtml(sz)} (${n})</option>`).join("");
+  sizeSel.value = sizes.has(prevSize) ? prevSize : "";
+}
+
+// ค้นหา: ตัวเลข 1–3 หลัก = เลขท้ายป้าย SKU (เช่น 17 → *-017) นอกนั้นค้นชื่อ/SKU/ไซซ์/Lot
+function matchItem(item, q) {
+  if (!q) return true;
+  if (/^\d{1,3}$/.test(q) && item.sku) {
+    if (item.sku.endsWith("-" + q.padStart(3, "0"))) return true;
+  }
+  const hay = [item.item_name, item.sku, item.size, item.condition, item.lots?.lot_name, item.lot_groups?.group_name]
+    .filter(Boolean).join(" ").toLowerCase();
+  return hay.includes(q);
+}
+
+function applySearch() {
+  if (activeTab === "sold") return renderSoldGrid(filterSold());
+  const q = $("searchBox").value.trim().toLowerCase();
+  const lotId = $("lotFilter").value;
+  const size = $("sizeFilter").value;
+  const list = inStockItems.filter((it) =>
+    (!lotId || (it.lot_id || "none") === lotId) &&
+    (!size || (it.size || "").trim().toUpperCase() === size) &&
+    (!showReservedOnly || reservationsByItem[it.id]) &&
+    matchItem(it, q));
+  renderGrid(list);
+}
+
+function renderGrid(items) {
+  $("gridCount").textContent = `${items.length} ชิ้น` + (showReservedOnly ? " ที่จองอยู่" : "");
+  if (!items.length) {
+    $("sellGrid").innerHTML = `<div class="empty-state">${inStockItems.length ? "ไม่พบสินค้าที่ค้นหา" : "ไม่มีของในสต็อกให้ขาย"}</div>`;
+    return;
+  }
+  $("sellGrid").innerHTML = items.map((item) => {
+    const img = thumbOf(item);
+    const inCart = cart.has(item.id);
+    const res = reservationsByItem[item.id];
+    const tag = item.sku ? item.sku.split("-").pop() : "";
+    return `
+      <div class="pos-tile${inCart ? " in-cart" : ""}${res ? " reserved" : ""}">
+        <button type="button" class="pos-tile-main" data-cart="${item.id}" aria-pressed="${inCart}" aria-label="${inCart ? "เอาออกจากตะกร้า" : "ใส่ตะกร้า"} ${escapeHtml(item.item_name)}">
+          <div class="pos-tile-img">${img ? `<img src="${img}" alt="" loading="lazy" decoding="async">` : SHIRT_SVG}</div>
+          ${tag ? `<span class="pos-tag">${escapeHtml(tag)}</span>` : ""}
+          <span class="pos-price">${thb(S(item.current_price))}</span>
+          ${res ? `<span class="pos-reserved">จอง: ${escapeHtml(res.customer_name)}</span>` : ""}
+          ${inCart ? `<span class="pos-check" aria-hidden="true">✓</span>` : ""}
+          <span class="pos-name">${escapeHtml(item.item_name)}<small>${escapeHtml(item.size || "-")} · ${escapeHtml(item.condition || "-")}</small></span>
+        </button>
+        <button type="button" class="pos-info" data-info="${item.id}" aria-label="ดูรายละเอียด ${escapeHtml(item.item_name)}">i</button>
+      </div>`;
+  }).join("");
+}
+
+// event delegation: กริดถูก render ใหม่บ่อย (ค้นหา/Realtime) จึงผูก listener ไว้ที่ตัวกริดครั้งเดียว
+$("sellGrid").addEventListener("click", (e) => {
+  const info = e.target.closest("[data-info]");
+  if (info) return openItemDetail(info.dataset.info, "available");
+  const tile = e.target.closest("[data-cart]");
+  if (tile) toggleCart(tile.dataset.cart);
+});
+
+// ==========================================================
+// ตะกร้า
+// ==========================================================
+async function toggleCart(itemId) {
+  const item = inStockItems.find((i) => i.id === itemId);
+  if (!item) return;
+  if (cart.has(itemId)) {
+    cart.delete(itemId);
+  } else {
+    const res = reservationsByItem[itemId];
+    if (res && !(await Notify.confirm({ title: `ตัวนี้จองไว้ให้ "${res.customer_name}"`, message: `ช่องทาง ${channelLabel(res.channel)}${res.due_date ? " · นัดภายใน " + formatDate(res.due_date) : ""}\nขายให้คนจองตอนนี้เลยไหม? (ถ้าเป็นลูกค้าคนอื่น ให้กดยกเลิก)`, confirmText: "ขายให้คนจอง" }))) return;
+    cart.set(itemId, { price: S(item.current_price) });
+  }
+  onCartChanged();
+}
+
+function onCartChanged() {
+  pendingBillId = null;           // ตะกร้าเปลี่ยน = บิลใหม่
+  if (deal.mode !== "none") applyDeal(deal.mode, deal.total, true);
+  applySearch();
+  renderCartBar();
+  if (!$("checkoutModal").classList.contains("hidden")) renderCheckout();
+}
+
+function cartLines() {
+  return [...cart.entries()].map(([id, line]) => ({ item: inStockItems.find((i) => i.id === id), ...line })).filter((l) => l.item);
+}
+const cartTotal = () => cartLines().reduce((s, l) => s + l.price, 0);
+const cartListTotal = () => cartLines().reduce((s, l) => s + S(l.item.current_price), 0);
+
+function renderCartBar() {
+  const lines = cartLines();
+  $("cartBar").classList.toggle("hidden", !lines.length);
+  document.body.classList.toggle("has-cart", lines.length > 0);
+  $("cartCount").textContent = `${lines.length} ชิ้น`;
+  $("cartTotal").textContent = thb(cartTotal());
+  $("cartThumbs").innerHTML = lines.slice(-6).map((l) => {
+    const img = thumbOf(l.item);
+    return `<span class="cart-thumb">${img ? `<img src="${img}" alt="">` : SHIRT_SVG}</span>`;
+  }).join("") + (lines.length > 6 ? `<span class="cart-more">+${lines.length - 6}</span>` : "");
+}
+
+$("cartClear").addEventListener("click", async () => {
+  if (!cart.size) return;
+  const n = cart.size;
+  if (!(await Notify.confirm({ title: "ล้างตะกร้าทั้งหมด?", message: `เอาออก ${n} ชิ้น (ยังไม่ได้ขาย ไม่กระทบสต็อก)`, confirmText: "ล้างตะกร้า", danger: true }))) return;
+  cart.clear(); deal = { mode: "none", total: null }; onCartChanged();
+  Notify.info("ล้างตะกร้าแล้ว", `เอาออก ${n} ชิ้น`);
+});
+$("cartPay").addEventListener("click", openCheckout);
+
+// ==========================================================
+// ชำระเงิน: แก้ราคารายชิ้น / ดีล / วิธีจ่าย / เงินทอน / QR
+// ==========================================================
+function openCheckout() {
+  if (!cart.size) return;
+  setSeg("channelSeg", "channel", channel);
+  setSeg("paySeg", "pay", payMethod);
+  $("cashReceived").value = "";
+  renderCheckout();
+  $("checkoutModal").classList.remove("hidden");
+}
+
+function renderCheckout() {
+  const lines = cartLines();
+  if (!lines.length) { closeModal("checkoutModal"); return; }
+  $("checkoutTitle").textContent = `ชำระเงิน · ${lines.length} ชิ้น`;
+  $("checkoutLines").innerHTML = lines.map((l) => {
+    const list = S(l.item.current_price);
+    const img = thumbOf(l.item);
+    return `<div class="co-line">
+      <span class="co-thumb">${img ? `<img src="${img}" alt="">` : SHIRT_SVG}</span>
+      <span class="co-name">${escapeHtml(l.item.item_name)}<small>${escapeHtml(l.item.sku || "")} · ป้าย ${thb(list)}</small></span>
+      <input type="number" class="co-price${l.price !== list ? " changed" : ""}" data-line="${l.item.id}" value="${Money.toBaht(l.price)}" min="0" step="1" inputmode="numeric" aria-label="ราคาที่ตกลงของ ${escapeHtml(l.item.item_name)}">
+      <button type="button" class="co-remove" data-remove="${l.item.id}" aria-label="เอาออก">×</button>
+    </div>`;
+  }).join("");
+  document.querySelectorAll("#dealChips [data-deal]").forEach((b) => b.classList.toggle("active", b.dataset.deal === deal.mode));
+  $("dealTotalRow").classList.toggle("hidden", deal.mode !== "total");
+  renderTotals();
+}
+
+function renderTotals() {
+  const total = cartTotal();
+  const list = cartListTotal();
+  $("sumList").textContent = thb(list);
+  $("sumDiscount").textContent = list > total ? "−" + thb(list - total) : total > list ? "+" + thb(total - list) : "฿0";
+  $("sumTotal").textContent = thb(total);
+  $("cartTotal").textContent = thb(total);
+  $("cashPanel").classList.toggle("hidden", payMethod !== "cash");
+  $("qrPanel").classList.toggle("hidden", payMethod !== "transfer");
+  if (payMethod === "cash") renderCash(total);
+  if (payMethod === "transfer") renderQr(total);
+}
+
+// แก้ราคาชิ้นเดียว → ถือว่าตกลงรายชิ้นเอง (ไม่ใช้ดีลทั้งบิลแล้ว)
+$("checkoutLines").addEventListener("input", (e) => {
+  const input = e.target.closest("[data-line]");
+  if (!input) return;
+  const line = cart.get(input.dataset.line);
+  if (!line) return;
+  line.price = Math.max(0, S(input.value));
+  deal = { mode: "lines", total: null };
+  pendingBillId = null;
+  document.querySelectorAll("#dealChips [data-deal]").forEach((b) => b.classList.remove("active"));
+  $("dealTotalRow").classList.add("hidden");
+  input.classList.toggle("changed", line.price !== S(inStockItems.find((i) => i.id === input.dataset.line)?.current_price));
+  renderTotals();
+});
+$("checkoutLines").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-remove]");
+  if (!btn) return;
+  cart.delete(btn.dataset.remove);
+  onCartChanged();
+});
+
+// ดีลทั้งบิล → กระจายลงแต่ละชิ้นตามสัดส่วน "ราคาป้าย"
+function applyDeal(mode, totalBaht, silent) {
+  const lines = cartLines();
+  const listPrices = lines.map((l) => S(l.item.current_price));
+  let prices = listPrices;
+  if (mode === "10" || mode === "20") prices = Money.percentOffTotal(listPrices, Number(mode));
+  if (mode === "total" && totalBaht !== null && totalBaht !== "" && Number(totalBaht) >= 0) prices = Money.distributeToTotal(listPrices, S(totalBaht));
+  if (mode === "lines") return; // แก้รายชิ้นเองแล้ว ไม่ทับ
+  lines.forEach((l, i) => { cart.get(l.item.id).price = prices[i]; });
+  deal = { mode, total: mode === "total" ? totalBaht : null };
+  pendingBillId = null;
+  if (!silent) renderCheckout();
+}
+$("dealChips").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-deal]");
+  if (!b) return;
+  if (b.dataset.deal === "total") {
+    deal = { mode: "total", total: $("dealTotal").value || null };
+    renderCheckout();
+    $("dealTotal").focus();
+    return;
+  }
+  applyDeal(b.dataset.deal, null);
+});
+$("dealTotal").addEventListener("input", () => applyDeal("total", $("dealTotal").value, false));
+
+// segmented buttons (ช่องทาง/วิธีจ่าย)
+function setSeg(segId, attr, value) {
+  document.querySelectorAll(`#${segId} [data-${attr}]`).forEach((b) => b.classList.toggle("active", b.dataset[attr] === value));
+}
+$("channelSeg").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-channel]");
+  if (!b) return;
+  channel = b.dataset.channel; safeSet("vims_pos_channel", channel);
+  setSeg("channelSeg", "channel", channel);
+});
+$("paySeg").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-pay]");
+  if (!b) return;
+  payMethod = b.dataset.pay;
+  setSeg("paySeg", "pay", payMethod);
+  renderTotals();
+});
+
+function renderCash(total) {
+  $("quickCash").innerHTML = Money.quickCashOptions(total).map((v, i) =>
+    `<button type="button" class="pos-chip" data-cash="${Money.toBaht(v)}">${i === 0 ? "พอดี " : ""}${thb(v)}</button>`).join("");
+  updateChange();
+}
+$("quickCash").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-cash]");
+  if (!b) return;
+  $("cashReceived").value = b.dataset.cash;
+  updateChange();
+});
+$("cashReceived").addEventListener("input", updateChange);
+function updateChange() {
+  const total = cartTotal();
+  const raw = $("cashReceived").value;
+  const el = $("changeDue");
+  if (raw === "") { el.textContent = "รับพอดี ไม่ต้องทอน"; el.className = "change-due"; return true; }
+  const change = Money.changeDue(total, S(raw));
+  if (change === null) { el.textContent = `รับเงินไม่พอ ขาดอีก ${thb(total - S(raw))}`; el.className = "change-due short"; return false; }
+  el.innerHTML = `ทอน <b>${thb(change)}</b>`;
+  el.className = "change-due ok";
+  return true;
+}
+
+// QR พร้อมเพย์ตามยอด (ลูกค้าสแกนแล้วยอดขึ้นเอง ไม่ต้องพิมพ์)
+function renderQr(total) {
+  const payload = Money.promptPayPayload(posSettings.promptpay_id, Money.toBaht(total));
+  if (!payload) {
+    $("qrBox").innerHTML = `<button type="button" class="btn btn-ghost" id="qrSetup">ตั้งค่าเบอร์พร้อมเพย์ก่อน</button>`;
+    $("qrCaption").textContent = "ยังไม่มีเลขพร้อมเพย์ — ลูกค้าโอนเองแล้วกดยืนยันได้";
+    $("qrSetup").addEventListener("click", openPosSettings);
+    return;
+  }
+  if (typeof qrcode !== "function") { $("qrBox").textContent = "โหลดตัวสร้าง QR ไม่สำเร็จ (ตรวจอินเทอร์เน็ต)"; return; }
+  const qr = qrcode(0, "M");
+  qr.addData(payload);
+  qr.make();
+  $("qrBox").innerHTML = qr.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+  $("qrCaption").innerHTML = `พร้อมเพย์ ${escapeHtml(maskId(posSettings.promptpay_id))} · <b>${thb(total)}</b><br>เช็กยอดเข้าแอปธนาคารก่อนกดยืนยัน`;
+}
+function maskId(id) { const d = String(id).replace(/\D/g, ""); return d.length > 4 ? "xxx-" + d.slice(-4) : d; }
+
+// ==========================================================
+// ยืนยันขาย → sell_bill
+// ==========================================================
+$("confirmSale").addEventListener("click", confirmSale);
+async function confirmSale() {
+  const lines = cartLines();
+  if (!lines.length) return;
+  if (payMethod === "cash" && !updateChange()) return Notify.warning("รับเงินไม่พอ", `ยอดที่ต้องจ่าย ${thb(cartTotal())} แต่ใส่รับมา ${thb(S($("cashReceived").value))}`, { hint: "แก้ช่อง 'รับเงินมา' หรือเว้นว่างถ้ารับพอดี" });
+  const btn = $("confirmSale");
+  btn.disabled = true; btn.textContent = "กำลังบันทึก...";
+
+  pendingBillId ||= crypto.randomUUID(); // ลองใหม่ด้วย id เดิม = ไม่เกิดบิลซ้ำ
+  const received = payMethod === "cash" && $("cashReceived").value !== "" ? Money.toBaht(S($("cashReceived").value)) : null;
+  const snapshot = lines.map((l) => ({ name: l.item.item_name, sku: l.item.sku, price: l.price, list: S(l.item.current_price) }));
+  const hasReserved = lines.some((l) => reservationsByItem[l.item.id]);
+
+  const { data, error } = await supabaseClient.rpc("sell_bill", {
+    p_bill_id: pendingBillId,
+    p_lines: lines.map((l) => ({ item_id: l.item.id, price: Money.toBaht(l.price) })),
+    p_payment_method: payMethod,
+    p_channel: channel,
+    p_cash_received: received,
+    p_note: null,
+    p_sell_reserved: hasReserved,
+  });
+  btn.disabled = false; btn.textContent = "ยืนยันขาย";
 
   if (error) {
     console.error(error);
-    document.getElementById("soldGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ</div>`;
-    return;
+    // ถ้าเป็นปัญหาเน็ต เก็บ pendingBillId ไว้ กดยืนยันอีกครั้งจะไม่เกิดบิลซ้ำ
+    const f = Notify.friendlyError(error);
+    return Notify.error("บันทึกการขายไม่สำเร็จ", f.detail, {
+      hint: f.hint || "ตะกร้ายังอยู่ครบ กด 'ลองอีกครั้ง' ได้เลย ระบบจะไม่สร้างบิลซ้ำ",
+      actions: [{ label: "ลองอีกครั้ง", onClick: confirmSale }],
+    });
   }
 
-  // แปลง sales+items ให้อยู่ในรูปแบบเดียวกับ inStockItems เพื่อใช้ openItemSaleDetail ร่วมกันได้
-  soldItems = (sales || [])
-    .filter((s) => s.items)
-    .map((s) => ({
-      ...s.items,
-      current_price: s.sale_price,
-      _saleDate: s.sale_date,
-    }));
+  lastBill = {
+    id: data.bill_id, no: data.bill_no, total: S(data.total), list: S(data.list_total),
+    lines: snapshot, pay: payMethod, channel, received: received === null ? null : S(received), at: new Date(),
+  };
+  cart.clear();
+  deal = { mode: "none", total: null };
+  pendingBillId = null;
+  $("dealTotal").value = "";
+  closeModal("checkoutModal");
+  renderCartBar();
+  openReceipt();
+  if (data.duplicate) Notify.info(`บิล #${data.bill_no} บันทึกไว้แล้วตั้งแต่ครั้งก่อน`, "ระบบไม่ได้สร้างบิลซ้ำ ยอดขายนับครั้งเดียว");
+  loadSellGrid();
+}
 
-  const ids = soldItems.map((item) => item.id);
-  soldImagesById = {};
-  if (ids.length) {
-    const { data: images, error: imageError } = await supabaseClient
-      .from("item_images")
-      .select("item_id, image_url, sort_order")
-      .in("item_id", ids)
-      .order("sort_order", { ascending: true });
-    if (!imageError) {
-      (images || []).forEach((image) => {
-        if (!soldImagesById[image.item_id]) soldImagesById[image.item_id] = [];
-        soldImagesById[image.item_id].push(image);
-      });
+// ==========================================================
+// ใบเสร็จ + เลิกทำ 5 วินาที
+// ==========================================================
+function openReceipt() {
+  const b = lastBill;
+  const change = b.received !== null ? b.received - b.total : null;
+  $("receiptTitle").textContent = `ขายแล้ว · บิล #${b.no}`;
+  $("receiptBody").innerHTML = `
+    ${b.lines.map((l) => `<div class="rc-line"><span>${escapeHtml(l.name)}</span><span>${l.price !== l.list ? `<s>${thb(l.list)}</s> ` : ""}${thb(l.price)}</span></div>`).join("")}
+    <div class="rc-total"><span>รวม</span><b>${thb(b.total)}</b></div>
+    <div class="rc-meta">${paymentLabel(b.pay)} · ${channelLabel(b.channel)}${change !== null ? ` · รับ ${thb(b.received)} ทอน ${thb(change)}` : ""}</div>`;
+  $("receiptModal").classList.remove("hidden");
+  startUndoCountdown();
+}
+
+function startUndoCountdown() {
+  clearInterval(undoTimer);
+  const btn = $("undoSale");
+  let left = 5;
+  btn.classList.remove("hidden");
+  btn.disabled = false;
+  btn.textContent = `เลิกทำ (${left})`;
+  undoTimer = setInterval(() => {
+    left -= 1;
+    if (left <= 0) { clearInterval(undoTimer); btn.classList.add("hidden"); return; }
+    btn.textContent = `เลิกทำ (${left})`;
+  }, 1000);
+}
+
+$("undoSale").addEventListener("click", async () => {
+  if (!lastBill) return;
+  clearInterval(undoTimer);
+  const btn = $("undoSale");
+  btn.disabled = true; btn.textContent = "กำลังยกเลิก...";
+  const { error } = await supabaseClient.rpc("void_bill", { p_bill_id: lastBill.id, p_reason: "เลิกทำทันทีหลังขาย" });
+  if (error) { btn.disabled = false; btn.textContent = "เลิกทำ"; return Notify.error(`ยกเลิกบิล #${lastBill.no} ไม่สำเร็จ`, error, { hint: "บิลยังถูกบันทึกอยู่ — ไปยกเลิกได้ที่แท็บ 'บิล & คืนของ'" }); }
+  Notify.success(`ยกเลิกบิล #${lastBill.no} แล้ว`, `${lastBill.lines.length} ชิ้นกลับเข้าสต็อก · ไม่นับยอด ${thb(lastBill.total)}`);
+  lastBill = null;
+  closeModal("receiptModal");
+  loadSellGrid();
+});
+$("nextCustomer").addEventListener("click", () => { clearInterval(undoTimer); closeModal("receiptModal"); $("searchBox").focus(); });
+
+// วาดใบเสร็จเป็นรูป → แชร์ (LINE/IG ผ่าน share sheet) หรือดาวน์โหลด
+$("shareReceipt").addEventListener("click", async () => {
+  if (!lastBill) return;
+  const blob = await drawReceipt(lastBill);
+  const file = new File([blob], `receipt-${lastBill.no}.png`, { type: "image/png" });
+  try {
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: `ใบเสร็จ #${lastBill.no}` });
+      Notify.success("แชร์ใบเสร็จแล้ว", `บิล #${lastBill.no}`);
+      return;
     }
+  } catch (err) {
+    if (err?.name === "AbortError") return; // ผู้ใช้กดยกเลิกเอง
   }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = file.name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  Notify.success("บันทึกรูปใบเสร็จแล้ว", `ไฟล์ ${file.name} อยู่ในโฟลเดอร์ดาวน์โหลด`);
+});
 
-  soldLoaded = true;
-  applySearch();
+async function drawReceipt(b) {
+  const W = 600, pad = 36, lh = 34;
+  const H = 260 + b.lines.length * lh + (posSettings.receipt_note ? 40 : 0);
+  const c = document.createElement("canvas");
+  c.width = W; c.height = H;
+  const g = c.getContext("2d");
+  try { await document.fonts?.ready; } catch (_) {}
+  g.fillStyle = "#ffffff"; g.fillRect(0, 0, W, H);
+  g.fillStyle = "#161923"; g.textBaseline = "alphabetic";
+  g.font = "600 28px Prompt, sans-serif"; g.textAlign = "center";
+  g.fillText(posSettings.shop_name || "Bubbles Gumps", W / 2, 56);
+  g.font = "400 18px Prompt, sans-serif"; g.fillStyle = "#5b6178";
+  g.fillText(`ใบเสร็จ #${b.no} · ${b.at.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" })}`, W / 2, 88);
+  let y = 132;
+  g.textAlign = "left"; g.fillStyle = "#161923"; g.font = "400 20px Prompt, sans-serif";
+  b.lines.forEach((l) => {
+    const name = l.name.length > 30 ? l.name.slice(0, 29) + "…" : l.name;
+    g.textAlign = "left"; g.fillText(name, pad, y);
+    g.textAlign = "right"; g.fillText(thb(l.price), W - pad, y);
+    y += lh;
+  });
+  g.strokeStyle = "#e4e6f0"; g.beginPath(); g.moveTo(pad, y - 12); g.lineTo(W - pad, y - 12); g.stroke();
+  y += 20;
+  g.font = "700 26px Prompt, sans-serif"; g.textAlign = "left"; g.fillText("รวม", pad, y);
+  g.textAlign = "right"; g.fillText(thb(b.total), W - pad, y);
+  y += 34;
+  g.font = "400 18px Prompt, sans-serif"; g.fillStyle = "#5b6178"; g.textAlign = "left";
+  const change = b.received !== null ? ` · รับ ${thb(b.received)} ทอน ${thb(b.received - b.total)}` : "";
+  g.fillText(`${paymentLabel(b.pay)}${change}`, pad, y);
+  if (posSettings.receipt_note) { y += 40; g.textAlign = "center"; g.fillText(posSettings.receipt_note, W / 2, y); }
+  return new Promise((resolve) => c.toBlob(resolve, "image/png"));
 }
 
-// สร้างการ์ดของที่ขายแล้ว: คลิกเพื่อดูรายละเอียด/ประวัติการขาย (ขายซ้ำไม่ได้)
-function renderSoldGrid(items) {
-  if (!items.length) {
-    document.getElementById("soldGrid").innerHTML = `<div class="empty-state">ยังไม่มีของที่ขายแล้ว</div>`;
+// ==========================================================
+// แท็บบิล: ยกเลิกทั้งบิล / คืนทีละชิ้น
+// ==========================================================
+async function loadBills() {
+  const { data, error } = await supabaseClient
+    .from("bills")
+    .select("id, bill_no, created_at, channel, payment_method, total, list_total, voided_at, void_reason, sales(id, sale_price, list_price, voided_at, void_reason, items(item_name, sku))")
+    .order("created_at", { ascending: false })
+    .limit(60);
+  if (error) {
+    $("billsList").innerHTML = `<div class="empty-state">โหลดบิลไม่สำเร็จ</div>`;
+    Notify.error("โหลดรายการบิลไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: loadBills }] });
     return;
   }
-  const html = items.map((item) => {
-    const image = soldImagesById[item.id]?.[0];
-    return `
-      <button class="item-tile tile-sold" data-id="${item.id}">
-        <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
-        <div class="name">${escapeHtml(item.item_name)}</div>
-        <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}</div>
-        <div class="price">${formatBaht(item.current_price)}</div>
-        <div class="item-tile-sold-date">${formatDateTime(item._saleDate)}</div>
-      </button>`;
+  if (!data?.length) { $("billsList").innerHTML = `<div class="empty-state">ยังไม่มีบิล</div>`; return; }
+  $("billsList").innerHTML = data.map((b) => {
+    const active = (b.sales || []).filter((s) => !s.voided_at);
+    const now = active.reduce((s, x) => s + S(x.sale_price), 0);
+    return `<div class="bill-card${b.voided_at ? " voided" : ""}">
+      <div class="bill-head">
+        <b>#${b.bill_no}</b>
+        <span>${formatDateTime(b.created_at)} · ${channelLabel(b.channel)} · ${paymentLabel(b.payment_method)}</span>
+        <strong>${thb(now)}</strong>
+      </div>
+      ${(b.sales || []).map((s) => `<div class="bill-line${s.voided_at ? " voided" : ""}">
+        <span>${escapeHtml(s.items?.item_name || "-")} <small>${escapeHtml(s.items?.sku || "")}</small></span>
+        <span>${thb(S(s.sale_price))}</span>
+        ${s.voided_at ? `<span class="voided-tag" title="${escapeHtml(s.void_reason || "")}">คืนแล้ว</span>` : b.voided_at ? "" : `<button type="button" class="btn btn-ghost btn-sm" data-refund="${s.id}">คืนชิ้นนี้</button>`}
+      </div>`).join("")}
+      ${b.voided_at ? `<div class="bill-void-note">ยกเลิกแล้ว${b.void_reason ? " · " + escapeHtml(b.void_reason) : ""}</div>`
+        : `<button type="button" class="btn btn-ghost btn-sm bill-void" data-void-bill="${b.id}" data-no="${b.bill_no}">ยกเลิกทั้งบิล</button>`}
+    </div>`;
   }).join("");
-
-  document.getElementById("soldGrid").innerHTML = html;
-  document.querySelectorAll("#soldGrid .item-tile").forEach((tile) => {
-    tile.addEventListener("click", () => openItemSaleDetail(tile.dataset.id, "sold"));
-  });
 }
 
-// สลับแท็บพร้อมขาย / ขายแล้ว
+$("billsList").addEventListener("click", async (e) => {
+  const refund = e.target.closest("[data-refund]");
+  const voidBtn = e.target.closest("[data-void-bill]");
+  if (!refund && !voidBtn) return;
+  const lineName = refund ? refund.closest(".bill-line")?.querySelector("span")?.textContent.trim() : "";
+  const reason = await Notify.prompt({
+    title: refund ? "คืนสินค้าชิ้นนี้?" : `ยกเลิกทั้งบิล #${voidBtn.dataset.no}?`,
+    message: refund ? `${lineName}\nสินค้าจะกลับเข้าสต็อก และไม่นับเป็นยอดขาย` : "ทุกชิ้นในบิลจะกลับเข้าสต็อก และไม่นับเป็นยอดขาย",
+    placeholder: refund ? "เหตุผล เช่น ไซซ์ไม่พอดี / มีตำหนิ" : "เหตุผล เช่น กดขายผิด",
+    required: true, requiredText: "ต้องใส่เหตุผลทุกครั้ง (ไว้ดูย้อนหลัง)",
+    confirmText: refund ? "คืนชิ้นนี้" : "ยกเลิกบิล",
+  });
+  if (!reason) return;
+  const { error } = refund
+    ? await supabaseClient.rpc("void_sale", { p_sale_id: refund.dataset.refund, p_reason: reason })
+    : await supabaseClient.rpc("void_bill", { p_bill_id: voidBtn.dataset.voidBill, p_reason: reason });
+  if (error) return Notify.error(refund ? "คืนสินค้าไม่สำเร็จ" : `ยกเลิกบิล #${voidBtn.dataset.no} ไม่สำเร็จ`, error);
+  Notify.success(refund ? "คืนสินค้าแล้ว" : `ยกเลิกบิล #${voidBtn.dataset.no} แล้ว`, refund ? `${lineName} กลับเข้าสต็อก · เหตุผล: ${reason}` : `ทุกชิ้นกลับเข้าสต็อก · เหตุผล: ${reason}`);
+  soldLoaded = false;
+  loadBills();
+  loadSellGrid();
+});
+
+// ==========================================================
+// แท็บขายแล้ว (ของเดิม)
+// ==========================================================
+async function loadSoldGrid() {
+  const { data: sales, error } = await supabaseClient
+    .from("sales")
+    .select("item_id, sale_price, sale_date, items(id, item_name, size, condition, tier, cost_price, base_price, sku, lot_id, group_id, lots(lot_name), lot_groups(group_name))")
+    .is("voided_at", null)
+    .order("sale_date", { ascending: false })
+    .limit(300);
+  if (error) {
+    console.error(error);
+    $("soldGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ</div>`;
+    return;
+  }
+  soldItems = (sales || []).filter((s) => s.items).map((s) => ({ ...s.items, current_price: s.sale_price, _saleDate: s.sale_date }));
+  soldImagesById = await loadImages(soldItems.map((i) => i.id));
+  soldLoaded = true;
+  renderSoldGrid(filterSold());
+}
+function filterSold() {
+  const q = $("soldSearch").value.trim().toLowerCase();
+  return soldItems.filter((it) => matchItem(it, q));
+}
+function renderSoldGrid(items) {
+  if (!items.length) { $("soldGrid").innerHTML = `<div class="empty-state">ยังไม่มีของที่ขายแล้ว</div>`; return; }
+  $("soldGrid").innerHTML = items.map((item) => {
+    const img = thumbOf(item, soldImagesById);
+    return `<button class="item-tile tile-sold" data-id="${item.id}">
+      <div class="item-tile-image">${img ? `<img src="${img}" alt="" loading="lazy">` : SHIRT_SVG}</div>
+      <div class="name">${escapeHtml(item.item_name)}</div>
+      <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"}</div>
+      <div class="price">${formatBaht(item.current_price)}</div>
+      <div class="item-tile-sold-date">${formatDateTime(item._saleDate)}</div>
+    </button>`;
+  }).join("");
+}
+$("soldGrid").addEventListener("click", (e) => {
+  const t = e.target.closest("[data-id]");
+  if (t) openItemDetail(t.dataset.id, "sold");
+});
+$("soldSearch").addEventListener("input", applySearch);
+
+// ==========================================================
+// รายละเอียดสินค้า + จอง
+// ==========================================================
+async function openItemDetail(itemId, context) {
+  detailContext = context;
+  const item = (context === "sold" ? soldItems : inStockItems).find((r) => r.id === itemId);
+  if (!item) return;
+  detailItem = item;
+  const imgs = (context === "sold" ? soldImagesById : imagesById)[item.id] || [];
+  $("detailImage1").innerHTML = imgs[0] ? `<img src="${imgs[0].image_url}" alt="">` : SHIRT_SVG;
+  $("detailImage2").innerHTML = imgs[1] ? `<img src="${imgs[1].image_url}" alt="">` : "";
+  $("detailImage2").classList.toggle("hidden", !imgs[1]);
+  $("detailName").textContent = item.item_name;
+  $("detailMeta").textContent = `${item.sku ? item.sku + " · " : ""}${item.size || "ไม่ระบุไซซ์"} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}`;
+  $("detailLot").textContent = item.lots?.lot_name || "-";
+  $("detailGroup").textContent = item.lot_groups?.group_name || "-";
+  $("detailCost").textContent = formatBaht(item.cost_price);
+  $("detailBasePrice").textContent = formatBaht(item.base_price);
+  $("detailCurrentPrice").textContent = formatBaht(item.current_price);
+
+  const res = context === "available" ? reservationsByItem[item.id] : null;
+  $("detailActions").classList.toggle("hidden", context === "sold");
+  $("detailAddCart").textContent = cart.has(item.id) ? "เอาออกจากตะกร้า" : "ใส่ตะกร้า";
+  $("detailReserve").classList.toggle("hidden", !!res);
+  $("reserveBox").classList.toggle("hidden", !res);
+  if (res) {
+    $("reserveBox").innerHTML = `<div><b>จองโดย ${escapeHtml(res.customer_name)}</b>
+      <span>${channelLabel(res.channel)}${res.due_date ? " · ภายใน " + formatDate(res.due_date) : ""}${Number(res.deposit) ? " · มัดจำ " + formatBaht(res.deposit) : ""}${res.note ? " · " + escapeHtml(res.note) : ""}</span></div>
+      <button type="button" class="btn btn-ghost btn-sm" id="releaseReserve">ยกเลิกจอง</button>`;
+    $("releaseReserve").addEventListener("click", () => releaseReservation(res));
+  }
+
+  const { data: sales } = await supabaseClient
+    .from("sales")
+    .select("id, sale_date, sale_price, cost_price, payment_method, channel, voided_at, void_reason")
+    .eq("item_id", item.id)
+    .order("sale_date", { ascending: false });
+  renderSaleHistory(sales || []);
+  $("saleDetailModal").classList.remove("hidden");
+}
+
+function renderSaleHistory(sales) {
+  const el = $("saleHistory");
+  if (!sales.length) { el.innerHTML = `<div class="empty-state small">ยังไม่มีประวัติการขาย</div>`; return; }
+  el.innerHTML = sales.map((sale) => {
+    const profit = Number(sale.sale_price || 0) - Number(sale.cost_price || 0);
+    return `<div class="sale-history-row ${sale.voided_at ? "voided" : ""}">
+      <div><b>${formatBaht(sale.sale_price)}</b><span>${formatDateTime(sale.sale_date)}</span></div>
+      <div><span>${paymentLabel(sale.payment_method)}</span><span>${channelLabel(sale.channel)}</span></div>
+      <strong class="${profit >= 0 ? "profit" : "loss"}">${profit >= 0 ? "+" : ""}${formatBaht(profit)}</strong>
+      ${sale.voided_at ? `<span class="voided-tag" title="${escapeHtml(sale.void_reason || "")}">ยกเลิกแล้ว</span>` : ""}
+    </div>`;
+  }).join("");
+}
+
+$("detailAddCart").addEventListener("click", () => {
+  if (!detailItem) return;
+  closeModal("saleDetailModal");
+  toggleCart(detailItem.id);
+});
+$("detailReserve").addEventListener("click", () => {
+  if (!detailItem) return;
+  $("reserveItemName").textContent = `${detailItem.item_name}${detailItem.sku ? " · " + detailItem.sku : ""} · ${formatBaht(detailItem.current_price)}`;
+  $("reserveForm").reset();
+  const due = new Date(Date.now() + 3 * 86400000); // ค่าเริ่มต้น: ภายใน 3 วัน
+  $("reserveDue").value = due.toISOString().slice(0, 10);
+  closeModal("saleDetailModal");
+  $("reserveModal").classList.remove("hidden");
+  $("reserveName").focus();
+});
+$("reserveForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!detailItem) return;
+  const { error } = await supabaseClient.rpc("reserve_item", {
+    p_item_id: detailItem.id,
+    p_customer_name: $("reserveName").value.trim(),
+    p_channel: $("reserveChannel").value,
+    p_deposit: Number($("reserveDeposit").value) || 0,
+    p_due_date: $("reserveDue").value || null,
+    p_note: $("reserveNote").value.trim() || null,
+  });
+  if (error) return Notify.error("จองไม่สำเร็จ", error);
+  Notify.success(`จองให้ ${$("reserveName").value.trim()} แล้ว`, `${detailItem.item_name}${$("reserveDue").value ? " · ภายใน " + formatDate($("reserveDue").value) : ""} — ชิ้นนี้จะขายให้คนอื่นไม่ได้จนกว่าจะยกเลิกจอง`);
+  cart.delete(detailItem.id);
+  closeModal("reserveModal");
+  loadSellGrid();
+});
+async function releaseReservation(res) {
+  if (!(await Notify.confirm({ title: `ยกเลิกการจองของ ${res.customer_name}?`, message: "สินค้าจะกลับมาขายให้ทุกคนได้ตามปกติ", confirmText: "ยกเลิกจอง", danger: true }))) return;
+  const { error } = await supabaseClient.rpc("release_reservation", { p_reservation_id: res.id });
+  if (error) return Notify.error("ยกเลิกการจองไม่สำเร็จ", error);
+  Notify.success("ยกเลิกการจองแล้ว", `${res.customer_name} · สินค้ากลับมาขายได้ปกติ`);
+  closeModal("saleDetailModal");
+  loadSellGrid();
+}
+
+// ==========================================================
+// ตั้งค่าหน้าร้าน (พร้อมเพย์ / ใบเสร็จ) → app_settings.pos_settings
+// ==========================================================
+function openPosSettings() {
+  $("setPromptPay").value = posSettings.promptpay_id || "";
+  $("setShopName").value = posSettings.shop_name || "";
+  $("setReceiptNote").value = posSettings.receipt_note || "";
+  $("posSettingsModal").classList.remove("hidden");
+}
+$("openPosSettings").addEventListener("click", openPosSettings);
+$("posSettingsForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = $("setPromptPay").value.trim();
+  if (id && !Money.normalizePromptPayId(id)) return Notify.warning("เลขพร้อมเพย์ไม่ถูกต้อง", `ใส่มา ${id.replace(/\D/g, "").length} หลัก — ต้องเป็นเบอร์มือถือ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก`);
+  const value = { promptpay_id: id, shop_name: $("setShopName").value.trim() || "Bubbles Gumps", receipt_note: $("setReceiptNote").value.trim() };
+  const { error } = await supabaseClient.from("app_settings").upsert({ key: "pos_settings", value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  if (error) return Notify.error("บันทึกการตั้งค่าไม่สำเร็จ", error);
+  posSettings = value;
+  Notify.success("บันทึกการตั้งค่าหน้าร้านแล้ว", value.promptpay_id ? `QR พร้อมเพย์จะใช้เลขลงท้าย ${value.promptpay_id.replace(/\D/g, "").slice(-4)}` : "ยังไม่ได้ใส่พร้อมเพย์ — หน้าชำระเงินจะไม่แสดง QR");
+  closeModal("posSettingsModal");
+  if (!$("checkoutModal").classList.contains("hidden")) renderTotals();
+});
+
+// ==========================================================
+// แท็บ / ตัวกรอง / คอลัมน์
+// ==========================================================
 document.querySelectorAll(".sell-tab").forEach((tab) => {
   tab.addEventListener("click", async () => {
     activeTab = tab.dataset.tab;
     document.querySelectorAll(".sell-tab").forEach((t) => t.classList.toggle("active", t === tab));
-    document.getElementById("sellGrid").classList.toggle("hidden", activeTab !== "available");
-    document.getElementById("soldGrid").classList.toggle("hidden", activeTab !== "sold");
-    document.getElementById("sellHintAvailable").classList.toggle("hidden", activeTab !== "available");
-    document.getElementById("sellHintSold").classList.toggle("hidden", activeTab !== "sold");
-    document.getElementById("searchBox").value = "";
-    if (activeTab === "sold" && !soldLoaded) await loadSoldGrid();
+    $("availableView").classList.toggle("hidden", activeTab !== "available");
+    $("billsView").classList.toggle("hidden", activeTab !== "bills");
+    $("soldView").classList.toggle("hidden", activeTab !== "sold");
+    $("cartBar").classList.toggle("tab-hidden", activeTab !== "available");
+    if (activeTab === "bills") await loadBills();
+    else if (activeTab === "sold" && !soldLoaded) await loadSoldGrid();
     else applySearch();
   });
 });
-
-// สร้างการ์ดสินค้า: คลิกได้ทั้งการ์ดเพื่อเปิดรายละเอียดก่อนขาย
-function renderGrid(items) {
-  if (!items.length) {
-    document.getElementById("sellGrid").innerHTML = `<div class="empty-state">ไม่มีของในสต็อกให้ขาย</div>`;
-    return;
-  }
-
-  const html = items.map((item) => {
-    const image = itemImagesById[item.id]?.[0];
-    return `
-      <div class="item-tile" data-id="${item.id}">
-        <button type="button" class="item-tile-main" data-action="detail" data-id="${item.id}" aria-label="ดูรายละเอียด ${escapeHtml(item.item_name)}">
-          <div class="item-tile-image">${image ? `<img src="${image.image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
-          <div class="name">${escapeHtml(item.item_name)}${item.sku ? ` <span class="sku-tag">${escapeHtml(item.sku)}</span>` : ""}</div>
-          <div class="meta">${escapeHtml(item.size || "-")} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}</div>
-          <div class="price">${formatBaht(item.current_price ?? item.sell_price)}</div>
-        </button>
-        <button type="button" class="btn btn-primary item-tile-sell" data-action="sell" data-id="${item.id}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;vertical-align:-2px;margin-right:4px"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>ขาย</button>
-      </div>`;
-  }).join("");
-
-  document.getElementById("sellGrid").innerHTML = html;
-  // ใช้ event delegation เพื่อให้ปุ่มขายทำงานแน่นอนแม้ grid จะถูก render ใหม่จาก Realtime
-  document.querySelectorAll("#sellGrid [data-action]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const itemId = button.dataset.id;
-      if (button.dataset.action === "sell") {
-        openItemSaleDetail(itemId, "available").then(() => openSellConfirm());
-      } else {
-        openItemSaleDetail(itemId, "available");
-      }
-    });
-  });
+$("searchBox").addEventListener("input", applySearch);
+$("lotFilter").addEventListener("change", applySearch);
+$("sizeFilter").addEventListener("change", applySearch);
+$("reservedFilter").addEventListener("click", () => {
+  showReservedOnly = !showReservedOnly;
+  $("reservedFilter").classList.toggle("active", showReservedOnly);
+  $("reservedFilter").setAttribute("aria-pressed", String(showReservedOnly));
+  applySearch();
+});
+// มือถือ: สลับ 2 คอลัมน์ (รูปใหญ่ ดูง่าย) / 3 คอลัมน์ (เห็นของเยอะ)
+function applyCols(n) {
+  $("sellGrid").classList.toggle("cols-2", n === 2);
+  $("sellGrid").classList.toggle("cols-3", n === 3);
+  $("colsToggle").textContent = n === 2 ? "3 คอลัมน์" : "2 คอลัมน์";
 }
+let gridCols = safeGet("vims_pos_cols") === "3" ? 3 : 2;
+applyCols(gridCols);
+$("colsToggle").addEventListener("click", () => { gridCols = gridCols === 2 ? 3 : 2; safeSet("vims_pos_cols", String(gridCols)); applyCols(gridCols); });
 
-// ค้นหาแบบทันทีจากชื่อสินค้า / size / group / lot เพื่อให้ใช้หน้าร้านได้เร็ว — ใช้ได้ทั้งแท็บพร้อมขายและขายแล้ว
-// V18: Dropdown เลือก Lot — สร้างจากสินค้าที่โหลดมาจริง (Lot ใหม่ที่เพิ่ม/ลงของแล้วจะโผล่เองทุกครั้งที่ข้อมูลรีเฟรช)
-function refreshLotOptions(source) {
-  const select = document.getElementById("lotFilter");
-  const lots = new Map(); // key = lot_id, เรียงตามลำดับที่เจอ (ของใหม่สุดขึ้นก่อน)
-  source.forEach((item) => {
-    const key = item.lot_id || "none";
-    const entry = lots.get(key) || { name: item.lots?.lot_name || "ไม่ระบุ Lot", count: 0 };
-    entry.count += 1;
-    lots.set(key, entry);
+// ปิด modal
+function closeModal(id) { $(id)?.classList.add("hidden"); }
+$("closeCheckout").addEventListener("click", () => closeModal("checkoutModal"));
+$("closeSaleDetail").addEventListener("click", () => closeModal("saleDetailModal"));
+$("closeReserve").addEventListener("click", () => closeModal("reserveModal"));
+$("closePosSettings").addEventListener("click", () => closeModal("posSettingsModal"));
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  ["posSettingsModal", "reserveModal", "saleDetailModal", "checkoutModal"].some((id) => {
+    if (!$(id).classList.contains("hidden")) { closeModal(id); return true; }
+    return false;
   });
-  const previous = select.value;
-  select.innerHTML =
-    `<option value="">ทุก Lot (${source.length})</option>` +
-    [...lots].map(([id, l]) => `<option value="${id}">${escapeHtml(l.name)} (${l.count})</option>`).join("");
-  select.value = lots.has(previous) ? previous : ""; // ถ้า Lot ที่เลือกไว้ไม่มีของเหลือแล้ว กลับไปทุก Lot
-}
-
-function applySearch() {
-  const q = document.getElementById("searchBox").value.trim().toLowerCase();
-  const allSource = activeTab === "sold" ? soldItems : inStockItems;
-  const render = activeTab === "sold" ? renderSoldGrid : renderGrid;
-  refreshLotOptions(allSource);
-  const lotId = document.getElementById("lotFilter").value;
-  const source = lotId ? allSource.filter((item) => (item.lot_id || "none") === lotId) : allSource;
-  if (!q) return render(source);
-  const filtered = source.filter((item) => {
-    const haystack = [
-      item.item_name,
-      item.sku, // V15: พิมพ์/ค้นหาด้วย SKU ได้ (ไม่ใช่การสแกน — แค่ค้นข้อความ)
-      item.size,
-      item.condition,
-      item.lots?.lot_name,
-      item.lot_groups?.group_name,
-    ].filter(Boolean).join(" ").toLowerCase();
-    return haystack.includes(q);
-  });
-  render(filtered);
-}
-
-document.getElementById("searchBox").addEventListener("input", applySearch);
-document.getElementById("lotFilter").addEventListener("change", applySearch);
-
-// V18: ย้าย modal ไปไว้ใต้ <body> เพื่อให้อยู่เหนือ Navbar ด้านล่างบนมือถือ (กันถูก stacking context ของ #mainWrap ครอบไว้)
-["sellModal", "saleDetailModal"].forEach((id) => {
-  const el = document.getElementById(id);
-  if (el && el.parentElement !== document.body) document.body.appendChild(el);
 });
 
-// เปิดหน้ารายละเอียด: เป็นจุดกลางระหว่าง “ค้นหา” และ “ยืนยันการขาย”
-// context = "available" (มาจากแท็บพร้อมขาย ขายได้) หรือ "sold" (มาจากแท็บขายแล้ว ดูอย่างเดียว)
-async function openItemSaleDetail(itemId, context = "available") {
-  detailContext = context;
-  const item = (context === "sold" ? soldItems : inStockItems).find((row) => row.id === itemId);
-  if (!item) return;
-  selectedItem = item;
-  document.getElementById("openSellConfirm").classList.toggle("hidden", context === "sold");
-
-  const images = (context === "sold" ? soldImagesById : itemImagesById)[item.id] || [];
-  document.getElementById("detailImage1").innerHTML = images[0] ? `<img src="${images[0].image_url}" alt="">` : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>';
-  document.getElementById("detailImage2").innerHTML = images[1] ? `<img src="${images[1].image_url}" alt="">` : "＋";
-  document.getElementById("detailName").textContent = item.item_name;
-  document.getElementById("detailMeta").textContent = `${item.size || "ไม่ระบุไซซ์"} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}`;
-  document.getElementById("detailLot").textContent = item.lots?.lot_name || "-";
-  document.getElementById("detailGroup").textContent = item.lot_groups?.group_name || "-";
-  document.getElementById("detailCost").textContent = formatBaht(item.cost_price);
-  document.getElementById("detailBasePrice").textContent = formatBaht(item.base_price);
-  document.getElementById("detailCurrentPrice").textContent = formatBaht(item.current_price ?? item.sell_price);
-
-  // โหลดประวัติการขายเฉพาะ Item นี้ เพื่อให้รู้ว่ามีรายการขายเดิมหรือไม่
-  const { data: sales } = await supabaseClient
-    .from("sales")
-    .select("id, sale_date, sale_price, cost_price, payment_method, channel, note, voided_at, void_reason")
-    .eq("item_id", item.id)
-    .order("sale_date", { ascending: false });
-  renderSaleHistory(sales || []);
-
-  document.getElementById("saleDetailModal").classList.remove("hidden");
-}
-
-function renderSaleHistory(sales) {
-  const el = document.getElementById("saleHistory");
-  if (!sales.length) {
-    el.innerHTML = `<div class="empty-state small">ยังไม่มีประวัติการขาย</div>`;
-    return;
-  }
-  el.innerHTML = sales.map((sale) => {
-    const profit = Number(sale.sale_price || 0) - Number(sale.cost_price || 0);
-    const voided = !!sale.voided_at;
-    return `<div class="sale-history-row ${voided ? "voided" : ""}">
-      <div><b>${formatBaht(sale.sale_price)}</b><span>${formatDateTime(sale.sale_date)}</span></div>
-      <div><span>${paymentLabel(sale.payment_method)}</span><span>${channelLabel(sale.channel)}</span></div>
-      <strong class="${profit >= 0 ? "profit" : "loss"}">${profit >= 0 ? "+" : ""}${formatBaht(profit)}</strong>
-      ${voided
-        ? `<span class="voided-tag" title="${sale.void_reason ? escapeHtml(sale.void_reason) : ""}">ยกเลิกแล้ว</span>`
-        : `<button type="button" class="btn btn-ghost btn-sm" data-void-sale="${sale.id}">ยกเลิกการขายนี้</button>`}
-    </div>`;
-  }).join("");
-  el.querySelectorAll("[data-void-sale]").forEach((btn) => btn.addEventListener("click", () => voidSaleById(btn.dataset.voidSale)));
-}
-
-// ยกเลิกการขาย (กู้จากกดขายผิด) — คืนสถานะ Item เป็น available ทันที
-async function voidSaleById(saleId) {
-  const reason = prompt("เหตุผลที่ยกเลิก (ไม่บังคับ):", "") || null;
-  const { error } = await supabaseClient.rpc("void_sale", { p_sale_id: saleId, p_reason: reason });
-  if (error) return showToast("ยกเลิกไม่สำเร็จ: " + error.message);
-  showToast("ยกเลิกการขายแล้ว — สินค้ากลับเป็นพร้อมขาย");
-  document.getElementById("saleDetailModal").classList.add("hidden");
-  soldLoaded = false;
-  await loadSellGrid();
-  if (activeTab === "sold") await loadSoldGrid();
-}
-
-// จากรายละเอียด → เปิดฟอร์มขายจริง โดยใช้ current_price เป็นราคาเริ่มต้น
-function openSellConfirm() {
-  if (!selectedItem) return;
-  document.getElementById("modalItemId").value = selectedItem.id;
-  document.getElementById("modalItemName").textContent = selectedItem.item_name;
-  document.getElementById("modalItemMeta").textContent = `${selectedItem.size || ""} ${selectedItem.condition ? "· " + selectedItem.condition : ""} · ต้นทุน ${formatBaht(selectedItem.cost_price)}`;
-  document.getElementById("salePrice").value = selectedItem.current_price ?? selectedItem.sell_price ?? 0;
-  document.getElementById("sellModal").classList.remove("hidden");
-}
-
-function closeModal(id) {
-  document.getElementById(id)?.classList.add("hidden");
-}
-
-document.getElementById("closeSaleDetail").addEventListener("click", () => closeModal("saleDetailModal"));
-document.getElementById("cancelDetailSale").addEventListener("click", () => closeModal("saleDetailModal"));
-document.getElementById("cancelSell").addEventListener("click", () => closeModal("sellModal"));
-// ปุ่ม "ขายสินค้านี้" อยู่ใน Modal รายละเอียด — ใช้ event delegation เพื่อป้องกันปัญหา listener หลุดหลัง UI ถูก render/อัปเดต
-document.addEventListener("click", (event) => {
-  const button = event.target.closest("#openSellConfirm");
-  if (!button) return;
-  event.preventDefault();
-  closeModal("saleDetailModal");
-  openSellConfirm();
-});
-
-// Confirm การขาย: ใช้ RPC ที่ lock row + insert sale + update status ใน transaction เดียว
-// เชื่อม: sell.js → Supabase RPC sell_item → sales + items.status/sold_at
-// ถ้าขั้นตอนใดล้มเหลว Database จะ rollback ทั้งชุด
-document.getElementById("sellForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const itemId = document.getElementById("modalItemId").value;
-  const item = inStockItems.find((row) => row.id === itemId);
-  if (!item) return;
-
-  const salePrice = Number(document.getElementById("salePrice").value);
-  const paymentMethod = document.getElementById("paymentMethod").value;
-  const channel = document.getElementById("channel").value;
-  if (!Number.isFinite(salePrice) || salePrice < 0) return showToast("ราคาขายไม่ถูกต้อง");
-
-  const submitButton = document.querySelector("#sellForm button[type='submit']");
-  submitButton.disabled = true;
-  submitButton.textContent = "กำลังบันทึก...";
-
-  const { error } = await supabaseClient.rpc("sell_item", {
-    p_item_id: item.id,
-    p_sale_price: salePrice,
-    p_payment_method: paymentMethod,
-    p_channel: channel,
-    p_note: null,
-  });
-
-  submitButton.disabled = false;
-  submitButton.textContent = "ยืนยันการขาย";
-
-  if (error) {
-    console.error(error);
-    showToast("บันทึกการขายไม่สำเร็จ: " + error.message);
-    return;
-  }
-
-  closeModal("sellModal");
-  selectedItem = null;
-  showToast(`ขาย “${item.item_name}” สำเร็จ`);
-
-  // หลังขายสำเร็จ โหลด Stock ใหม่ทันทีบนเครื่องที่กดขาย
-  await loadSellGrid();
-});
-
-function paymentLabel(value) {
-  return ({ cash: "เงินสด", transfer: "โอน", government: "โครงการรัฐ" })[value] || value || "-";
-}
-function channelLabel(value) {
-  return ({ street_market: "ถนนคนเดิน", facebook: "Facebook", instagram: "Instagram" })[value] || value || "-";
-}
-function formatDateTime(value) {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-}
-function escapeHtml(value = "") {
-  return String(value).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
-}
-function showToast(msg) {
-  const t = document.getElementById("toast");
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(window.__toast);
-  window.__toast = setTimeout(() => t.classList.remove("show"), 2500);
-}
-
-
+// ---------- helpers ----------
+function paymentLabel(v) { return ({ cash: "เงินสด", transfer: "โอน", government: "โครงการรัฐ" })[v] || v || "-"; }
+function channelLabel(v) { return ({ street_market: "ถนนคนเดิน", facebook: "Facebook", instagram: "Instagram" })[v] || v || "-"; }
+function formatDateTime(v) { return v ? new Date(v).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "-"; }
+function escapeHtml(v = "") { return String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
+function showToast(msg) { return Notify.auto(msg); }
 
 // ==========================================================
-// REALTIME — SELL PAGE
-// ==========================================================
-// ถ้า Device อื่นเพิ่ม/ขาย/แก้ Item หรือรูป:
-//   Supabase Realtime
-//      ↓
-//   vims:realtime
-//      ↓
-//   โหลด Stock Grid ใหม่
+// REALTIME: อีกเครื่องขาย/แก้ของ → โหลดกริดใหม่ (ตะกร้าจะตัดของที่หายไปให้เอง)
 // ==========================================================
 const reloadSellDebounced = debounce(() => {
   loadSellGrid();
-  if (activeTab === 'sold') loadSoldGrid();
-}, 500);
-window.addEventListener('vims:realtime', (event) => {
+  if (activeTab === "bills") loadBills();
+  if (activeTab === "sold") loadSoldGrid();
+}, 600);
+window.addEventListener("vims:realtime", (event) => {
   const table = event.detail?.table;
-  if (table === 'page_refresh' || ['items', 'item_images', 'sales'].includes(table)) {
-    soldLoaded = false; // ให้โหลดของขายแล้วใหม่ครั้งถัดไปที่สลับมาแท็บนี้
+  if (table === "page_refresh" || ["items", "item_images", "sales", "bills", "reservations"].includes(table)) {
+    soldLoaded = false;
     reloadSellDebounced();
   }
 });
 
-// โหลด Stock ครั้งแรกเมื่อเปิดหน้า Sell
+// มือถือ: วัดความสูงเมนูล่างจริง ให้แถบตะกร้าลอยเหนือเมนูพอดี
+function updateNavOffset() {
+  const nav = document.getElementById("sidebar");
+  const mobile = window.matchMedia("(max-width: 859.98px)").matches;
+  document.documentElement.style.setProperty("--nav-h", mobile && nav ? nav.offsetHeight + "px" : "0px");
+}
+updateNavOffset();
+window.addEventListener("resize", debounce(updateNavOffset, 150));
+
+// modal อยู่ใต้ <body> แล้วใน HTML (เหนือเมนูล่างบนมือถือ)
+loadPosSettings();
 loadSellGrid();

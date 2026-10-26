@@ -1,0 +1,60 @@
+/* ==========================================================
+   shift.css — การ์ด "กะวันนี้" + modal ปิดกะ บนหน้าภาพรวม (V19)
+   ========================================================== */
+.shift-card { padding: 18px 20px !important; }
+.shift-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.shift-pill { font: 600 12.5px var(--v11-ui); padding: 5px 11px; border-radius: 999px; background: var(--v11-surface-3); color: var(--v11-muted); }
+.shift-pill.open { background: #e7f8ef; color: #0e7a47; }
+.shift-where { font-size: 12.5px; color: var(--v11-muted); flex: 1; min-width: 180px; }
+.shift-close-btn { min-height: 44px; }
+.shift-missing { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--v11-muted); }
+.shift-missing b { color: var(--v11-text); font-size: 15px; }
+
+.shift-open { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px; }
+.shift-open label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: var(--v11-muted); flex: 1 1 140px; }
+.shift-open input { min-height: 44px; font-size: 16px; }
+.shift-open .btn { min-height: 46px; padding: 0 22px; }
+
+.shift-summary { background: var(--v11-surface-2); border-radius: 14px; padding: 10px 14px; }
+.ss-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 5px 0; font-size: 14px; }
+.ss-row small { color: var(--v11-muted); font-size: 11.5px; }
+.ss-row small.tag { background: #fff; border: 1px solid var(--v11-border); border-radius: 6px; padding: 0 5px; }
+.ss-sales b { font: 700 20px var(--v11-ui); }
+.ss-exp { color: #5b6178; }
+.ss-exp > span:last-child { display: inline-flex; align-items: center; gap: 6px; }
+.ss-del { width: 26px; height: 26px; border-radius: 50%; border: 0; background: #fff; color: var(--v11-muted); cursor: pointer; font-size: 15px; }
+.ss-left { border-top: 1px solid var(--v11-border); margin-top: 4px; padding-top: 9px; }
+.ss-left b { font: 700 24px var(--v11-ui); }
+.ss-profit b, .ss-drawer b { font: 600 16px var(--v11-ui); }
+.ss-drawer { border-top: 1px dashed var(--v11-border-2); margin-top: 4px; padding-top: 9px; }
+.shift-summary b.pos { color: #0e7a47; }
+.shift-summary b.neg { color: var(--v11-red); }
+
+.shift-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.shift-expense { display: grid; grid-template-columns: 1fr 120px; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid var(--v11-border); border-radius: 14px; background: #fff; }
+.shift-expense input { min-height: 44px; font-size: 16px; }
+.shift-expense .seg, .shift-expense input[name="note"], .shift-expense-actions { grid-column: 1 / -1; }
+.seg.seg-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.shift-expense-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.shift-expense-actions .btn { min-height: 44px; }
+
+/* ---------- modal ปิดกะ (หน้าภาพรวมไม่ได้โหลด sell.css) ---------- */
+#closeShiftModal { position: fixed; inset: 0; background: rgba(15,15,20,.55); z-index: 1000; display: grid; place-items: center; padding: 20px; }
+#closeShiftModal.hidden { display: none; }
+.shift-modal { background: #fff; border-radius: 18px; width: min(100%, 440px); max-height: 92vh; overflow: auto; padding: 22px; box-sizing: border-box; box-shadow: 0 20px 60px rgba(0,0,0,.2); }
+.shift-modal h2 { margin: 0 0 12px; }
+.shift-modal label { display: block; font-size: 12.5px; color: var(--v11-muted); margin: 12px 0 4px; }
+.shift-modal input { width: 100%; box-sizing: border-box; min-height: 46px; font-size: 18px; }
+.cs-expected { display: flex; justify-content: space-between; align-items: baseline; background: var(--v11-surface-2); border-radius: 12px; padding: 12px 14px; }
+.cs-expected b { font: 700 24px var(--v11-ui); }
+.cs-diff { margin-top: 8px; font-weight: 600; min-height: 20px; }
+.cs-diff.ok { color: #0e7a47; } .cs-diff.short { color: var(--v11-red); } .cs-diff.over { color: var(--v11-yellow); }
+.cs-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.cs-actions .btn { min-height: 48px; }
+.cs-summary { white-space: pre-wrap; font: 400 14px/1.6 var(--v11-thai); background: var(--v11-surface-2); border-radius: 12px; padding: 12px 14px; margin: 0; }
+
+@media (max-width: 639.98px) {
+  .shift-card { padding: 14px !important; }
+  #closeShiftModal { align-items: end; padding: 0; }
+  .shift-modal { border-radius: 20px 20px 0 0; width: 100%; padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
+}

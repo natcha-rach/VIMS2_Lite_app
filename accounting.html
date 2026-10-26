@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="assets/css/base.css" />
 <link rel="stylesheet" href="assets/css/accounting.css" />
   <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
-</head>
+    <link rel="stylesheet" href="assets/css/polish.css?v=191" />
+  </head>
 <body>
 
 <nav id="sidebar" class="sidebar">
@@ -38,7 +39,7 @@
   </div>
 
   <div class="page">
-  <h1>สรุปบัญชี</h1>
+  <h1>สรุปบัญชี <a href="tax.html" class="btn btn-ghost btn-sm" style="margin-left:8px;vertical-align:middle">สรุปภาษี →</a></h1>
   <p style="color:var(--color-ink-soft); margin-top:0;">ภาพรวมเงินเข้า-ออกทั้งหมด และกำไรที่แท้จริงหลังหักค่าใช้จ่าย</p>
 
   <div class="tag-card cash-hero" id="cashCard">
@@ -266,6 +267,13 @@
   </div>
 </div>
 
+<!-- V19: พื้นที่ที่ใช้ไป (แพ็กเกจฟรี Supabase: DB 500 MB · Storage 1 GB) -->
+<div class="tag-card storage-card" id="storageCard" style="margin-top:16px">
+  <h2 style="margin:0 0 4px">พื้นที่ที่ใช้ไป</h2>
+  <p class="muted" style="margin:0 0 12px">ข้อมูลที่ขายแล้วไม่ต้องลบ (1 ชิ้น ≈ 3 KB) — ที่กินพื้นที่จริงคือรูป</p>
+  <div id="storageBody" class="muted">กำลังโหลด...</div>
+</div>
+
 </div>
 
 <div class="toast" id="toast"></div>
@@ -273,8 +281,25 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/js/notify.js?v=191"></script>
+<script src="assets/js/auth.js"></script>
 <script src="assets/js/nav.js"></script>
 <script src="assets/js/accounting.js?v=22"></script>
+<script>
+  // V19: เรียก RPC storage_usage() — ถ้ายังไม่ได้รัน migration_v19 จะแจ้งไว้เฉยๆ
+  (async () => {
+    const el = document.getElementById("storageBody");
+    const { data, error } = await supabaseClient.rpc("storage_usage");
+    if (error) { el.textContent = "ยังดูไม่ได้ — รัน sql/migration_v19_pos_shift.sql ก่อน"; return; }
+    const mb = (b) => (Number(b) / 1048576).toFixed(1);
+    const bar = (used, limit) => { const p = Math.min(100, used / limit * 100); return `<div style="height:8px;border-radius:4px;background:#eef0f7;overflow:hidden;margin:4px 0 12px"><span style="display:block;height:100%;width:${p.toFixed(1)}%;background:${p >= 80 ? "#f79009" : "#4a5cf0"}"></span></div>`; };
+    el.classList.remove("muted");
+    el.innerHTML =
+      `<div style="display:flex;justify-content:space-between;font-size:14px"><span>ฐานข้อมูล</span><b>${mb(data.db_bytes)} / 500 MB</b></div>${bar(data.db_bytes, 500 * 1048576)}` +
+      `<div style="display:flex;justify-content:space-between;font-size:14px"><span>รูปสินค้า (${Number(data.image_files).toLocaleString("th-TH")} ไฟล์)</span><b>${mb(data.image_bytes)} / 1,024 MB</b></div>${bar(data.image_bytes, 1024 * 1048576)}` +
+      `<small class="muted">สินค้าทั้งหมด ${Number(data.items).toLocaleString("th-TH")} ชิ้น · ขายแล้ว ${Number(data.sold_items).toLocaleString("th-TH")} ชิ้น</small>`;
+  })();
+</script>
     <script src="assets/js/realtime.js?v=19"></script>
 </body>
 </html>

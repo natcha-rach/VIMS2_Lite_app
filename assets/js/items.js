@@ -131,6 +131,7 @@ async function loadLots(preferredLotId = null) {
 
   if (error) {
     console.error('[Items] loadLots error:', error);
+    Notify.error('โหลดรายชื่อล็อตไม่สำเร็จ', error, { hint: 'ช่องเลือก Lot จะว่าง — รีเฟรชหน้าแล้วลองใหม่' });
     selects.forEach(el => {
       el.innerHTML = '<option value="">โหลด Lot ไม่สำเร็จ</option>';
     });
@@ -403,19 +404,45 @@ async function uploadItemImages(itemId, files) {
       .from('item-images')
       .getPublicUrl(path);
 
+    // 2.5) V19: รูปย่อ ~400px สำหรับกริดหน้าขาย (ไฟล์ราว 30–50KB แทน 300KB+)
+    //      ถ้าทำรูปย่อไม่สำเร็จ ไม่ถือว่าล้มเหลว — หน้าขายจะใช้รูปเต็มแทน
+    let thumbUrl = null;
+    let thumbPath = null;
+    try {
+      const thumb = await compressImageFile(rawFiles[i], 400, 0.72);
+      if (thumb !== rawFiles[i]) {
+        thumbPath = `${itemId}/thumb_${crypto.randomUUID()}.jpg`;
+        const { error: thumbErr } = await supabaseClient.storage.from('item-images')
+          .upload(thumbPath, thumb, { upsert: false, contentType: 'image/jpeg' });
+        if (thumbErr) throw thumbErr;
+        uploadedPaths.push(thumbPath);
+        thumbUrl = supabaseClient.storage.from('item-images').getPublicUrl(thumbPath).data.publicUrl;
+      }
+    } catch (thumbError) {
+      console.warn('ทำรูปย่อไม่สำเร็จ ใช้รูปเต็มแทน:', thumbError);
+      thumbUrl = null;
+      thumbPath = null;
+    }
+
     // 3) ผูกไฟล์กับ Item ใน item_images
-    const { error: imageRowError } = await supabaseClient
-      .from('item_images')
-      .insert({
-        item_id: itemId,
-        image_url: urlData.publicUrl,
-        storage_path: path,
-        sort_order: i + 1
-      });
+    const imageRow = {
+      item_id: itemId,
+      image_url: urlData.publicUrl,
+      storage_path: path,
+      sort_order: i + 1
+    };
+    if (thumbUrl) Object.assign(imageRow, { thumb_url: thumbUrl, thumb_path: thumbPath });
+    let { error: imageRowError } = await supabaseClient.from('item_images').insert(imageRow);
+    // ฐานข้อมูลยังไม่ได้รัน migration_v19 (ไม่มีคอลัมน์ thumb_*) → บันทึกแบบเดิมไปก่อน
+    if (imageRowError && thumbUrl && /thumb_/.test(imageRowError.message || '')) {
+      delete imageRow.thumb_url;
+      delete imageRow.thumb_path;
+      ({ error: imageRowError } = await supabaseClient.from('item_images').insert(imageRow));
+    }
 
     if (imageRowError) {
       // ลบไฟล์ที่เพิ่ง upload ถ้าสร้าง row ไม่สำเร็จ เพื่อไม่ให้ Storage มี orphan file
-      await supabaseClient.storage.from('item-images').remove([path]);
+      await supabaseClient.storage.from('item-images').remove([path, thumbPath].filter(Boolean));
       throw new Error(`บันทึกข้อมูลรูป ${i + 1} ไม่สำเร็จ: ${imageRowError.message}`);
     }
   }
@@ -579,7 +606,8 @@ $('bulkApplyDamaged')?.addEventListener('click', () => callBulkUpdate({p_status:
 $('bulkApplyAvailable')?.addEventListener('click', () => callBulkUpdate({p_status:'available'}, 'คืนเป็นพร้อมขายแล้ว'));
 async function updateQuickStats(){ const {data,error}=await fetchAllRows(()=>supabaseClient.from('items').select('status,cost_price').eq('intake_status','listed')); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`<div><span>สินค้าทั้งหมด</span><b>${rows.length}</b></div><div><span>พร้อมขาย</span><b>${available.length}</b></div><div><span>ขายแล้ว</span><b>${sold.length}</b></div><div><span>ต้นทุนคงเหลือ</span><b>${formatBaht(value)}</b></div>`; }
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function showToast(msg){const t=$('toast');if(!t)return;t.textContent=msg;t.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove('show'),2600);}
+// V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
+function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
 loadLots(); loadItems();
 
 
@@ -1358,7 +1386,8 @@ $('editItemForm')?.addEventListener('submit', async event => {
     const newFiles = Array.from($('editImages').files || []).slice(0,2);
     if (newFiles.length) {
       for (const oldImage of editItemImages) {
-        if (oldImage.storage_path) await supabaseClient.storage.from('item-images').remove([oldImage.storage_path]);
+        const oldPaths = [oldImage.storage_path, oldImage.thumb_path].filter(Boolean); // V19: ลบรูปย่อด้วย
+        if (oldPaths.length) await supabaseClient.storage.from('item-images').remove(oldPaths);
       }
       await supabaseClient.from('item_images').delete().eq('item_id', editingItemId);
       await uploadItemImages(editingItemId, newFiles);
