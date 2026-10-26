@@ -27,9 +27,18 @@
 
   // ไฮไลต์เมนูของหน้าปัจจุบัน
   const currentPage = location.pathname.split("/").pop() || "index.html";
+  // V19.5: เมนู "สต็อก" (ลิงก์ items.html) รวม Lot + สินค้า → หน้า lots.html ก็ไฮไลต์ที่ "สต็อก"
+  const activeHref = currentPage === "lots.html" ? "items.html" : currentPage;
   document.querySelectorAll(".sidebar-links a").forEach((a) => {
-    if (a.getAttribute("href") === currentPage) a.classList.add("active");
+    if (a.getAttribute("href") === activeHref) a.classList.add("active");
   });
+
+  // แท็บย่อย "สินค้า" ในหน้า Lot/สินค้า: พา Lot/กลุ่มที่เลือกล่าสุดไปด้วย (อ่านจาก vimsContext.js)
+  const itemsTab = document.querySelector('.stock-tabs a[href="items.html"]');
+  if (itemsTab && window.VimsContext) {
+    const { lotId, groupId } = VimsContext.resolve();
+    if (lotId || groupId) itemsTab.href = VimsContext.itemsUrl({ lotId, groupId });
+  }
 
   // ==========================================================
   // Stock aging badge — จุดแดงที่ไอคอน "สินค้า" เมื่อมีของพร้อมขาย

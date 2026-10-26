@@ -238,3 +238,9 @@ input[type=file]::file-selector-button {
 }
 .topbar::after{display:none!important} /* ชื่อร้านซ้ำกับ sidebar และถูกป้ายสถานะซิงก์ทับ */
 a.btn, a.btn:hover { text-decoration: none !important; display: inline-flex; align-items: center; justify-content: center; }
+
+/* ---------- V19.5: แท็บย่อยเมนู "สต็อก" (lots.html / items.html) — หน้าตาแบบ .seg ใน pos.css ---------- */
+.stock-tabs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; max-width: 360px; margin: 0 0 16px; padding: 4px; background: var(--v11-surface-3); border-radius: 12px; }
+.stock-tabs a { min-height: 44px; display: flex; align-items: center; justify-content: center; border-radius: 9px; font: 500 14px var(--v11-thai); color: var(--v11-text); text-decoration: none !important; }
+.stock-tabs a[aria-current="page"] { background: #fff; font-weight: 600; box-shadow: 0 1px 2px rgba(16, 24, 40, .1); }
+@media (max-width: 639.98px) { .stock-tabs { max-width: none; } }
