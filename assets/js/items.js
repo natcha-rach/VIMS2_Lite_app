@@ -403,19 +403,45 @@ async function uploadItemImages(itemId, files) {
       .from('item-images')
       .getPublicUrl(path);
 
+    // 2.5) V19: รูปย่อ ~400px สำหรับกริดหน้าขาย (ไฟล์ราว 30–50KB แทน 300KB+)
+    //      ถ้าทำรูปย่อไม่สำเร็จ ไม่ถือว่าล้มเหลว — หน้าขายจะใช้รูปเต็มแทน
+    let thumbUrl = null;
+    let thumbPath = null;
+    try {
+      const thumb = await compressImageFile(rawFiles[i], 400, 0.72);
+      if (thumb !== rawFiles[i]) {
+        thumbPath = `${itemId}/thumb_${crypto.randomUUID()}.jpg`;
+        const { error: thumbErr } = await supabaseClient.storage.from('item-images')
+          .upload(thumbPath, thumb, { upsert: false, contentType: 'image/jpeg' });
+        if (thumbErr) throw thumbErr;
+        uploadedPaths.push(thumbPath);
+        thumbUrl = supabaseClient.storage.from('item-images').getPublicUrl(thumbPath).data.publicUrl;
+      }
+    } catch (thumbError) {
+      console.warn('ทำรูปย่อไม่สำเร็จ ใช้รูปเต็มแทน:', thumbError);
+      thumbUrl = null;
+      thumbPath = null;
+    }
+
     // 3) ผูกไฟล์กับ Item ใน item_images
-    const { error: imageRowError } = await supabaseClient
-      .from('item_images')
-      .insert({
-        item_id: itemId,
-        image_url: urlData.publicUrl,
-        storage_path: path,
-        sort_order: i + 1
-      });
+    const imageRow = {
+      item_id: itemId,
+      image_url: urlData.publicUrl,
+      storage_path: path,
+      sort_order: i + 1
+    };
+    if (thumbUrl) Object.assign(imageRow, { thumb_url: thumbUrl, thumb_path: thumbPath });
+    let { error: imageRowError } = await supabaseClient.from('item_images').insert(imageRow);
+    // ฐานข้อมูลยังไม่ได้รัน migration_v19 (ไม่มีคอลัมน์ thumb_*) → บันทึกแบบเดิมไปก่อน
+    if (imageRowError && thumbUrl && /thumb_/.test(imageRowError.message || '')) {
+      delete imageRow.thumb_url;
+      delete imageRow.thumb_path;
+      ({ error: imageRowError } = await supabaseClient.from('item_images').insert(imageRow));
+    }
 
     if (imageRowError) {
       // ลบไฟล์ที่เพิ่ง upload ถ้าสร้าง row ไม่สำเร็จ เพื่อไม่ให้ Storage มี orphan file
-      await supabaseClient.storage.from('item-images').remove([path]);
+      await supabaseClient.storage.from('item-images').remove([path, thumbPath].filter(Boolean));
       throw new Error(`บันทึกข้อมูลรูป ${i + 1} ไม่สำเร็จ: ${imageRowError.message}`);
     }
   }
@@ -1358,7 +1384,8 @@ $('editItemForm')?.addEventListener('submit', async event => {
     const newFiles = Array.from($('editImages').files || []).slice(0,2);
     if (newFiles.length) {
       for (const oldImage of editItemImages) {
-        if (oldImage.storage_path) await supabaseClient.storage.from('item-images').remove([oldImage.storage_path]);
+        const oldPaths = [oldImage.storage_path, oldImage.thumb_path].filter(Boolean); // V19: ลบรูปย่อด้วย
+        if (oldPaths.length) await supabaseClient.storage.from('item-images').remove(oldPaths);
       }
       await supabaseClient.from('item_images').delete().eq('item_id', editingItemId);
       await uploadItemImages(editingItemId, newFiles);

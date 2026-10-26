@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="assets/css/base.css" />
     <link rel="stylesheet" href="assets/css/dashboard.css" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
+    <link rel="stylesheet" href="assets/css/pos.css?v=19" />
+    <link rel="stylesheet" href="assets/css/shift.css?v=19" />
 </head>
   <body>
     <nav id="sidebar" class="sidebar">
@@ -74,6 +76,8 @@
           </div>
         </div>
 
+        <!-- V19: กะวันนี้ — เปิดกะ / ค่าใช้จ่ายรายวัน / เหลือวันนี้ / ปิดกะ (assets/js/shift.js) -->
+        <section class="tag-card shift-card" id="shiftCard" aria-label="กะวันนี้"><div class="empty-state">กำลังโหลดกะวันนี้...</div></section>
         <section class="v11-today-pulse" aria-label="ภาพรวมช่วงที่เลือก">
           <div class="pulse-heading">
             <div>
@@ -125,6 +129,7 @@
             <a href="sell.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.4"/><circle cx="18" cy="21" r="1.4"/><path d="M2.5 3h2.2l2.3 12.4a2 2 0 0 0 2 1.6h8.4a2 2 0 0 0 2-1.6L21 8H6"/></svg></span><b>ขายสินค้า</b><small>เปิด POS</small></a>
             <a href="items.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg></span><b>เพิ่มสินค้า</b><small>จัดการ Stock</small></a>
             <a href="lots.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span><b>รับ Lot</b><small>เพิ่มกระสอบใหม่</small></a>
+            <a href="tax.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><polyline points="14 3 14 8 19 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span><b>สรุปภาษี</b><small>ภ.ง.ด.90/94</small></a>
             <a href="reports.html" class="quick-action"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="8 7 17 7 17 16"/></svg></span><b>ดูรายงาน</b><small>วิเคราะห์ยอด</small></a>
           </div>
         </section>
@@ -233,12 +238,37 @@
         </div>
       </div>
     </div>
+    
+    <!-- V19: นับเงิน & ปิดกะ -->
+    <div class="modal-backdrop hidden" id="closeShiftModal">
+      <div class="modal-sheet shift-modal" role="dialog" aria-labelledby="csTitle">
+        <form id="csForm">
+          <h2 id="csTitle">นับเงิน &amp; ปิดกะ</h2>
+          <div class="cs-expected"><span>เงินสดในลิ้นชักควรมี</span><b id="csExpected">-</b></div>
+          <label for="csCounted">นับได้จริง (บาท)</label>
+          <input type="number" id="csCounted" min="0" step="1" inputmode="numeric" required />
+          <div class="cs-diff" id="csDiff"></div>
+          <label for="csReason">เหตุผล (บังคับถ้าขาด/เกิน)</label>
+          <input type="text" id="csReason" placeholder="เช่น ทอนผิด / ซื้อน้ำ ลืมลง" />
+          <div class="cs-actions"><button type="button" class="btn btn-ghost" id="csCancel">ยังไม่ปิด</button><button type="submit" class="btn btn-primary" id="csSubmit">ปิดกะ</button></div>
+        </form>
+        <div id="csResult" class="hidden">
+          <h2>ปิดกะแล้ว</h2>
+          <pre class="cs-summary"></pre>
+          <div class="cs-actions"><button type="button" class="btn btn-primary" id="csLine">แชร์ไป LINE</button><button type="button" class="btn btn-ghost" id="csShare">แชร์/คัดลอก</button></div>
+          <button type="button" class="btn btn-ghost" id="csDone" style="width:100%;margin-top:8px">เสร็จ</button>
+        </div>
+      </div>
+    </div>
     <div class="toast" id="toast"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="assets/js/dashboard.js"></script>
+    <script src="assets/js/money.js?v=19"></script>
+    <script src="assets/js/shift.js?v=19"></script>
     <script src="assets/js/realtime.js"></script>
   </body>
 </html>

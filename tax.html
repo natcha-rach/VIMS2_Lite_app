@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>สรุปภาษี | ระบบร้านเสื้อมือสอง</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css" />
+    <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
+    <link rel="stylesheet" href="assets/css/pos.css?v=19" />
+    <link rel="stylesheet" href="assets/css/tax.css?v=19" />
+</head>
+  <body>
+    <nav id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <span class="brand-mark"></span
+          ><span class="brand-text">Bubbles <span>Gumps</span></span>
+        </div>
+        <button
+          id="navCollapse"
+          class="nav-collapse"
+          aria-label="ย่อ/ขยายเมนู"
+          title="ย่อ/ขยายเมนู"
+        >
+          ‹
+        </button>
+      </div>
+      <div class="sidebar-links">
+        <a href="index.html" title="ภาพรวม"
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg></span><span class="label">ภาพรวม</span></a
+        >
+        <a href="lots.html" title="ล็อต"
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span><span class="label">ล็อต</span></a
+        >
+        <a href="items.html" title="สินค้า"
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg></span><span class="label">สินค้า</span><span class="nav-badge" id="navStockBadge" hidden>0</span></a
+        >
+        <a href="sell.html" title="ขายของ"
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg></span><span class="label">ขายของ</span></a
+        >
+        <a href="reports.html" title="รายงาน"
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="9.5" x2="21" y2="9.5"/></svg></span><span class="label">รายงาน</span></a
+        >
+        <a href="accounting.html" title="บัญชี"
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2V2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/></svg></span><span class="label">บัญชี</span></a
+        >
+            </div>
+      <div class="sidebar-footer">
+        <div class="footer-avatar">BG</div>
+        <div class="footer-meta"><b>Bubbles Gumps</b><span>ร้านเสื้อมือสอง</span></div>
+      </div>
+    </nav>
+
+    <div id="mainWrap">
+      <div class="topbar"><div class="subtitle">สรุปภาษี · เตรียมตัวเลขก่อนยื่นเว็บสรรพากร</div></div>
+      <div class="page tax-page">
+        <div class="tax-head">
+          <div>
+            <h1>สรุปเพื่อยื่นภาษี</h1>
+            <p class="muted">เงินได้ 40(8) จากการขายของ · คำนวณจากบิลที่ไม่ถูกยกเลิก/คืนเงิน</p>
+          </div>
+          <select id="taxYear" aria-label="ปีภาษี"></select>
+        </div>
+
+        <div class="seg tax-seg" id="taxPeriodSeg" role="tablist" aria-label="รอบภาษี">
+          <button type="button" data-period="half" role="tab"><b>ครึ่งปี · ภ.ง.ด.94</b><small>ม.ค.–มิ.ย. · ยื่นภายใน 30 ก.ย.</small></button>
+          <button type="button" data-period="full" role="tab" class="active"><b>ทั้งปี · ภ.ง.ด.90</b><small>ม.ค.–ธ.ค. · ยื่นภายใน 31 มี.ค. ปีถัดไป</small></button>
+        </div>
+
+        <section class="tag-card tax-card">
+          <div class="tax-period" id="taxPeriodLabel">-</div>
+          <div class="tax-row"><span>ยอดขายในแอป</span><b id="taxAppSales">-</b></div>
+          <div class="tax-row"><span>รายได้นอกแอป <small>เช่น ขายของ Lot เก่าก่อนเริ่มใช้แอป</small></span><input type="number" id="taxOutside" min="0" step="1" inputmode="numeric" value="0" aria-label="รายได้นอกแอป"></div>
+          <div class="tax-row tax-total"><span>เงินได้ 40(8) จากการขาย</span><b id="taxIncome">-</b></div>
+        </section>
+
+        <section class="tag-card tax-card">
+          <h2>เลือกวิธีหักค่าใช้จ่าย</h2>
+          <div class="tax-choices">
+            <div class="tax-choice" id="taxFlatBox"><span>หักเหมา 60%</span><b id="taxFlat">-</b><small>ไม่ต้องใช้หลักฐาน</small></div>
+            <div class="tax-choice" id="taxRealBox"><span>หักตามจริง</span><b id="taxReal">-</b><small id="taxRealDetail">-</small></div>
+          </div>
+          <div class="tax-row"><span>ต้นทุนของรายได้นอกแอป <small>(ใช้กับการหักตามจริง)</small></span><input type="number" id="taxOutsideCost" min="0" step="1" inputmode="numeric" value="0" aria-label="ต้นทุนของรายได้นอกแอป"></div>
+          <div class="tax-advice" id="taxAdvice"></div>
+          <div class="tax-net"><span>เงินได้หลังหักค่าใช้จ่าย<small>นำไปกรอกต่อในเว็บสรรพากร (ก่อนค่าลดหย่อน)</small></span><b id="taxNet">-</b></div>
+        </section>
+
+        <section class="tag-card tax-card">
+          <div class="tax-row"><span>รายรับ 12 เดือนล่าสุด เทียบเกณฑ์จด VAT</span><b id="taxVatText">-</b></div>
+          <div class="tax-bar"><span id="taxVatBar"></span></div>
+          <small class="muted" id="taxVatNote"></small>
+        </section>
+
+        <section class="tag-card tax-card">
+          <h2>รายเดือน</h2>
+          <div class="table-wrap"><table class="tax-table"><thead><tr><th>เดือน</th><th>ยอดขาย</th><th>ต้นทุนเสื้อ</th><th>ค่าใช้จ่าย</th><th>กำไร</th></tr></thead><tbody id="taxMonthly"></tbody></table></div>
+        </section>
+
+        <p class="tax-disclaimer">ใช้เตรียมตัวเลขเท่านั้น ไม่ใช่คำแนะนำภาษี ตรวจอัตรา วันยื่น และค่าลดหย่อนกับกรมสรรพากร (rd.go.th · โทร 1161) ก่อนยื่นทุกครั้ง</p>
+
+        <div class="tax-actions">
+          <button type="button" class="btn btn-ghost" id="taxCsv">ส่งออก CSV</button>
+          <button type="button" class="btn btn-primary" id="taxPrint">พิมพ์ / บันทึก PDF</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/js/auth.js"></script>
+    <script src="assets/js/nav.js"></script>
+    <script src="assets/js/money.js?v=19"></script>
+    <script src="assets/js/tax.js?v=19"></script>
+    <script src="assets/js/realtime.js"></script>
+  </body>
+</html>

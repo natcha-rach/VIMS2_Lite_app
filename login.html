@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>เข้าสู่ระบบ | Bubbles Gumps</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Prompt:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="assets/css/base.css" />
+    <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
+    <style>
+      /* หน้า login ไม่มี sidebar → ยกเลิก margin ซ้ายของ layout หลัก */
+      #mainWrap { margin-left: 0 !important; }
+      .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }
+      .login-card { width: 100%; max-width: 380px; background: #fff; border: 1px solid var(--v11-border); border-radius: 20px; padding: 28px 24px; box-shadow: var(--v11-shadow); }
+      .login-card h1 { font-size: 22px; margin: 0 0 4px; }
+      .login-card p { margin: 0 0 20px; color: var(--v11-muted); font-size: 13px; }
+      .login-card .field { margin-bottom: 14px; }
+      .login-card input { width: 100%; box-sizing: border-box; min-height: 46px; }
+      .login-card .btn { width: 100%; min-height: 48px; }
+      .login-error { color: var(--v11-red); font-size: 13px; min-height: 18px; margin: 4px 0 10px; }
+    </style>
+  </head>
+  <body>
+    <div id="mainWrap">
+      <div class="login-wrap">
+        <form class="login-card" id="loginForm">
+          <h1>Bubbles Gumps</h1>
+          <p>เข้าสู่ระบบหลังร้าน (ใช้บัญชีที่สร้างใน Supabase → Authentication)</p>
+          <div class="field">
+            <label for="loginEmail">อีเมล</label>
+            <input type="email" id="loginEmail" autocomplete="username" required />
+          </div>
+          <div class="field">
+            <label for="loginPassword">รหัสผ่าน</label>
+            <input type="password" id="loginPassword" autocomplete="current-password" required />
+          </div>
+          <div class="login-error" id="loginError" role="alert"></div>
+          <button type="submit" class="btn btn-primary" id="loginSubmit">เข้าสู่ระบบ</button>
+        </form>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="assets/js/supabaseClient.js"></script>
+    <script>
+      // พาไปหน้าที่ตั้งใจจะเปิด (กันเปิดลิงก์ภายนอกด้วยการรับเฉพาะชื่อไฟล์ .html ในเว็บเดียวกัน)
+      const rawNext = new URLSearchParams(location.search).get("next") || "index.html";
+      const next = /^[a-z0-9_-]+\.html(\?.*)?$/i.test(rawNext) ? rawNext : "index.html";
+
+      supabaseClient.auth.getSession().then(({ data }) => { if (data?.session) location.replace(next); });
+
+      document.getElementById("loginForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById("loginSubmit");
+        const errEl = document.getElementById("loginError");
+        btn.disabled = true; btn.textContent = "กำลังเข้าสู่ระบบ...";
+        errEl.textContent = "";
+        const { error } = await supabaseClient.auth.signInWithPassword({
+          email: document.getElementById("loginEmail").value.trim(),
+          password: document.getElementById("loginPassword").value,
+        });
+        btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
+        if (error) { errEl.textContent = "เข้าสู่ระบบไม่สำเร็จ: อีเมลหรือรหัสผ่านไม่ถูกต้อง"; return; }
+        location.replace(next);
+      });
+    </script>
+  </body>
+</html>

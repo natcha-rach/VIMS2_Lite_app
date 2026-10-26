@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="assets/css/base.css" />
     <link rel="stylesheet" href="assets/css/sell.css?v=20" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
+    <link rel="stylesheet" href="assets/css/pos.css?v=19" />
 </head>
   <body>
     <nav id="sidebar" class="sidebar">
@@ -54,148 +55,202 @@
 
     <div id="mainWrap">
       <div class="topbar">
-        <div class="subtitle">ขายของ · แตะที่ตัวเสื้อเพื่อขาย</div>
+        <div class="subtitle">ขายของ · แตะรูปเพื่อใส่ตะกร้า</div>
       </div>
 
-      <div class="page">
+      <div class="page pos-page">
+        <!-- แท็บ: พร้อมขาย (ตะกร้า) / บิล (ยกเลิก-คืนของ) / ขายแล้ว (ดูย้อนหลัง) -->
         <div class="sell-tabs" id="sellTabs">
           <button type="button" class="sell-tab active" data-tab="available">พร้อมขาย</button>
+          <button type="button" class="sell-tab" data-tab="bills">บิล &amp; คืนของ</button>
           <button type="button" class="sell-tab" data-tab="sold">ขายแล้ว</button>
+          <button type="button" class="pos-icon-btn" id="openPosSettings" title="ตั้งค่าพร้อมเพย์/ใบเสร็จ" aria-label="ตั้งค่าพร้อมเพย์และใบเสร็จ">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+          </button>
         </div>
-        <div class="field" style="margin-bottom: 16px; display: flex; gap: 10px; flex-wrap: wrap">
-          <select id="lotFilter" aria-label="เลือก Lot" style="flex: 0 1 240px; min-width: 180px">
-            <option value="">ทุก Lot</option>
-          </select>
-          <input type="text" id="searchBox" placeholder="ค้นหาชื่อเสื้อ..." style="flex: 1 1 220px" />
+
+        <!-- ===== แท็บพร้อมขาย ===== -->
+        <div id="availableView">
+          <div class="pos-toolbar">
+            <input type="search" id="searchBox" placeholder="ค้นชื่อ / SKU / เลข 3 ตัวท้ายป้าย" inputmode="search" autocomplete="off" />
+            <select id="lotFilter" aria-label="เลือก Lot"><option value="">ทุก Lot</option></select>
+            <select id="sizeFilter" aria-label="เลือกไซซ์"><option value="">ทุกไซซ์</option></select>
+            <button type="button" class="pos-chip" id="reservedFilter" aria-pressed="false">จองอยู่</button>
+            <button type="button" class="pos-chip pos-cols-toggle" id="colsToggle" title="สลับ 2/3 คอลัมน์">3 คอลัมน์</button>
+          </div>
+          <div class="pos-count" id="gridCount"></div>
+          <div class="pos-grid cols-2" id="sellGrid"><div class="empty-state">กำลังโหลด...</div></div>
         </div>
-        <div class="sell-hint" id="sellHintAvailable">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/></svg>คลิกสินค้าเพื่อดูรูป ต้นทุน Lot ราคา และประวัติการขายก่อนยืนยัน
+
+        <!-- ===== แท็บบิล: ยกเลิกทั้งบิล / คืนทีละชิ้น ===== -->
+        <div id="billsView" class="hidden">
+          <div class="sell-hint">บิล 60 รายการล่าสุด · "คืนชิ้นนี้" = สินค้ากลับเข้าสต็อกและไม่นับยอด · ทุกการยกเลิกต้องใส่เหตุผล</div>
+          <div id="billsList"><div class="empty-state">กำลังโหลด...</div></div>
         </div>
-        <div class="sell-hint hidden" id="sellHintSold">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><path d="M9 18h6"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.5.4.8 1 .8 1.6V16h5.4v-.5c0-.6.3-1.2.8-1.6A6 6 0 0 0 12 3z"/></svg>แสดงรายการที่ขายล่าสุด 300 รายการ — ดูรายงานย้อนหลังทั้งหมดได้ที่หน้า "รายงาน"
+
+        <!-- ===== แท็บขายแล้ว (ของเดิม) ===== -->
+        <div id="soldView" class="hidden">
+          <div class="field" style="margin-bottom: 12px">
+            <input type="search" id="soldSearch" placeholder="ค้นหาชื่อเสื้อที่ขายแล้ว..." />
+          </div>
+          <div class="sell-hint">แสดงรายการที่ขายล่าสุด 300 รายการ — ดูย้อนหลังทั้งหมดได้ที่หน้า "รายงาน"</div>
+          <div class="item-grid" id="soldGrid"><div class="empty-state">กำลังโหลด...</div></div>
         </div>
-        <div class="item-grid" id="sellGrid">
-          <div class="empty-state">กำลังโหลด...</div>
-        </div>
-        <div class="item-grid hidden" id="soldGrid">
-          <div class="empty-state">กำลังโหลด...</div>
+
+        <!-- แถบตะกร้า: ติดล่างจอ (อยู่เหนือเมนูล่างบนมือถือ) -->
+        <div class="cart-bar hidden" id="cartBar">
+          <div class="cart-thumbs" id="cartThumbs"></div>
+          <div class="cart-sum"><small id="cartCount">0 ชิ้น</small><b id="cartTotal">฿0</b></div>
+          <button type="button" class="btn btn-ghost cart-clear" id="cartClear" aria-label="ล้างตะกร้า">ล้าง</button>
+          <button type="button" class="btn btn-primary cart-pay" id="cartPay">ชำระเงิน</button>
         </div>
       </div>
+    </div>
 
-      <!-- Modal ยืนยันการขาย -->
-      <div class="modal-backdrop hidden" id="sellModal">
-        <div class="modal-sheet">
-          <h2 id="modalItemName">-</h2>
-          <p
-            style="color: var(--color-ink-soft); margin-top: 0; font-size: 13px"
-            id="modalItemMeta"
-          ></p>
-
-          <form id="sellForm">
-            <input type="hidden" id="modalItemId" />
-            <div class="field">
-              <label for="salePrice">ราคาที่ขายได้จริง (บาท)</label>
-              <input
-                type="number"
-                id="salePrice"
-                step="0.01"
-                min="0"
-                required
-              />
-            </div>
-            <div class="field">
-              <label for="paymentMethod">วิธีจ่ายเงิน</label>
-              <select id="paymentMethod" required>
-                <option value="cash">เงินสด</option>
-                <option value="transfer">เงินโอน</option>
-                <option value="government">โครงการรัฐ</option>
-              </select>
-            </div>
-            <div class="field">
-              <label for="channel">ช่องทางขาย</label>
-              <select id="channel">
-                <option value="street_market">ถนนคนเดิน</option>
-                <option value="facebook">Facebook</option>
-                <option value="instagram">Instagram</option>
-              </select>
-            </div>
-            <div class="field-row">
-              <button
-                type="button"
-                class="btn btn-ghost"
-                id="cancelSell"
-                style="flex: 1"
-              >
-                ยกเลิก
-              </button>
-              <button type="submit" class="btn btn-primary" style="flex: 2">
-                ยืนยันการขาย
-              </button>
-            </div>
-          </form>
+    <!-- ===== ชำระเงิน ===== -->
+    <div class="modal-backdrop hidden" id="checkoutModal">
+      <div class="modal-sheet pos-sheet" role="dialog" aria-labelledby="checkoutTitle">
+        <div class="modal-head">
+          <h2 id="checkoutTitle">ชำระเงิน</h2>
+          <button class="icon-btn" id="closeCheckout" aria-label="ปิด">×</button>
         </div>
-      </div>
+        <div class="checkout-lines" id="checkoutLines"></div>
 
-      <!-- Item Detail Modal: หน้ากลางก่อนขาย เพื่อเห็นข้อมูลสินค้าและ Sale History ครบในที่เดียว -->
-      <div class="modal-backdrop hidden" id="saleDetailModal">
-        <div class="modal-sheet sale-detail-sheet">
-          <div class="modal-head">
-            <div>
-              <h2 id="detailName">-</h2>
-              <p id="detailMeta"></p>
-            </div>
-            <button class="icon-btn" id="closeSaleDetail">×</button>
+        <div class="checkout-block">
+          <div class="checkout-label">ดีล (กระจายส่วนลดลงแต่ละชิ้นตามสัดส่วนราคา)</div>
+          <div class="deal-chips" id="dealChips">
+            <button type="button" class="pos-chip active" data-deal="none">ราคาป้าย</button>
+            <button type="button" class="pos-chip" data-deal="10">ลด 10%</button>
+            <button type="button" class="pos-chip" data-deal="20">ลด 20%</button>
+            <button type="button" class="pos-chip" data-deal="total">ใส่ยอดเหมา</button>
           </div>
-
-          <!-- รูป 1–2 รูปมาจาก item_images และไม่เกี่ยวกับการคำนวณราคา -->
-          <div class="detail-images">
-            <div id="detailImage1" class="detail-image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg></div>
-            <div id="detailImage2" class="detail-image">＋</div>
-          </div>
-
-          <div class="detail-grid">
-            <div><span>Lot</span><b id="detailLot">-</b></div>
-            <div><span>กลุ่ม</span><b id="detailGroup">-</b></div>
-            <div><span>ต้นทุน</span><b id="detailCost">-</b></div>
-            <div><span>ราคาตั้งต้น</span><b id="detailBasePrice">-</b></div>
-            <div><span>ราคาปัจจุบัน</span><b id="detailCurrentPrice">-</b></div>
-          </div>
-
-          <section class="sale-history-section">
-            <div class="section-title"><h3>ประวัติการขาย</h3></div>
-            <div id="saleHistory">
-              <div class="empty-state small">กำลังโหลด...</div>
-            </div>
-          </section>
-
-          <div class="field-row">
-            <button
-              type="button"
-              class="btn btn-ghost"
-              id="cancelDetailSale"
-              style="flex: 1"
-            >
-              ปิด
-            </button>
-            <button
-              type="button"
-              class="btn btn-primary"
-              id="openSellConfirm"
-              style="flex: 2"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px;vertical-align:-3px;margin-right:5px"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg>ขายสินค้านี้
-            </button>
+          <div class="deal-total hidden" id="dealTotalRow">
+            <input type="number" id="dealTotal" min="0" step="1" inputmode="numeric" placeholder="ยอดรวมที่ตกลง เช่น 350" />
           </div>
         </div>
+
+        <div class="checkout-summary">
+          <div><span>ราคาป้ายรวม</span><span id="sumList">฿0</span></div>
+          <div><span>ส่วนลด</span><span id="sumDiscount">฿0</span></div>
+          <div class="checkout-total"><span>ต้องจ่าย</span><b id="sumTotal">฿0</b></div>
+        </div>
+
+        <div class="checkout-block">
+          <div class="checkout-label">ช่องทางขาย</div>
+          <div class="seg" id="channelSeg">
+            <button type="button" data-channel="street_market" class="active">ถนนคนเดิน</button>
+            <button type="button" data-channel="facebook">Facebook</button>
+            <button type="button" data-channel="instagram">Instagram</button>
+          </div>
+        </div>
+
+        <div class="checkout-block">
+          <div class="checkout-label">วิธีจ่าย</div>
+          <div class="seg" id="paySeg">
+            <button type="button" data-pay="cash" class="active">เงินสด</button>
+            <button type="button" data-pay="transfer">โอน / QR</button>
+            <button type="button" data-pay="government">โครงการรัฐ</button>
+          </div>
+          <div class="pay-panel" id="cashPanel">
+            <label for="cashReceived">รับเงินมา (บาท) — เว้นว่าง = พอดี</label>
+            <input type="number" id="cashReceived" min="0" step="1" inputmode="numeric" />
+            <div class="quick-cash" id="quickCash"></div>
+            <div class="change-due" id="changeDue"></div>
+          </div>
+          <div class="pay-panel hidden" id="qrPanel">
+            <div class="qr-box" id="qrBox"></div>
+            <div class="qr-caption" id="qrCaption"></div>
+          </div>
+        </div>
+
+        <button type="button" class="btn btn-primary checkout-confirm" id="confirmSale">ยืนยันขาย</button>
       </div>
+    </div>
+
+    <!-- ===== ใบเสร็จ + เลิกทำ ===== -->
+    <div class="modal-backdrop hidden" id="receiptModal">
+      <div class="modal-sheet pos-sheet receipt-sheet" role="dialog" aria-labelledby="receiptTitle">
+        <div class="receipt-ok" aria-hidden="true">✓</div>
+        <h2 id="receiptTitle">ขายแล้ว</h2>
+        <div class="receipt-body" id="receiptBody"></div>
+        <div class="receipt-actions">
+          <button type="button" class="btn btn-ghost" id="undoSale">เลิกทำ</button>
+          <button type="button" class="btn btn-ghost" id="shareReceipt">แชร์ใบเสร็จ</button>
+          <button type="button" class="btn btn-primary" id="nextCustomer">ลูกค้าคนต่อไป</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== รายละเอียดสินค้า (กด ⓘ บนรูป) ===== -->
+    <div class="modal-backdrop hidden" id="saleDetailModal">
+      <div class="modal-sheet sale-detail-sheet">
+        <div class="modal-head">
+          <div>
+            <h2 id="detailName">-</h2>
+            <p id="detailMeta"></p>
+          </div>
+          <button class="icon-btn" id="closeSaleDetail" aria-label="ปิด">×</button>
+        </div>
+        <div class="detail-images">
+          <div id="detailImage1" class="detail-image"></div>
+          <div id="detailImage2" class="detail-image"></div>
+        </div>
+        <div class="detail-grid">
+          <div><span>Lot</span><b id="detailLot">-</b></div>
+          <div><span>กลุ่ม</span><b id="detailGroup">-</b></div>
+          <div><span>ต้นทุน</span><b id="detailCost">-</b></div>
+          <div><span>ราคาตั้งต้น</span><b id="detailBasePrice">-</b></div>
+          <div><span>ราคาปัจจุบัน</span><b id="detailCurrentPrice">-</b></div>
+        </div>
+        <div class="reserve-box hidden" id="reserveBox"></div>
+        <section class="sale-history-section">
+          <div class="section-title"><h3>ประวัติการขาย</h3></div>
+          <div id="saleHistory"><div class="empty-state small">กำลังโหลด...</div></div>
+        </section>
+        <div class="field-row" id="detailActions">
+          <button type="button" class="btn btn-ghost" id="detailReserve" style="flex: 1">จองให้ลูกค้า</button>
+          <button type="button" class="btn btn-primary" id="detailAddCart" style="flex: 2">ใส่ตะกร้า</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== จองสินค้า ===== -->
+    <div class="modal-backdrop hidden" id="reserveModal">
+      <form class="modal-sheet" id="reserveForm">
+        <div class="modal-head"><h2>จองให้ลูกค้า</h2><button type="button" class="icon-btn" id="closeReserve" aria-label="ปิด">×</button></div>
+        <p class="muted" id="reserveItemName" style="margin-top:0"></p>
+        <div class="field"><label for="reserveName">ชื่อลูกค้า / IG</label><input type="text" id="reserveName" required placeholder="เช่น @prae.v" /></div>
+        <div class="field-row">
+          <div class="field" style="flex:1"><label for="reserveChannel">ช่องทาง</label>
+            <select id="reserveChannel"><option value="instagram">Instagram</option><option value="facebook">Facebook</option><option value="street_market">หน้าร้าน</option></select></div>
+          <div class="field" style="flex:1"><label for="reserveDue">มารับ/โอนภายใน</label><input type="date" id="reserveDue" /></div>
+        </div>
+        <div class="field"><label for="reserveDeposit">มัดจำที่รับแล้ว (จดไว้เตือนความจำ ยอดขายนับตอนปิดบิล)</label><input type="number" id="reserveDeposit" min="0" step="1" value="0" /></div>
+        <div class="field"><label for="reserveNote">หมายเหตุ</label><input type="text" id="reserveNote" placeholder="เช่น ส่ง EMS" /></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">บันทึกการจอง</button>
+      </form>
+    </div>
+
+    <!-- ===== ตั้งค่าหน้าร้าน ===== -->
+    <div class="modal-backdrop hidden" id="posSettingsModal">
+      <form class="modal-sheet" id="posSettingsForm">
+        <div class="modal-head"><h2>ตั้งค่าหน้าร้าน</h2><button type="button" class="icon-btn" id="closePosSettings" aria-label="ปิด">×</button></div>
+        <div class="field"><label for="setPromptPay">พร้อมเพย์ (เบอร์มือถือ 10 หลัก หรือเลขบัตร 13 หลัก)</label><input type="text" id="setPromptPay" inputmode="numeric" placeholder="08x-xxx-xxxx" /></div>
+        <div class="field"><label for="setShopName">ชื่อร้านบนใบเสร็จ</label><input type="text" id="setShopName" placeholder="Bubbles Gumps" /></div>
+        <div class="field"><label for="setReceiptNote">ข้อความท้ายใบเสร็จ</label><input type="text" id="setReceiptNote" placeholder="ขอบคุณที่อุดหนุนค่ะ IG: ..." /></div>
+        <button type="submit" class="btn btn-primary" style="width:100%">บันทึก</button>
+      </form>
     </div>
 
     <div class="toast" id="toast"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js"></script>
-    <script src="assets/js/sell.js?v=20"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
+    <script src="assets/js/money.js?v=19"></script>
+    <script src="assets/js/sell.js?v=21"></script>
     <script src="assets/js/realtime.js"></script>
   </body>
 </html>
