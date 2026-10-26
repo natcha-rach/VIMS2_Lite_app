@@ -14,7 +14,8 @@ function formatBaht(value) {
   return new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", maximumFractionDigits: 0 }).format(Number(value || 0));
 }
 function formatDate(value) { return new Intl.DateTimeFormat("th-TH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value)); }
-function showToast(msg) { const t=document.getElementById("toast"); if(!t)return; t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2500); }
+// V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
+function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
 function percent(a,b) { return b ? (a/b)*100 : 0; }
 
 /* ---------- ตั้งค่า date/month/year selector ---------- */
@@ -59,7 +60,7 @@ async function loadReport() {
     const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[];
     renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales); renderWeekendBreakdown(sales); renderTopProfitItems(sales); renderSaleList(sales);
     await Promise.all([renderLotBreakdown(), renderGroupPerformance(), renderSourceQuality(), renderTrend(start,end)]);
-  } catch(err) { console.error(err); showToast("โหลดรายงานไม่สำเร็จ: "+(err.message||err)); }
+  } catch(err) { console.error(err); Notify.error("โหลดรายงานไม่สำเร็จ", err, { actions: [{ label: "ลองใหม่", onClick: () => location.reload() }] }); }
 }
 
 function renderStats(sales,expenses) {
@@ -88,7 +89,7 @@ function renderTierBreakdown(sales) {
 async function renderLotBreakdown() {
   const el = document.getElementById("repLotBreakdown");
   const { data, error } = await supabaseClient.rpc("get_lot_performance");
-  if (error) { console.error(error); el.innerHTML = "<tr><td colspan=10 class=empty-state>โหลด Performance ตาม Lot ไม่สำเร็จ</td></tr>"; return; }
+  if (error) { console.error(error); Notify.error("โหลด Performance ตาม Lot ไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=10 class=empty-state>โหลด Performance ตาม Lot ไม่สำเร็จ</td></tr>"; return; }
   const rows = (data||[]).filter(x=>Number(x.total_items)>0||Number(x.sold)>0);
   el.innerHTML=rows.length?rows.map(x=>`<tr>
     <td><b>${escapeHtml(x.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(x.purchase_date)}</small></td>
@@ -106,7 +107,7 @@ async function renderLotBreakdown() {
 async function renderGroupPerformance() {
   const el = document.getElementById("repGroupPerformance");
   const { data, error } = await supabaseClient.rpc("get_group_performance");
-  if (error) { console.error(error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
+  if (error) { console.error(error); Notify.error("โหลดผลงานตามกลุ่มราคาไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
   const rows = (data || []).filter(x => Number(x.listed) > 0).sort((a, b) => Number(b.profit) - Number(a.profit));
   el.innerHTML = rows.length ? rows.map(x => `<tr>
     <td><b>${escapeHtml(x.group_name)}</b><small class="table-sub">${x.tier === "head" ? "งานหัว" : "ปกติ"}</small></td>
@@ -122,7 +123,7 @@ async function renderGroupPerformance() {
 async function renderSourceQuality() {
   const el = document.getElementById("repSourceQuality");
   const { data, error } = await supabaseClient.rpc("get_source_quality");
-  if (error) { console.error(error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
+  if (error) { console.error(error); Notify.error("โหลดคุณภาพแหล่งซื้อไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
   const rows = (data || []).filter(x => Number(x.lots_count) > 0);
   el.innerHTML = rows.length ? rows.map(x => `<tr>
     <td>${escapeHtml(x.source)}</td>
@@ -175,6 +176,7 @@ async function renderTrend(start,end) {
   else if(currentPeriod==="month"){title.textContent="แนวโน้มรายวันในเดือนนี้";col.textContent="วันที่";labelFn=d=>formatDate(d).split(" ").slice(0,2).join(" ");}
   else {title.textContent="แนวโน้มรายเดือนในปีนี้";col.textContent="เดือน";labelFn=d=>new Intl.DateTimeFormat("th-TH",{month:"short"}).format(d);}
   const {data,error}=await supabaseClient.from("sales").select("sale_date,sale_price,cost_price").is("voided_at",null).gte("sale_date",trendStart.toISOString()).lt("sale_date",trendEnd.toISOString()); if(error){console.error(error);return;}
+  if(error){ Notify.error("โหลดกราฟแนวโน้มไม่สำเร็จ", error); return; }
   const buckets={}; data.forEach(s=>{const d=new Date(s.sale_date);const key=currentPeriod==="year"?`${d.getFullYear()}-${d.getMonth()}`:d.toDateString();buckets[key] ||= {count:0,revenue:0,profit:0,label:labelFn(d)};buckets[key].count++;buckets[key].revenue+=Number(s.sale_price||0);buckets[key].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
   const rows=Object.values(buckets);
   renderReportTrendChart(rows);

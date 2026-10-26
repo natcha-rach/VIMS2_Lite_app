@@ -131,6 +131,7 @@ async function loadLots(preferredLotId = null) {
 
   if (error) {
     console.error('[Items] loadLots error:', error);
+    Notify.error('โหลดรายชื่อล็อตไม่สำเร็จ', error, { hint: 'ช่องเลือก Lot จะว่าง — รีเฟรชหน้าแล้วลองใหม่' });
     selects.forEach(el => {
       el.innerHTML = '<option value="">โหลด Lot ไม่สำเร็จ</option>';
     });
@@ -605,7 +606,8 @@ $('bulkApplyDamaged')?.addEventListener('click', () => callBulkUpdate({p_status:
 $('bulkApplyAvailable')?.addEventListener('click', () => callBulkUpdate({p_status:'available'}, 'คืนเป็นพร้อมขายแล้ว'));
 async function updateQuickStats(){ const {data,error}=await fetchAllRows(()=>supabaseClient.from('items').select('status,cost_price').eq('intake_status','listed')); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`<div><span>สินค้าทั้งหมด</span><b>${rows.length}</b></div><div><span>พร้อมขาย</span><b>${available.length}</b></div><div><span>ขายแล้ว</span><b>${sold.length}</b></div><div><span>ต้นทุนคงเหลือ</span><b>${formatBaht(value)}</b></div>`; }
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-function showToast(msg){const t=$('toast');if(!t)return;t.textContent=msg;t.classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove('show'),2600);}
+// V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
+function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
 loadLots(); loadItems();
 
 

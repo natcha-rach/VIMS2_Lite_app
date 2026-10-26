@@ -19,6 +19,7 @@
       .login-card .btn { width: 100%; min-height: 48px; }
       .login-error { color: var(--v11-red); font-size: 13px; min-height: 18px; margin: 4px 0 10px; }
     </style>
+      <link rel="stylesheet" href="assets/css/polish.css?v=191" />
   </head>
   <body>
     <div id="mainWrap">
@@ -41,6 +42,7 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/js/notify.js?v=191"></script>
     <script>
       // พาไปหน้าที่ตั้งใจจะเปิด (กันเปิดลิงก์ภายนอกด้วยการรับเฉพาะชื่อไฟล์ .html ในเว็บเดียวกัน)
       const rawNext = new URLSearchParams(location.search).get("next") || "index.html";
@@ -59,7 +61,13 @@
           password: document.getElementById("loginPassword").value,
         });
         btn.disabled = false; btn.textContent = "เข้าสู่ระบบ";
-        if (error) { errEl.textContent = "เข้าสู่ระบบไม่สำเร็จ: อีเมลหรือรหัสผ่านไม่ถูกต้อง"; return; }
+        if (error) {
+          const net = /fetch|network/i.test(error.message || "");
+          errEl.textContent = net ? "เชื่อมต่อเซิร์ฟเวอร์ไม่ได้ — เช็กอินเทอร์เน็ต" : "อีเมลหรือรหัสผ่านไม่ถูกต้อง";
+          Notify.error("เข้าสู่ระบบไม่สำเร็จ", error, { hint: net ? "" : "ตรวจตัวพิมพ์เล็ก/ใหญ่ หรือรีเซ็ตรหัสใน Supabase → Authentication → Users" });
+          return;
+        }
+        Notify.success("เข้าสู่ระบบแล้ว", "กำลังพาไปหน้าที่เปิดไว้…");
         location.replace(next);
       });
     </script>

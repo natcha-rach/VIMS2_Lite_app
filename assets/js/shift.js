@@ -37,6 +37,11 @@
 
   async function load() {
     const { data, error } = await supabaseClient.from("shifts").select("*").is("closed_at", null).maybeSingle();
+    if (error && !/shifts|relation|schema cache|PGRST205|42P01/i.test(`${error.message} ${error.code}`)) {
+      card.innerHTML = `<div class="shift-missing"><b>โหลดกะวันนี้ไม่สำเร็จ</b><span>${esc(Notify.friendlyError(error).detail)}</span></div>`;
+      Notify.error("โหลดกะวันนี้ไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: load }] });
+      return;
+    }
     if (error) {
       card.innerHTML = `<div class="shift-missing"><b>กะขาย / ค่าใช้จ่ายรายวัน</b><span>ยังใช้ไม่ได้ — รัน <code>sql/migration_v19_pos_shift.sql</code> ใน Supabase SQL Editor ก่อน</span></div>`;
       return;
@@ -135,9 +140,10 @@
     const del = e.target.closest("[data-del]");
     if (del) {
       const x = expenses.find((r) => r.id === del.dataset.del);
-      if (!x || !confirm(`ลบค่าใช้จ่าย "${x.category}" ${thb(S(x.amount))}?`)) return;
+      if (!x || !(await Notify.confirm({ title: `ลบค่าใช้จ่าย "${x.category}"?`, message: `${thb(S(x.amount))}${x.note ? " · " + x.note : ""}\nยอดเหลือวันนี้และเงินในลิ้นชักจะคำนวณใหม่`, confirmText: "ลบ", danger: true }))) return;
       const { error } = await supabaseClient.from("expenses").delete().eq("id", x.id);
-      if (error) return toast("ลบไม่สำเร็จ: " + error.message);
+      if (error) return Notify.error(`ลบ "${x.category}" ไม่สำเร็จ`, error);
+      Notify.success(`ลบ "${x.category}" แล้ว`, `คืนยอด ${thb(S(x.amount))} กลับเข้าเหลือวันนี้`);
       load();
     }
   });
@@ -149,16 +155,16 @@
       const opening = Number(form.opening.value) || 0;
       const location = form.location.value.trim() || "ถนนคนเดิน";
       const { error } = await supabaseClient.rpc("open_shift", { p_opening_cash: opening, p_location: location });
-      if (error) return toast("เปิดกะไม่สำเร็จ: " + error.message);
+      if (error) return Notify.error("เปิดกะไม่สำเร็จ", error);
       set("vims_shift_opening", String(opening));
       set("vims_shift_location", location);
-      toast(`เปิดกะแล้ว · เงินทอน ${thb(S(opening))}`);
+      Notify.success("เปิดกะแล้ว", `${location} · เงินทอนตั้งต้น ${thb(S(opening))} — ขายได้เลย ทุกบิลจะนับเข้ากะนี้`);
       load();
     }
     if (form.dataset.form === "expense") {
       const amount = Number(form.amount.value);
       const category = form.category.value.trim();
-      if (!(amount > 0) || !category) return toast("ใส่จำนวนเงิน");
+      if (!(amount > 0) || !category) return Notify.warning("ยังไม่ได้ใส่จำนวนเงิน", "ใส่ยอดค่าใช้จ่ายเป็นบาท (มากกว่า 0)");
       const now = new Date();
       const row = {
         expense_date: todayStr(),
@@ -170,9 +176,9 @@
         paid_from: shift ? expenseForm.paid : "other",
       };
       const { error } = await supabaseClient.from("expenses").insert(row);
-      if (error) return toast("บันทึกไม่สำเร็จ: " + error.message);
+      if (error) return Notify.error(`บันทึก ${category} ไม่สำเร็จ`, error);
       set("vims_exp_last_" + expenseForm.cat, String(amount)); // ครั้งหน้ากรอกยอดเดิมให้
-      toast(`ลง ${category} ${thb(S(amount))} แล้ว`);
+      Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, row.paid_from === "drawer" ? "หักจากเงินในลิ้นชักที่ควรมีแล้ว" : row.paid_from === "transfer" ? "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)" : "นับเป็นค่าใช้จ่ายของวันนี้");
       expenseForm = null;
       load();
     }
@@ -208,16 +214,18 @@
     modal.querySelector("#csForm").addEventListener("submit", async (e) => {
       e.preventDefault();
       const raw = modal.querySelector("#csCounted").value;
-      if (raw === "") return toast("ใส่ยอดเงินที่นับได้");
+      if (raw === "") return Notify.warning("ยังไม่ได้ใส่ยอดที่นับได้", "นับเงินสดในลิ้นชักทั้งหมด (รวมเงินทอนตั้งต้น) แล้วใส่ยอด");
       const counted = Number(raw);
       const reason = modal.querySelector("#csReason").value.trim();
       const diff = S(counted) - S(totals.expected_cash);
-      if (diff !== 0 && !reason) return toast("เงินขาด/เกิน ต้องใส่เหตุผล");
+      if (diff !== 0 && !reason) return Notify.warning(`เงิน${diff < 0 ? "ขาด" : "เกิน"} ${thb(Math.abs(diff))} ต้องใส่เหตุผล`, "เช่น ทอนผิด / ซื้อน้ำแล้วลืมลง — ไว้ดูย้อนหลัง");
       const btn = modal.querySelector("#csSubmit");
       btn.disabled = true;
       const { data, error } = await supabaseClient.rpc("close_shift", { p_shift_id: shift.id, p_counted_cash: counted, p_reason: reason || null });
       btn.disabled = false;
-      if (error) return toast("ปิดกะไม่สำเร็จ: " + error.message);
+      if (error) return Notify.error("ปิดกะไม่สำเร็จ", error, { hint: "กะยังเปิดอยู่ ตัวเลขไม่หาย ลองกดปิดกะอีกครั้ง" });
+      const d = Number(data.cash_diff || 0);
+      Notify.success("ปิดกะแล้ว", `ขาย ${thb(S(data.revenue))} · เหลือ ${thb(S(data.left_today))} · ลิ้นชัก${d === 0 ? "ตรงพอดี" : d < 0 ? ` ขาด ${thb(S(-d))}` : ` เกิน ${thb(S(d))}`}`);
       showCloseResult(data);
       load();
     });
@@ -249,19 +257,11 @@
       try {
         if (navigator.share) { await navigator.share({ text }); return; }
         await navigator.clipboard.writeText(text);
-        toast("คัดลอกสรุปแล้ว");
+        Notify.success("คัดลอกสรุปกะแล้ว", "ไปวางในแชตได้เลย");
       } catch (_) { /* ผู้ใช้กดยกเลิก */ }
     };
   }
 
-  function toast(msg) {
-    const t = document.getElementById("toast");
-    if (!t) return;
-    t.textContent = msg;
-    t.classList.add("show");
-    clearTimeout(window.__shiftToast);
-    window.__shiftToast = setTimeout(() => t.classList.remove("show"), 2800);
-  }
 
   // Realtime: ขายจากมือถือ/แท็บเล็ต → ตัวเลขการ์ดนี้ขยับตาม
   // ระหว่างกรอกค่าใช้จ่ายไม่ render ใหม่ (กันตัวเลขที่พิมพ์อยู่หาย) — บันทึกเสร็จจะโหลดเองอยู่แล้ว

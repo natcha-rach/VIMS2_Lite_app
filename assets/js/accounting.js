@@ -35,7 +35,7 @@ document.getElementById("capitalForm").addEventListener("submit", async (e) => {
   if (!hasAnchor && !hasCapitalEntries && type === "capital_in") {
     const amt = Number(document.getElementById("capAmount").value);
     if (!(amt > 0)) return showToast("กรุณาใส่จำนวนเงินมากกว่า 0");
-    if (!confirm(`ยังไม่ได้ตั้งเงินตั้งต้น\nใช้ ${formatBaht(amt)} เป็นเงินจริงที่มีอยู่ตอนนี้ (เงินสด + เงินโอน) ใช่ไหม?`)) return;
+    if (!(await Notify.confirm({ title: "ยังไม่ได้ตั้งเงินตั้งต้น", confirmText: "ใช้ยอดนี้", message: `ใช้ ${formatBaht(amt)} เป็นเงินจริงที่มีอยู่ตอนนี้ (เงินสด + เงินโอน) ใช่ไหม?` }))) return;
     type = "opening";
   }
   const ok = await addCapitalEntry(
@@ -66,7 +66,7 @@ document.getElementById("adjBtn").addEventListener("click", async () => {
   if (hasAnchor) {
     const diff = Math.round((real - currentBalance) * 100) / 100;
     if (diff !== 0) {
-      if (!confirm(`ระบบคำนวณ ${formatBaht(currentBalance)} / นับจริง ${formatBaht(real)}\nส่วนต่าง ${diff > 0 ? "+" : "−"}${formatBaht(Math.abs(diff))} — บันทึกยอดที่นับจริงเป็นจุดตั้งต้นใหม่ใช่ไหม?`)) return;
+      if (!(await Notify.confirm({ title: "ยอดนับจริงไม่ตรงกับระบบ", confirmText: "บันทึกยอดนับจริง", message: `ระบบคำนวณ ${formatBaht(currentBalance)} / นับจริง ${formatBaht(real)}\nส่วนต่าง ${diff > 0 ? "+" : "−"}${formatBaht(Math.abs(diff))} — บันทึกยอดที่นับจริงเป็นจุดตั้งต้นใหม่ใช่ไหม?` }))) return;
       reason += ` (ส่วนต่างจากระบบ ${diff > 0 ? "+" : "−"}${Math.abs(diff).toFixed(2)})`;
     }
   }
@@ -96,6 +96,7 @@ async function loadBucketSettings() {
 
   if (error) {
     console.error(error);
+    Notify.error("โหลดการตั้งค่าบัญชีไม่สำเร็จ", error);
     return;
   }
   if (data && data.value) {
@@ -218,7 +219,7 @@ function enterEditMode(expense) {
 }
 
 async function handleDeleteExpense(id) {
-  const ok = confirm("ลบรายการค่าใช้จ่ายนี้ใช่ไหม?");
+  const ok = await Notify.confirm({ title: "ลบรายการค่าใช้จ่ายนี้?", message: "ลบแล้วกู้คืนไม่ได้ ยอดค่าใช้จ่ายและกำไรจะคำนวณใหม่", confirmText: "ลบ", danger: true });
   if (!ok) return;
 
   const { error } = await supabaseClient.from("expenses").delete().eq("id", id);
@@ -287,7 +288,7 @@ async function loadAll() {
 
   if (lotsErr || expErr || salesErr || itemsErr || capErr) {
     console.error(lotsErr || expErr || salesErr || itemsErr || capErr);
-    showToast("โหลดข้อมูลไม่สำเร็จ");
+    Notify.error("โหลดข้อมูลบัญชีไม่สำเร็จ", lotsErr || expErr || salesErr || itemsErr || capErr, { actions: [{ label: "ลองใหม่", onClick: () => loadAll() }] });
     return;
   }
 
@@ -523,13 +524,8 @@ document.getElementById("exportCsvBtn").addEventListener("click", () => {
   URL.revokeObjectURL(url);
 });
 
-function showToast(msg) {
-  const t = document.getElementById("toast");
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2500);
-}
+// V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
+function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
 
 loadAll();
 loadBucketSettings();

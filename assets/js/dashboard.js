@@ -189,6 +189,7 @@ async function renderLotRecovery() {
   } catch (err) {
     console.error(err);
     el.innerHTML = `<div class="empty-state">โหลดข้อมูล Lot ไม่สำเร็จ</div>`;
+    Notify.error("โหลดความคืบหน้าคืนทุนไม่สำเร็จ", err);
   }
 }
 
@@ -418,7 +419,7 @@ function renderDashboard(data, range) {
 async function renderTodayTasks() {
   const el = $("todayTasks"); if (!el) return;
   const { data, error } = await supabaseClient.rpc("get_lot_summary");
-  if (error) { console.error(error); el.innerHTML = `<div class="empty-state">โหลดไม่สำเร็จ</div>`; return; }
+  if (error) { console.error(error); el.innerHTML = `<div class="empty-state">โหลดไม่สำเร็จ</div>`; Notify.error("โหลดงานวันนี้ไม่สำเร็จ", error); return; }
   const lots = (data || []);
   const pending = lots.filter(l => ["receiving","sorting"].includes(l.status) && Number(l.pending) > 0)
     .sort((a,b) => Number(b.pending) - Number(a.pending)).slice(0, 5);
@@ -452,7 +453,7 @@ async function loadDashboard(range) {
   try {
     dashboardRows ||= await fetchDashboardData();
     renderDashboard(dashboardRows, range);
-  } catch (err) { console.error(err); showToast("โหลด Dashboard ไม่สำเร็จ: " + (err.message || err)); }
+  } catch (err) { console.error(err); Notify.error("โหลดภาพรวมร้านไม่สำเร็จ", err, { actions: [{ label: "ลองใหม่", onClick: () => location.reload() }] }); }
   // แยกจาก renderDashboard เพราะดึงผ่าน RPC (async) และไม่ผูกกับ periodRange — ไม่ต้อง block การแสดง KPI หลัก
   renderLotRecovery();
   if (!lotsMetaCache) await loadLotsMeta();
@@ -496,7 +497,7 @@ $("periodMonth").addEventListener("change", () => { syncPeriodValueFromInputs();
 $("periodYear").addEventListener("change", () => { syncPeriodValueFromInputs(); loadDashboard(currentRange()); });
 $("exportCsvBtn")?.addEventListener("click", () => exportDashboardCSV(currentRange()));
 $("editGoalBtn")?.addEventListener("click", async () => {
-  const input = prompt("ตั้งเป้ายอดขายเดือนนี้ (บาท)", monthlyGoal || "");
+  const input = await Notify.prompt({ title: "ตั้งเป้ายอดขายเดือนนี้", message: "ใส่เป็นบาท เช่น 30000", value: monthlyGoal || "", type: "number", inputmode: "numeric", confirmText: "บันทึกเป้า" });
   if (input === null) return;
   const val = Number(String(input).replace(/[^0-9.]/g, ""));
   if (!isFinite(val) || val < 0) return showToast("กรุณากรอกตัวเลขให้ถูกต้อง");
@@ -506,7 +507,8 @@ $("editGoalBtn")?.addEventListener("click", async () => {
     showToast("บันทึกเป้ายอดขายแล้ว");
   } catch (err) { console.error(err); showToast("บันทึกเป้าไม่สำเร็จ: " + (err.message || err)); }
 });
-function showToast(m){const t=$("toast");if(!t)return;t.textContent=m;t.classList.add("show");clearTimeout(window.__toast);window.__toast=setTimeout(()=>t.classList.remove("show"),2600)}
+// V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
+function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
 
 // Realtime: Dashboard ต้องดึงข้อมูลใหม่เมื่อ Lot / Item / Sale / Expense เปลี่ยนจาก Device อื่น
 // debounce: Bulk save ยิง event เป็นร้อยครั้ง — โหลด Dashboard ใหม่ครั้งเดียวหลังนิ่งแล้ว

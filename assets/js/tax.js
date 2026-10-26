@@ -47,7 +47,7 @@
       fetchAllRows(() => supabaseClient.from("expenses").select("amount,expense_date,category").gte("expense_date", ymd(year, 1, 1)).lte("expense_date", ymd(year, 12, 31))),
       supabaseClient.from("app_settings").select("value").eq("key", "tax_inputs").maybeSingle(),
     ]);
-    if (s.error || e.error) { toast("โหลดข้อมูลไม่สำเร็จ"); return; }
+    if (s.error || e.error) { Notify.error(`โหลดข้อมูลปี ${year + 543} ไม่สำเร็จ`, s.error || e.error, { actions: [{ label: "ลองใหม่", onClick: load }] }); return; }
     sales = s.data || [];
     expenses = e.data || [];
     inputs = st.data?.value || {};
@@ -109,7 +109,8 @@
     inputs[year] = inputs[year] || {};
     inputs[year][period] = { outside: Number($("taxOutside").value) || 0, outsideCost: Number($("taxOutsideCost").value) || 0 };
     const { error } = await supabaseClient.from("app_settings").upsert({ key: "tax_inputs", value: inputs, updated_at: new Date().toISOString() }, { onConflict: "key" });
-    if (error) toast("บันทึกตัวเลขนอกแอปไม่สำเร็จ: " + error.message);
+    if (error) Notify.error("บันทึกตัวเลขนอกแอปไม่สำเร็จ", error, { hint: "ตัวเลขบนจอยังคำนวณได้ แต่ถ้ารีเฟรชจะหาย — ลองแก้ตัวเลขอีกครั้ง" });
+    else Notify.success("บันทึกตัวเลขนอกแอปแล้ว", `ปี ${year + 543} · ${period === "half" ? "ครึ่งปี" : "ทั้งปี"}`, { duration: 2200 });
   }, 800);
   ["taxOutside", "taxOutsideCost"].forEach((id) => $(id).addEventListener("input", () => { compute(); saveInputs(); }));
 
@@ -138,16 +139,10 @@
     a.download = `tax-${year + 543}-${period === "half" ? "half" : "full"}.csv`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    Notify.success("ส่งออก CSV แล้ว", `ไฟล์ ${a.download} · เปิดด้วย Excel/Google Sheets ได้`);
   });
   $("taxPrint").addEventListener("click", () => window.print());
 
-  function toast(msg) {
-    const t = $("toast");
-    if (!t) return;
-    t.textContent = msg; t.classList.add("show");
-    clearTimeout(window.__taxToast);
-    window.__taxToast = setTimeout(() => t.classList.remove("show"), 2800);
-  }
 
   const reload = debounce(load, 900);
   window.addEventListener("vims:realtime", (e) => {

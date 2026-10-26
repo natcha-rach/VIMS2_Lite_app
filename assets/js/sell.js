@@ -55,7 +55,8 @@ async function loadSellGrid() {
 
   if (error) {
     console.error(error);
-    $("sellGrid").innerHTML = `<div class="empty-state">โหลดข้อมูลไม่สำเร็จ</div>`;
+    $("sellGrid").innerHTML = `<div class="empty-state">โหลดสินค้าไม่สำเร็จ <button type="button" class="btn btn-ghost btn-sm" onclick="loadSellGrid()">ลองใหม่</button></div>`;
+    Notify.error("โหลดสินค้าพร้อมขายไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: loadSellGrid }] });
     return;
   }
   inStockItems = items || [];
@@ -68,7 +69,7 @@ async function loadSellGrid() {
   const live = new Set(ids);
   let removed = 0;
   [...cart.keys()].forEach((id) => { if (!live.has(id)) { cart.delete(id); removed++; } });
-  if (removed) showToast(`เอาออกจากตะกร้า ${removed} ชิ้น (ขายไปแล้วจากอีกเครื่อง)`);
+  if (removed) Notify.warning(`เอาออกจากตะกร้า ${removed} ชิ้น`, "ชิ้นนี้ถูกขาย/แก้สถานะจากอีกเครื่องไปแล้ว ยอดในตะกร้าคำนวณใหม่ให้แล้ว");
 
   refreshFilterOptions();
   applySearch();
@@ -82,6 +83,7 @@ async function loadImages(ids) {
   const run = (cols) => fetchAllRows(() => supabaseClient.from("item_images").select(cols).in("item_id", ids).order("sort_order", { ascending: true }));
   let { data, error } = await run("item_id, image_url, thumb_url, sort_order");
   if (error) ({ data, error } = await run("item_id, image_url, sort_order"));
+  if (error) Notify.warning("โหลดรูปสินค้าไม่ครบ", error, { hint: "สินค้ายังขายได้ตามปกติ แค่ไม่มีรูปให้ดู — ลองรีเฟรชหน้า" });
   (data || []).forEach((img) => { (map[img.item_id] ||= []).push(img); });
   return map;
 }
@@ -95,7 +97,8 @@ async function loadReservations() {
 }
 
 async function loadPosSettings() {
-  const { data } = await supabaseClient.from("app_settings").select("value").eq("key", "pos_settings").maybeSingle();
+  const { data, error } = await supabaseClient.from("app_settings").select("value").eq("key", "pos_settings").maybeSingle();
+  if (error) Notify.warning("โหลดการตั้งค่าพร้อมเพย์ไม่สำเร็จ", error, { hint: "QR อาจยังไม่ขึ้น — รีเฟรชหน้า หรือเปิดปุ่มเฟืองตั้งใหม่" });
   if (data?.value) posSettings = { ...posSettings, ...data.value };
 }
 
@@ -189,14 +192,14 @@ $("sellGrid").addEventListener("click", (e) => {
 // ==========================================================
 // ตะกร้า
 // ==========================================================
-function toggleCart(itemId) {
+async function toggleCart(itemId) {
   const item = inStockItems.find((i) => i.id === itemId);
   if (!item) return;
   if (cart.has(itemId)) {
     cart.delete(itemId);
   } else {
     const res = reservationsByItem[itemId];
-    if (res && !confirm(`ตัวนี้จองไว้ให้ "${res.customer_name}" — ขายให้คนจองตอนนี้เลยไหม?`)) return;
+    if (res && !(await Notify.confirm({ title: `ตัวนี้จองไว้ให้ "${res.customer_name}"`, message: `ช่องทาง ${channelLabel(res.channel)}${res.due_date ? " · นัดภายใน " + formatDate(res.due_date) : ""}\nขายให้คนจองตอนนี้เลยไหม? (ถ้าเป็นลูกค้าคนอื่น ให้กดยกเลิก)`, confirmText: "ขายให้คนจอง" }))) return;
     cart.set(itemId, { price: S(item.current_price) });
   }
   onCartChanged();
@@ -228,9 +231,12 @@ function renderCartBar() {
   }).join("") + (lines.length > 6 ? `<span class="cart-more">+${lines.length - 6}</span>` : "");
 }
 
-$("cartClear").addEventListener("click", () => {
-  if (!cart.size || !confirm("ล้างตะกร้าทั้งหมด?")) return;
+$("cartClear").addEventListener("click", async () => {
+  if (!cart.size) return;
+  const n = cart.size;
+  if (!(await Notify.confirm({ title: "ล้างตะกร้าทั้งหมด?", message: `เอาออก ${n} ชิ้น (ยังไม่ได้ขาย ไม่กระทบสต็อก)`, confirmText: "ล้างตะกร้า", danger: true }))) return;
   cart.clear(); deal = { mode: "none", total: null }; onCartChanged();
+  Notify.info("ล้างตะกร้าแล้ว", `เอาออก ${n} ชิ้น`);
 });
 $("cartPay").addEventListener("click", openCheckout);
 
@@ -392,7 +398,7 @@ $("confirmSale").addEventListener("click", confirmSale);
 async function confirmSale() {
   const lines = cartLines();
   if (!lines.length) return;
-  if (payMethod === "cash" && !updateChange()) return showToast("รับเงินไม่พอ");
+  if (payMethod === "cash" && !updateChange()) return Notify.warning("รับเงินไม่พอ", `ยอดที่ต้องจ่าย ${thb(cartTotal())} แต่ใส่รับมา ${thb(S($("cashReceived").value))}`, { hint: "แก้ช่อง 'รับเงินมา' หรือเว้นว่างถ้ารับพอดี" });
   const btn = $("confirmSale");
   btn.disabled = true; btn.textContent = "กำลังบันทึก...";
 
@@ -414,11 +420,12 @@ async function confirmSale() {
 
   if (error) {
     console.error(error);
-    if (/sell_bill/.test(error.message || "") && /function|schema cache/i.test(error.message || "")) {
-      return showToast("ฐานข้อมูลยังไม่มี sell_bill — รัน sql/migration_v19_pos_shift.sql ก่อน");
-    }
     // ถ้าเป็นปัญหาเน็ต เก็บ pendingBillId ไว้ กดยืนยันอีกครั้งจะไม่เกิดบิลซ้ำ
-    return showToast("บันทึกไม่สำเร็จ: " + error.message + " — กดยืนยันอีกครั้งได้");
+    const f = Notify.friendlyError(error);
+    return Notify.error("บันทึกการขายไม่สำเร็จ", f.detail, {
+      hint: f.hint || "ตะกร้ายังอยู่ครบ กด 'ลองอีกครั้ง' ได้เลย ระบบจะไม่สร้างบิลซ้ำ",
+      actions: [{ label: "ลองอีกครั้ง", onClick: confirmSale }],
+    });
   }
 
   lastBill = {
@@ -432,6 +439,7 @@ async function confirmSale() {
   closeModal("checkoutModal");
   renderCartBar();
   openReceipt();
+  if (data.duplicate) Notify.info(`บิล #${data.bill_no} บันทึกไว้แล้วตั้งแต่ครั้งก่อน`, "ระบบไม่ได้สร้างบิลซ้ำ ยอดขายนับครั้งเดียว");
   loadSellGrid();
 }
 
@@ -470,8 +478,8 @@ $("undoSale").addEventListener("click", async () => {
   const btn = $("undoSale");
   btn.disabled = true; btn.textContent = "กำลังยกเลิก...";
   const { error } = await supabaseClient.rpc("void_bill", { p_bill_id: lastBill.id, p_reason: "เลิกทำทันทีหลังขาย" });
-  if (error) { btn.disabled = false; btn.textContent = "เลิกทำ"; return showToast("ยกเลิกไม่สำเร็จ: " + error.message); }
-  showToast(`ยกเลิกบิล #${lastBill.no} แล้ว — สินค้ากลับเข้าสต็อก`);
+  if (error) { btn.disabled = false; btn.textContent = "เลิกทำ"; return Notify.error(`ยกเลิกบิล #${lastBill.no} ไม่สำเร็จ`, error, { hint: "บิลยังถูกบันทึกอยู่ — ไปยกเลิกได้ที่แท็บ 'บิล & คืนของ'" }); }
+  Notify.success(`ยกเลิกบิล #${lastBill.no} แล้ว`, `${lastBill.lines.length} ชิ้นกลับเข้าสต็อก · ไม่นับยอด ${thb(lastBill.total)}`);
   lastBill = null;
   closeModal("receiptModal");
   loadSellGrid();
@@ -486,6 +494,7 @@ $("shareReceipt").addEventListener("click", async () => {
   try {
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file], title: `ใบเสร็จ #${lastBill.no}` });
+      Notify.success("แชร์ใบเสร็จแล้ว", `บิล #${lastBill.no}`);
       return;
     }
   } catch (err) {
@@ -496,6 +505,7 @@ $("shareReceipt").addEventListener("click", async () => {
   a.download = file.name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  Notify.success("บันทึกรูปใบเสร็จแล้ว", `ไฟล์ ${file.name} อยู่ในโฟลเดอร์ดาวน์โหลด`);
 });
 
 async function drawReceipt(b) {
@@ -541,7 +551,8 @@ async function loadBills() {
     .order("created_at", { ascending: false })
     .limit(60);
   if (error) {
-    $("billsList").innerHTML = `<div class="empty-state">โหลดบิลไม่สำเร็จ — รัน sql/migration_v19_pos_shift.sql แล้วหรือยัง?</div>`;
+    $("billsList").innerHTML = `<div class="empty-state">โหลดบิลไม่สำเร็จ</div>`;
+    Notify.error("โหลดรายการบิลไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: loadBills }] });
     return;
   }
   if (!data?.length) { $("billsList").innerHTML = `<div class="empty-state">ยังไม่มีบิล</div>`; return; }
@@ -569,13 +580,20 @@ $("billsList").addEventListener("click", async (e) => {
   const refund = e.target.closest("[data-refund]");
   const voidBtn = e.target.closest("[data-void-bill]");
   if (!refund && !voidBtn) return;
-  const reason = (prompt(refund ? "เหตุผลที่คืน (เช่น ไซซ์ไม่พอดี / มีตำหนิ):" : "เหตุผลที่ยกเลิกทั้งบิล:", "") || "").trim();
-  if (!reason) return showToast("ต้องใส่เหตุผลทุกครั้ง");
+  const lineName = refund ? refund.closest(".bill-line")?.querySelector("span")?.textContent.trim() : "";
+  const reason = await Notify.prompt({
+    title: refund ? "คืนสินค้าชิ้นนี้?" : `ยกเลิกทั้งบิล #${voidBtn.dataset.no}?`,
+    message: refund ? `${lineName}\nสินค้าจะกลับเข้าสต็อก และไม่นับเป็นยอดขาย` : "ทุกชิ้นในบิลจะกลับเข้าสต็อก และไม่นับเป็นยอดขาย",
+    placeholder: refund ? "เหตุผล เช่น ไซซ์ไม่พอดี / มีตำหนิ" : "เหตุผล เช่น กดขายผิด",
+    required: true, requiredText: "ต้องใส่เหตุผลทุกครั้ง (ไว้ดูย้อนหลัง)",
+    confirmText: refund ? "คืนชิ้นนี้" : "ยกเลิกบิล",
+  });
+  if (!reason) return;
   const { error } = refund
     ? await supabaseClient.rpc("void_sale", { p_sale_id: refund.dataset.refund, p_reason: reason })
     : await supabaseClient.rpc("void_bill", { p_bill_id: voidBtn.dataset.voidBill, p_reason: reason });
-  if (error) return showToast("ไม่สำเร็จ: " + error.message);
-  showToast(refund ? "คืนแล้ว — สินค้ากลับเข้าสต็อก" : `ยกเลิกบิล #${voidBtn.dataset.no} แล้ว`);
+  if (error) return Notify.error(refund ? "คืนสินค้าไม่สำเร็จ" : `ยกเลิกบิล #${voidBtn.dataset.no} ไม่สำเร็จ`, error);
+  Notify.success(refund ? "คืนสินค้าแล้ว" : `ยกเลิกบิล #${voidBtn.dataset.no} แล้ว`, refund ? `${lineName} กลับเข้าสต็อก · เหตุผล: ${reason}` : `ทุกชิ้นกลับเข้าสต็อก · เหตุผล: ${reason}`);
   soldLoaded = false;
   loadBills();
   loadSellGrid();
@@ -705,17 +723,17 @@ $("reserveForm").addEventListener("submit", async (e) => {
     p_due_date: $("reserveDue").value || null,
     p_note: $("reserveNote").value.trim() || null,
   });
-  if (error) return showToast("จองไม่สำเร็จ: " + error.message);
-  showToast(`จองให้ ${$("reserveName").value.trim()} แล้ว`);
+  if (error) return Notify.error("จองไม่สำเร็จ", error);
+  Notify.success(`จองให้ ${$("reserveName").value.trim()} แล้ว`, `${detailItem.item_name}${$("reserveDue").value ? " · ภายใน " + formatDate($("reserveDue").value) : ""} — ชิ้นนี้จะขายให้คนอื่นไม่ได้จนกว่าจะยกเลิกจอง`);
   cart.delete(detailItem.id);
   closeModal("reserveModal");
   loadSellGrid();
 });
 async function releaseReservation(res) {
-  if (!confirm(`ยกเลิกการจองของ ${res.customer_name}? สินค้าจะกลับมาขายได้ตามปกติ`)) return;
+  if (!(await Notify.confirm({ title: `ยกเลิกการจองของ ${res.customer_name}?`, message: "สินค้าจะกลับมาขายให้ทุกคนได้ตามปกติ", confirmText: "ยกเลิกจอง", danger: true }))) return;
   const { error } = await supabaseClient.rpc("release_reservation", { p_reservation_id: res.id });
-  if (error) return showToast("ไม่สำเร็จ: " + error.message);
-  showToast("ยกเลิกการจองแล้ว");
+  if (error) return Notify.error("ยกเลิกการจองไม่สำเร็จ", error);
+  Notify.success("ยกเลิกการจองแล้ว", `${res.customer_name} · สินค้ากลับมาขายได้ปกติ`);
   closeModal("saleDetailModal");
   loadSellGrid();
 }
@@ -733,12 +751,12 @@ $("openPosSettings").addEventListener("click", openPosSettings);
 $("posSettingsForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const id = $("setPromptPay").value.trim();
-  if (id && !Money.normalizePromptPayId(id)) return showToast("เลขพร้อมเพย์ต้องเป็นเบอร์ 10 หลัก หรือเลขบัตร 13 หลัก");
+  if (id && !Money.normalizePromptPayId(id)) return Notify.warning("เลขพร้อมเพย์ไม่ถูกต้อง", `ใส่มา ${id.replace(/\D/g, "").length} หลัก — ต้องเป็นเบอร์มือถือ 10 หลัก หรือเลขบัตรประชาชน 13 หลัก`);
   const value = { promptpay_id: id, shop_name: $("setShopName").value.trim() || "Bubbles Gumps", receipt_note: $("setReceiptNote").value.trim() };
   const { error } = await supabaseClient.from("app_settings").upsert({ key: "pos_settings", value, updated_at: new Date().toISOString() }, { onConflict: "key" });
-  if (error) return showToast("บันทึกไม่สำเร็จ: " + error.message);
+  if (error) return Notify.error("บันทึกการตั้งค่าไม่สำเร็จ", error);
   posSettings = value;
-  showToast("บันทึกการตั้งค่าแล้ว");
+  Notify.success("บันทึกการตั้งค่าหน้าร้านแล้ว", value.promptpay_id ? `QR พร้อมเพย์จะใช้เลขลงท้าย ${value.promptpay_id.replace(/\D/g, "").slice(-4)}` : "ยังไม่ได้ใส่พร้อมเพย์ — หน้าชำระเงินจะไม่แสดง QR");
   closeModal("posSettingsModal");
   if (!$("checkoutModal").classList.contains("hidden")) renderTotals();
 });
@@ -797,14 +815,7 @@ function paymentLabel(v) { return ({ cash: "เงินสด", transfer: "โ�
 function channelLabel(v) { return ({ street_market: "ถนนคนเดิน", facebook: "Facebook", instagram: "Instagram" })[v] || v || "-"; }
 function formatDateTime(v) { return v ? new Date(v).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "-"; }
 function escapeHtml(v = "") { return String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
-function showToast(msg) {
-  const t = $("toast");
-  if (!t) return;
-  t.textContent = msg;
-  t.classList.add("show");
-  clearTimeout(window.__toast);
-  window.__toast = setTimeout(() => t.classList.remove("show"), 3000);
-}
+function showToast(msg) { return Notify.auto(msg); }
 
 // ==========================================================
 // REALTIME: อีกเครื่องขาย/แก้ของ → โหลดกริดใหม่ (ตะกร้าจะตัดของที่หายไปให้เอง)

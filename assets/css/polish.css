@@ -1,0 +1,240 @@
+/* ==========================================================
+   polish.css — ชั้นดีไซน์สุดท้ายของทุกหน้า (V19.1) โหลดหลัง CSS อื่นทั้งหมด
+   1) ฟอร์ม/ปุ่ม หน้าตาเดียวกันทุกหน้า (ช่องสูง ≥44px กดง่ายบนมือถือ)
+   2) เมนูล่างมือถือแบบกะทัดรัด ปุ่ม "ขาย" เด่นตรงกลาง
+   3) ระบบแจ้งเตือน (notify.js) + กล่องยืนยัน
+   4) การ์ด/โมดอล/สถานะว่าง ให้นุ่มและอ่านง่ายขึ้น
+   ========================================================== */
+:root {
+  --ui-radius: 14px;
+  --ui-ring: 0 0 0 3px rgba(74, 92, 240, .16);
+  --ui-shadow-sm: 0 1px 2px rgba(16, 24, 40, .05);
+  --ui-shadow-md: 0 1px 2px rgba(16, 24, 40, .04), 0 10px 28px rgba(16, 24, 40, .07);
+  --ui-shadow-lg: 0 24px 60px rgba(16, 24, 40, .22);
+  --ok: #12a15e; --ok-bg: #e9f8f0; --ok-ink: #0b6b3f;
+  --bad: #e5483a; --bad-bg: #fdeeec; --bad-ink: #a42a1f;
+  --warn: #f08c00; --warn-bg: #fff4e0; --warn-ink: #8a5300;
+  --info: #4a5cf0; --info-bg: #eef0ff; --info-ink: #3040c4;
+}
+
+/* ---------- 1) ฟอร์ม ---------- */
+/* :where() = specificity 0 → class ของแต่ละหน้า (เช่น .co-price, ตาราง bulk) ยังชนะได้ */
+:where(input:not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]), select, textarea) {
+  font: 400 15px var(--v11-ui), var(--v11-thai), sans-serif;
+  color: var(--v11-text);
+  background: #fff;
+  border: 1px solid var(--v11-border-2);
+  border-radius: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+:where(textarea) { padding: 10px 12px; min-height: 88px; }
+:where(table) :where(input, select) { min-height: 36px; padding: 0 8px; font-size: 13px; border-radius: 8px; }
+input::placeholder, textarea::placeholder { color: #a1a8c2; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--v11-purple) !important; box-shadow: var(--ui-ring) !important; }
+select {
+  appearance: none; -webkit-appearance: none;
+  padding-right: 34px !important;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238992a9' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 12px center !important;
+}
+.field input, .field select, .field textarea, .toolbar input, .filter-select { border-radius: 12px !important; font-size: 15px !important; min-height: 44px; }
+label { color: #5f6782; }
+/* iOS ซูมเมื่อฟอนต์ < 16px — มือถือใช้ 16px */
+@media (max-width: 639.98px) {
+  :where(input:not([type=checkbox]):not([type=radio]):not([type=file]), select, textarea) { font-size: 16px; }
+  .field input, .field select, .field textarea { font-size: 16px !important; }
+}
+
+/* ---------- ปุ่ม ---------- */
+.btn { border-radius: 12px !important; min-height: 44px; padding-left: 16px; padding-right: 16px; transition: transform .12s ease, box-shadow .15s ease, background .15s ease !important; }
+.btn:active { transform: scale(.98); }
+.btn:disabled { opacity: .55; cursor: not-allowed; transform: none !important; }
+.btn-primary { box-shadow: 0 6px 16px rgba(74, 92, 240, .24) !important; }
+.btn-danger, .btn.btn-danger { background: var(--bad) !important; color: #fff !important; border-color: var(--bad) !important; box-shadow: 0 6px 16px rgba(229, 72, 58, .22) !important; }
+.btn-danger:hover { background: #cf3a2d !important; }
+.btn-sm { min-height: 36px; border-radius: 10px !important; }
+.btn:focus-visible, button:focus-visible, a:focus-visible { outline: none; box-shadow: var(--ui-ring) !important; }
+
+/* ---------- 4) การ์ด / หัวข้อ / สถานะว่าง ---------- */
+.tag-card, .stat-card, .bill-card { border-radius: 18px !important; box-shadow: var(--ui-shadow-md) !important; border-color: var(--v11-border) !important; }
+.empty-state {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  padding: 28px 16px !important; color: var(--v11-muted) !important; text-align: center; font-size: 14px;
+  background: repeating-linear-gradient(135deg, transparent 0 10px, rgba(74, 92, 240, .025) 10px 20px);
+  border: 1px dashed var(--v11-border-2); border-radius: 16px;
+}
+.empty-state.small { padding: 14px !important; }
+.page h1 { letter-spacing: -.02em; }
+
+/* topbar มือถือ: ให้ป้ายสถานะซิงก์เหลือแค่จุด ไม่ทับชื่อหน้า */
+.sync-indicator { border-radius: 999px !important; box-shadow: var(--ui-shadow-sm) !important; }
+@media (max-width: 639.98px) {
+  .sync-indicator { padding: 7px !important; top: 14px !important; right: 12px !important; }
+  .sync-indicator .sync-text { display: none !important; }
+  .topbar .subtitle { padding-right: 36px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .page h1 { font-size: 24px !important; }
+}
+
+/* ---------- โมดอลเดิมทุกหน้า: เข้าออกนุ่มขึ้น ---------- */
+.modal-backdrop { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); background: rgba(20, 22, 43, .45) !important; }
+.modal-backdrop:not(.hidden) .modal-sheet { animation: ui-sheet-in .22s cubic-bezier(.2, .8, .2, 1); }
+.modal-sheet { border-radius: 22px !important; box-shadow: var(--ui-shadow-lg) !important; }
+@keyframes ui-sheet-in { from { transform: translateY(14px) scale(.985); opacity: 0; } to { transform: none; opacity: 1; } }
+
+/* ---------- 2) เมนูล่างมือถือ ---------- */
+@media (max-width: 859.98px) {
+  .sidebar {
+    background: rgba(255, 255, 255, .96) !important;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 -6px 24px rgba(16, 24, 40, .08) !important;
+    border-top: 1px solid var(--v11-border) !important;
+  }
+  .sidebar-links { padding: 6px 4px !important; gap: 0 !important; display: grid !important; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+  .sidebar-links a {
+    flex-direction: column !important; align-items: center !important; justify-content: center !important;
+    gap: 3px !important; padding: 6px 0 !important; min-height: 54px !important;
+    font: 500 10.5px var(--v11-thai) !important; color: #7a82a0 !important;
+    background: transparent !important; box-shadow: none !important; border-radius: 12px !important;
+  }
+  .sidebar-links a .label { font-size: 10.5px !important; white-space: nowrap !important; line-height: 1.1 !important; overflow: visible !important; }
+  .sidebar-links a .icon { width: 40px !important; height: 26px !important; border-radius: 13px; display: flex !important; align-items: center; justify-content: center; transition: background .15s; }
+  .sidebar-links a .icon svg { width: 21px !important; height: 21px !important; }
+  .sidebar-links a.active { color: var(--v11-purple-2) !important; font-weight: 600 !important; }
+  .sidebar-links a.active .icon { background: #e8ebff; color: var(--v11-purple-2) !important; }
+  /* ปุ่มขาย: วงกลมเด่นตรงกลาง (ใช้บ่อยที่สุดตอนออกตลาด) */
+  .sidebar-links a[href="sell.html"] { color: var(--v11-text) !important; font-weight: 600 !important; }
+  .sidebar-links a[href="sell.html"] .icon {
+    width: 48px !important; height: 48px !important; border-radius: 50%; margin-top: -22px;
+    background: var(--v11-purple) !important; color: #fff !important;
+    box-shadow: 0 8px 18px rgba(74, 92, 240, .38), 0 0 0 4px #fff;
+  }
+  .sidebar-links a[href="sell.html"] .icon svg { width: 23px !important; height: 23px !important; }
+  .sidebar-links a[href="sell.html"].active .icon { background: var(--v11-purple-2) !important; }
+  .nav-badge { top: 2px !important; right: calc(50% - 22px) !important; }
+  #mainWrap { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important; }
+}
+
+/* ---------- 3) แจ้งเตือน (notify.js) ---------- */
+.toast { display: none !important; } /* ของเดิม — ใช้ notify แทนแล้ว */
+.notify-stack {
+  position: fixed; z-index: 3000; top: 16px; right: 16px; width: min(400px, calc(100vw - 24px));
+  display: flex; flex-direction: column; gap: 10px; pointer-events: none;
+}
+.notify {
+  pointer-events: auto; position: relative; overflow: hidden;
+  display: grid; grid-template-columns: 34px 1fr 28px; gap: 12px; align-items: start;
+  background: #fff; border: 1px solid var(--v11-border); border-radius: 16px; padding: 14px 12px 14px 14px;
+  box-shadow: 0 14px 36px rgba(16, 24, 40, .16); font-family: var(--v11-thai);
+  transform: translateY(-8px) scale(.98); opacity: 0; transition: transform .22s cubic-bezier(.2, .8, .2, 1), opacity .22s;
+}
+.notify.in { transform: none; opacity: 1; }
+.notify.out { transform: translateX(16px); opacity: 0; }
+.notify::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+.notify-icon { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+.notify-icon svg { width: 19px; height: 19px; }
+.notify-body { min-width: 0; }
+.notify-title { display: block; font: 600 14.5px/1.35 var(--v11-thai); color: var(--v11-text); }
+.notify-detail { font-size: 13px; line-height: 1.45; color: #4d5470; margin-top: 3px; white-space: pre-line; word-break: break-word; }
+.notify-hint { font-size: 12.5px; line-height: 1.45; margin-top: 7px; padding: 7px 9px; border-radius: 9px; }
+.notify-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.notify-actions button { min-height: 32px; padding: 0 11px; border-radius: 9px; border: 1px solid var(--v11-border-2); background: #fff; font: 600 12.5px var(--v11-thai); color: var(--v11-text); cursor: pointer; }
+.notify-actions button:first-child { border-color: transparent; }
+.notify-close { width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: #9aa1bf; font-size: 19px; line-height: 1; cursor: pointer; }
+.notify-close:hover { background: var(--v11-surface-3); color: var(--v11-text); }
+.notify-timer { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; transform-origin: left; animation: notify-timer linear forwards; opacity: .55; }
+.notify.paused .notify-timer { animation-play-state: paused; }
+@keyframes notify-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.notify-success::before, .notify-success .notify-timer { background: var(--ok); }
+.notify-success .notify-icon { background: var(--ok-bg); color: var(--ok); }
+.notify-success .notify-actions button:first-child { background: var(--ok-bg); color: var(--ok-ink); }
+.notify-error::before, .notify-error .notify-timer { background: var(--bad); }
+.notify-error .notify-icon { background: var(--bad-bg); color: var(--bad); }
+.notify-error .notify-hint { background: var(--bad-bg); color: var(--bad-ink); }
+.notify-error .notify-actions button:first-child { background: var(--bad); color: #fff; }
+.notify-warning::before, .notify-warning .notify-timer { background: var(--warn); }
+.notify-warning .notify-icon { background: var(--warn-bg); color: var(--warn); }
+.notify-warning .notify-hint { background: var(--warn-bg); color: var(--warn-ink); }
+.notify-warning .notify-actions button:first-child { background: var(--warn-bg); color: var(--warn-ink); }
+.notify-info::before, .notify-info .notify-timer { background: var(--info); }
+.notify-info .notify-icon { background: var(--info-bg); color: var(--info); }
+.notify-info .notify-hint { background: var(--info-bg); color: var(--info-ink); }
+.notify-info .notify-actions button:first-child { background: var(--info-bg); color: var(--info-ink); }
+@media (max-width: 639.98px) {
+  .notify-stack { top: 10px; right: 12px; left: 12px; width: auto; }
+  .notify { grid-template-columns: 30px 1fr 26px; gap: 10px; padding: 12px 10px 12px 12px; }
+  .notify-icon { width: 30px; height: 30px; }
+}
+
+/* กล่องยืนยัน / ถามข้อความ */
+.notify-dialog-backdrop {
+  position: fixed; inset: 0; z-index: 3100; background: rgba(20, 22, 43, .5);
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  display: grid; place-items: center; padding: 20px; opacity: 0; transition: opacity .18s;
+}
+.notify-dialog-backdrop.in { opacity: 1; }
+.notify-dialog {
+  width: min(100%, 400px); background: #fff; border-radius: 22px; padding: 22px 20px 18px; text-align: center;
+  box-shadow: var(--ui-shadow-lg); transform: translateY(12px) scale(.98); transition: transform .2s cubic-bezier(.2, .8, .2, 1);
+  font-family: var(--v11-thai); box-sizing: border-box;
+}
+.notify-dialog-backdrop.in .notify-dialog { transform: none; }
+.notify-dialog .notify-icon.big { width: 48px; height: 48px; margin: 0 auto 10px; background: var(--info-bg); color: var(--info); }
+.notify-dialog.danger .notify-icon.big { background: var(--bad-bg); color: var(--bad); }
+.notify-dialog .notify-icon.big svg { width: 24px; height: 24px; }
+.notify-dialog h3 { margin: 0 0 6px; font-size: 17px; line-height: 1.35; }
+.notify-dialog p { margin: 0 0 4px; font-size: 13.5px; line-height: 1.55; color: #4d5470; white-space: pre-line; }
+.notify-dialog .nd-input { width: 100%; margin-top: 12px; }
+.nd-error { color: var(--bad); font-size: 12.5px; min-height: 18px; margin-top: 6px; text-align: left; }
+.nd-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+.nd-actions .btn { min-height: 48px; }
+@media (max-width: 639.98px) {
+  .notify-dialog-backdrop { align-items: end; padding: 0; }
+  .notify-dialog { width: 100%; border-radius: 22px 22px 0 0; padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* ---------- การ์ดกะวันนี้: หัวการ์ดเข้ม แบบ mockup ---------- */
+.shift-card { position: relative; overflow: hidden; }
+.shift-card .shift-head {
+  margin: -18px -20px 14px !important; padding: 16px 20px 14px;
+  background: linear-gradient(135deg, #14162b 0%, #252a52 100%); color: #fff;
+}
+.shift-card .shift-where { color: rgba(255, 255, 255, .72) !important; }
+.shift-card .shift-pill { background: rgba(255, 255, 255, .14) !important; color: #fff !important; }
+.shift-card .shift-pill.open { background: rgba(18, 161, 94, .22) !important; color: #7ff0b6 !important; }
+.shift-card .shift-close-btn { background: #fff !important; color: var(--v11-text) !important; box-shadow: none !important; }
+.shift-card .shift-open { background: var(--v11-surface-2); border-radius: 14px; padding: 12px; }
+.shift-card .ss-left b { font-size: 28px !important; letter-spacing: -.02em; }
+.shift-card .pos-chip { background: #fff; }
+@media (max-width: 639.98px) {
+  .shift-card .shift-head { margin: -14px -14px 12px !important; padding: 14px; }
+  .shift-card .shift-close-btn { width: 100%; }
+  .shift-card .shift-open .btn { width: 100%; }
+}
+
+/* ---------- แก้เพิ่มหลังตรวจหน้าจอ ---------- */
+/* ลูกศร select ในฟอร์มเดิม (design-v12 ใช้ background shorthand ทับไว้) */
+.field select, .toolbar select, select.filter-select, select.period-mode-select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5l5 5 5-5' fill='none' stroke='%238992a9' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+  background-repeat: no-repeat !important; background-position: right 12px center !important;
+  appearance: none; -webkit-appearance: none; padding-right: 34px !important;
+}
+/* ปุ่มเลือกไฟล์รูป */
+input[type=file] { font: 400 13px var(--v11-thai); color: var(--v11-muted); max-width: 100%; }
+input[type=file]::file-selector-button {
+  margin-right: 10px; min-height: 40px; padding: 0 14px; border-radius: 10px; cursor: pointer;
+  border: 1px dashed var(--v11-purple); background: var(--info-bg); color: var(--info-ink); font: 600 13px var(--v11-thai);
+}
+@media (max-width: 859.98px) {
+  .sidebar-links a.active, .sidebar-links a:hover { background: transparent !important; box-shadow: none !important; }
+}
+/* มือถือ: ฟอร์ม 3–4 ช่องต่อแถว → 2 คอลัมน์ ไม่บีบจนอ่านไม่ออก */
+@media (max-width: 639.98px) {
+  .field-row.three, .field-row.four, .field-row.two { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 0 10px !important; flex-direction: initial !important; }
+  .field-row.three > .field:last-child { grid-column: 1 / -1; }
+  .field-row:has(input[type=file]) { flex-direction: column !important; gap: 0 !important; }
+}
+.topbar::after{display:none!important} /* ชื่อร้านซ้ำกับ sidebar และถูกป้ายสถานะซิงก์ทับ */
+a.btn, a.btn:hover { text-decoration: none !important; display: inline-flex; align-items: center; justify-content: center; }
