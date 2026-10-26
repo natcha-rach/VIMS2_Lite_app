@@ -150,3 +150,43 @@ app_settings keys ที่ใช้: `pos_settings {promptpay_id, shop_name, re
 - Mockup 10 หน้าจอ: design canvas (artifact `GLqnwvB1XNoTmdv5mMJ53w`)
 - Storyboard & Build Roadmap: Claude Doc (artifact `CfnTwwiniFcqzM96NYGPXa`) — มีหัวข้อ "ทำบน Web App เดิมก่อน (V19)"
 - โปรเจกต์ Flutter ที่ทำไว้ก่อน (พักไว้): `VIMS2_Lite_Flutter.zip`
+
+---
+
+## 10. งานที่ผู้ใช้สั่งล่าสุด (26 ต.ค. 2569 20:39) — ทำตามลำดับนี้
+
+### งาน A — หน้าหลักเหลือแค่ "ร้านวันนี้ + PULSE" ✅ ทำแล้วใน V19.4 (commit "V19.4")
+- `index.html` เหลือ: หัวหน้า + ปุ่ม Download, การ์ด `#shiftCard`, ตัวเลือกช่วงเวลา, section `.v11-today-pulse` (6 stat-card)
+- `dashboard.js`: `$()` คืน div เปล่าเมื่อหา id ไม่เจอ (โค้ดคำนวณเดิมทำงานต่อได้โดยไม่ error), `renderLotRecovery/renderTodayTasks` ข้ามเมื่อไม่มีการ์ด
+- สิ่งที่ Claude Code ต้องทำ: แค่ตรวจบนมือถือจริงหลัง deploy ว่าไม่มีแจ้งเตือน error
+- ถ้าจะลบโค้ดคำนวณที่ไม่ได้ใช้ใน `dashboard.js` (goal/charts/aging/markdown) ทำได้ แต่ไม่บังคับ — ระวังอย่าลบส่วนที่ PULSE ใช้ (`statRevenue`, `statGrossProfit`, `statExpenses`, `statNetProfit`, `statCash`, `statAvailable`, sparkline)
+
+### งาน B — รวมเมนู "ล็อต" + "สินค้า" เป็นเมนูเดียว "สต็อก" (ยังไม่ทำ)
+ข้อตกลงกับผู้ใช้: **รวมที่เมนู/การนำทาง แต่ไม่ยุบไฟล์** (`lots.html`/`lots.js` กับ `items.html`/`items.js` แยกเหมือนเดิม — items.js ~90KB เสี่ยงพังและโหลดช้า)
+1. ทุกหน้า `.html` (index, items, lots, sell, reports, accounting, tax): ใน `.sidebar-links` แทน 2 ลิงก์ `lots.html` + `items.html` ด้วยลิงก์เดียว
+   `<a href="items.html" title="สต็อก">` ไอคอนกล่อง (ใช้ svg ของล็อตเดิม) + `<span class="label">สต็อก</span>` + ย้าย `#navStockBadge` มาไว้ในลิงก์นี้
+   → เมนูเหลือ 5 ปุ่ม: ภาพรวม · สต็อก · ขายของ (วงกลมกลาง) · รายงาน · บัญชี
+   (ปุ่มขายควรอยู่ตรงกลาง — ลำดับใหม่: ภาพรวม, สต็อก, ขายของ, รายงาน, บัญชี)
+2. `nav.js`: ไฮไลต์ "สต็อก" เมื่อหน้าปัจจุบันเป็น `items.html` หรือ `lots.html`
+   (ตอนนี้เทียบ `href === currentPage` — เพิ่มกรณี `lots.html` → active ที่ลิงก์ items.html)
+3. ใส่แถบแท็บย่อยบนสุดของ `.page` ทั้ง 2 หน้า: `<nav class="stock-tabs"><a href="lots.html">Lot</a><a href="items.html">สินค้า</a></nav>` (แท็บของหน้าปัจจุบันมี `aria-current="page"`) สไตล์ใช้แบบ `.seg` ใน pos.css / ใส่ CSS ใน polish.css
+4. แท็บ "สินค้า" ต้องพา Lot/กลุ่มที่เลือกล่าสุดไปด้วย: ใช้ `VimsContext.itemsUrl(VimsContext.resolve())` (มีใน `vimsContext.js` แล้ว) — `lots.html` ต้องโหลด `vimsContext.js` ด้วยถ้ายังไม่โหลด
+5. ปุ่ม "ไปหน้าสินค้า" ที่หัวหน้า lots.html เอาออกได้ (ซ้ำกับแท็บ)
+6. polish.css มี rule ปุ่มขายตรงกลางโดยอิง `a[href="sell.html"]` อยู่แล้ว — ใช้ได้กับ 5 ปุ่มเลย
+7. เพิ่มเลข `?v=` ของ nav.js / polish.css ในทุก html · รัน `tests/ui` (`node shots.js after`) ดูมือถือ 390px + จอ 1280px ว่าเมนูไม่ตกบรรทัด และ `node run.js` ผ่าน
+8. commit: `V19.5: merge Lots + Items into one "สต็อก" menu with sub-tabs`
+
+### งาน C — Deploy
+ยังไม่รู้ว่าผู้ใช้ host เว็บไว้ที่ไหน → **ถามผู้ใช้ก่อน** 1 คำถาม (เช่น GitHub Pages / Netlify / Vercel / Cloudflare Pages / โฮสต์อื่นแบบอัปโหลดไฟล์)
+1. **ฐานข้อมูลก่อนเว็บเสมอ**: ต้องรัน `sql/migration_v19_pos_shift.sql` ใน Supabase ก่อนเว็บ V19 ขึ้นจริง (หน้าขายเรียก `sell_bill`)
+   - ถ้าผู้ใช้ให้ connection string: `psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f sql/migration_v19_pos_shift.sql` (รันซ้ำได้)
+   - ถ้าไม่ให้: บอกผู้ใช้วางไฟล์นี้ใน Supabase → SQL Editor → Run แล้วรอยืนยันว่าขึ้น Success
+   - ตรวจหลังรัน: `select proname from pg_proc where proname in ('sell_bill','open_shift','close_shift','reserve_item');` ต้องได้ 4 แถว
+   - **อย่ารัน `migration_v20_auth_lock.sql` เอง** จนกว่าผู้ใช้สร้าง user + เปิด `AUTH_REQUIRED=true` + login ได้แล้ว (ดูหัวไฟล์)
+2. Push: `git push -u origin v19-pos-shift-tax` → เปิด PR เข้า `master` → merge (ถามผู้ใช้ก่อน merge)
+3. ถ้าเลือก **GitHub Pages**: มี `.github/workflows/pages.yml` แล้ว (รัน unit test → คัดเฉพาะ *.html + assets/ → deploy เมื่อ push เข้า master)
+   ผู้ใช้ต้องเปิด repo → Settings → Pages → Source = **GitHub Actions** ครั้งแรกครั้งเดียว · URL จะเป็น `https://natcha-rach.github.io/VIMS2_Lite_v6/`
+   ถ้า repo เป็น private และบัญชีเป็นแพ็กเกจฟรี GitHub Pages อาจใช้ไม่ได้ → เสนอ Netlify/Cloudflare Pages (ลากโฟลเดอร์ที่มีแค่ *.html + assets/)
+4. ถ้าโฮสต์อื่น: deploy เฉพาะ `*.html` + `assets/` (ไม่ต้องอัป `sql/ tests/ docs/ .github/`)
+5. หลัง deploy: เปิด URL จริงบนมือถือ → หน้าขาย → ปุ่มเฟือง ตั้งพร้อมเพย์ → ทดลอง เปิดร้าน → ขาย 1 บิล → เลิกทำ → ปิดร้าน แล้วรายงานผลให้ผู้ใช้
+6. Supabase → Authentication → URL Configuration: เพิ่ม URL เว็บจริงใน Site URL/Redirect URLs (จำเป็นเมื่อเปิดระบบ login)
