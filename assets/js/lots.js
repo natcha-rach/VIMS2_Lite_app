@@ -1,3 +1,11 @@
+/* ==========================================================
+   lots.js — ชั้น UI ของหน้าล็อต (lots.html): ฟอร์ม Lot + ต้นทุนแยกส่วน, การ์ด Lot, ปิด/เปิด Lot,
+             คิดต้นทุนใหม่, จัดการกลุ่มราคา
+   เรียกต่อ:
+     Data   LotsRepo  ← lots / lot_groups / items · RPC get_lot_summary, get_group_progress, recost_lot (data/lotsRepo.js)
+     Domain LotCalc   ← ต้นทุนรวม/เฉลี่ย, นับชิ้นต่อกลุ่ม                                          (domain/lotCalc.js)
+     VimsContext      ← ปุ่ม "ดูสินค้าใน Lot" พา Lot ไปหน้าสินค้า (vimsContext.js)
+   ========================================================== */
 let editingLotId = null;
 let lotsCache = [];
 let activeLotId = null;
@@ -18,16 +26,14 @@ function setDefaultPurchaseDate() { $("purchaseDate").valueAsDate = new Date(); 
 function costBreakdownActive() { return $("costPurchase").value !== ""; }
 function syncCostBreakdown() {
   if (!costBreakdownActive()) { updateAvgCost(); return; }
-  const sum = ["costPurchase", "costShipping", "costCleaning", "costRepair", "costOther"]
-    .reduce((s, id) => s + Number($(id).value || 0), 0);
+  const sum = LotCalc.totalCost(["costPurchase", "costShipping", "costCleaning", "costRepair", "costOther"].map((id) => $(id).value));
   $("totalCost").value = sum;
   $("totalCost").readOnly = true;
   updateAvgCost();
 }
 function updateAvgCost() {
-  const cost = Number($("totalCost").value || 0);
-  const count = Number($("totalItems").value || 0);
-  $("avgCostPreview").textContent = count > 0 ? `ต้นทุนเฉลี่ย: ${formatBaht(cost / count)} / ชิ้น` : "ต้นทุนเฉลี่ย: - / ชิ้น";
+  const avg = LotCalc.avgCost($("totalCost").value, $("totalItems").value);
+  $("avgCostPreview").textContent = avg !== null ? `ต้นทุนเฉลี่ย: ${formatBaht(avg)} / ชิ้น` : "ต้นทุนเฉลี่ย: - / ชิ้น";
 }
 
 $("totalCost").addEventListener("input", updateAvgCost);
@@ -57,8 +63,8 @@ $("lotForm").addEventListener("submit", async (e) => {
   if (payload.total_items < 0 || payload.total_cost < 0) return showToast("ต้นทุน/จำนวนไม่ถูกต้อง");
 
   const query = editingLotId
-    ? supabaseClient.from("lots").update(payload).eq("id", editingLotId)
-    : supabaseClient.from("lots").insert(payload);
+    ? LotsRepo.save(editingLotId, payload)
+    : LotsRepo.save(null, payload);
   const { error } = await query;
   if (error) return showToast("บันทึกไม่สำเร็จ: " + error.message);
 
@@ -107,7 +113,7 @@ const LOT_STATUS_LABEL = { receiving: "กำลังรับของ", sorti
 const LOT_STATUS_NEXT = { receiving: { to: "sorting", label: "เริ่มคัด" }, sorting: { to: "ready", label: "ทำเครื่องหมายพร้อมขาย" }, ready: { to: "closed", label: "ปิดล็อต" } };
 
 async function loadLots() {
-  const { data, error } = await supabaseClient.from("lots").select("*").order("purchase_date", { ascending: false });
+  const { data, error } = await LotsRepo.list();
   if (error) {
     console.error(error);
     Notify.error("โหลดรายการล็อตไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: () => loadLots() }] });
@@ -127,9 +133,9 @@ async function loadLots() {
   // ตัวเลข Reconciliation/กำไรทั้งหมดคำนวณที่ Postgres (get_lot_summary, get_group_progress)
   // เพื่อไม่ให้ตรงกับ Dashboard/Reports คนละค่ากัน และไม่ต้องดึง sales ทั้งตารางมาที่ browser
   const [groupsR, summaryR, groupProgressR] = await Promise.all([
-    fetchAllRows(() => supabaseClient.from("lot_groups").select("*").in("lot_id", lotIds).order("sort_order").order("created_at")),
-    supabaseClient.rpc("get_lot_summary"),
-    supabaseClient.rpc("get_group_progress")
+    LotsRepo.groupsOfLots(lotIds),
+    LotsRepo.summaries(),
+    LotsRepo.groupProgress()
   ]);
   if (groupsR.error) console.warn(groupsR.error);
   if (summaryR.error) console.warn(summaryR.error);
@@ -204,14 +210,14 @@ async function advanceLotStatus(lotId) {
   const next = LOT_STATUS_NEXT[lot.status || "sorting"]; if (!next) return;
   const payload = { status: next.to };
   if (next.to === "closed") payload.closed_at = new Date().toISOString();
-  const { error } = await supabaseClient.from("lots").update(payload).eq("id", lotId);
+  const { error } = await LotsRepo.update(lotId, payload);
   if (error) return showToast("เปลี่ยนสถานะไม่สำเร็จ: " + error.message);
   showToast(`สถานะ Lot: ${LOT_STATUS_LABEL[next.to]}`);
   loadLots();
 }
 
 async function reopenLot(lotId) {
-  const { error } = await supabaseClient.from("lots").update({ status: "ready", closed_at: null }).eq("id", lotId);
+  const { error } = await LotsRepo.update(lotId, { status: "ready", closed_at: null });
   if (error) return showToast("เปิดล็อตใหม่ไม่สำเร็จ: " + error.message);
   showToast("เปิดล็อตใหม่แล้ว");
   loadLots();
@@ -225,7 +231,7 @@ async function recostLot(lotId, summary) {
   const currentBasis = lot.cost_basis || "received";
   const ok = await Notify.confirm({ title: `คำนวณต้นทุนเฉลี่ยใหม่ของ "${lot.lot_name}"?`, confirmText: "คำนวณใหม่", message: `ฐานคำนวณ: ${basisLabel[currentBasis]}\nจะอัปเดตเฉพาะสินค้าที่ยัง "พร้อมขาย" (${summary?.available ?? "-"} ชิ้น) ของที่ขายไปแล้วจะไม่ถูกแก้ย้อนหลัง\n\nเปลี่ยนฐานคำนวณได้ที่ "แก้ไข Lot"` });
   if (!ok) return;
-  const { data, error } = await supabaseClient.rpc("recost_lot", { p_lot_id: lotId, p_basis: currentBasis });
+  const { data, error } = await LotsRepo.recost(lotId, currentBasis);
   if (error) return showToast("คำนวณไม่สำเร็จ: " + error.message);
   showToast(`ต้นทุนเฉลี่ยใหม่ ${formatBaht(data.avg_cost)}/ชิ้น (${data.items_updated} รายการ)`);
   loadLots();
@@ -235,7 +241,7 @@ async function recostLot(lotId, summary) {
 async function adjustLotCounter(lotId, field, delta) {
   const lot = lotsCache.find(l => l.id === lotId); if (!lot) return;
   const next = Math.max(0, Number(lot[field] || 0) + delta);
-  const { error } = await supabaseClient.from("lots").update({ [field]: next }).eq("id", lotId);
+  const { error } = await LotsRepo.update(lotId, { [field]: next });
   if (error) return showToast("อัปเดตไม่สำเร็จ: " + error.message);
   loadLots();
 }
@@ -253,7 +259,7 @@ async function handleDelete(lotId, summary) {
   }
   const ok = await Notify.confirm({ title: `ลบล็อต “${lot.lot_name}”?`, confirmText: "ลบล็อต", danger: true, message: `Lot นี้ยังไม่มีสินค้าหรือยอดขาย ลบได้ปลอดภัย กลุ่มของล็อตจะถูกลบไปด้วย` });
   if (!ok) return;
-  const { error } = await supabaseClient.from("lots").delete().eq("id", lotId);
+  const { error } = await LotsRepo.remove(lotId);
   if (error) return showToast("ลบไม่สำเร็จ: " + error.message);
   showToast("ลบล็อตเรียบร้อย");
   if (editingLotId === lotId) exitEditMode();
@@ -263,7 +269,7 @@ async function handleDelete(lotId, summary) {
 async function advanceStatusDirect(lotId, status) {
   const payload = { status };
   if (status === "closed") payload.closed_at = new Date().toISOString();
-  const { error } = await supabaseClient.from("lots").update(payload).eq("id", lotId);
+  const { error } = await LotsRepo.update(lotId, payload);
   if (error) return showToast("ปิดล็อตไม่สำเร็จ: " + error.message);
   showToast("ปิดล็อตแล้ว");
   loadLots();
@@ -282,13 +288,12 @@ async function openGroupManager(lotId) {
 
 async function loadGroupsForLot() {
   if (!activeLotId) return;
-  const { data, error } = await supabaseClient.from("lot_groups").select("*").eq("lot_id", activeLotId).order("sort_order").order("created_at");
+  const { data, error } = await LotsRepo.groupsOfLot(activeLotId);
   if (error) return showToast("โหลดกลุ่มไม่สำเร็จ: " + error.message);
   activeGroups = data || [];
-  const { data: items, error: itemErr } = await supabaseClient.from("items").select("group_id,status").eq("lot_id", activeLotId);
+  const { data: items, error: itemErr } = await LotsRepo.itemGroupsOfLot(activeLotId);
   if (itemErr) console.warn(itemErr);
-  const countByGroup = {};
-  (items || []).forEach(i => { if (i.group_id) countByGroup[i.group_id] = (countByGroup[i.group_id] || 0) + 1; });
+  const countByGroup = LotCalc.countByGroup(items || []);
   $("groupSummary").innerHTML = activeGroups.length ? `<span>${activeGroups.length} กลุ่ม</span><span>${Object.values(countByGroup).reduce((a,b)=>a+b,0)} รายการถูกผูกกลุ่มแล้ว</span>` : `<span>ยังไม่มีกลุ่ม</span><span>สร้างกลุ่มเพื่อเริ่มคัดสินค้า</span>`;
   $("groupList").innerHTML = activeGroups.length ? activeGroups.map(g => `<div class="group-manage-row"><div><b>${escapeHtml(g.group_name)}</b><span>${g.tier === "head" ? "งานหัว / Premium" : "ปกติ"} · ราคาตั้งต้น ${formatBaht(g.base_price)} · ${countByGroup[g.id] || 0}${g.target_qty ? `/${g.target_qty}` : ""} รายการ</span></div><div class="group-row-actions"><button class="btn btn-ghost btn-sm" data-group-edit="${g.id}">แก้ไข</button><button class="btn btn-danger btn-sm" data-group-delete="${g.id}" ${countByGroup[g.id] ? "disabled title=\"กลุ่มนี้มีสินค้าอยู่\"" : ""}>ลบ</button></div></div>`).join("") : `<div class="empty-state">ยังไม่มีกลุ่ม</div>`;
   document.querySelectorAll("[data-group-edit]").forEach(btn => btn.addEventListener("click", () => editGroup(btn.dataset.groupEdit)));
@@ -316,7 +321,7 @@ $("groupForm").addEventListener("submit", async e => {
   const targetRaw = $("groupTargetQty")?.value;
   const payload = { lot_id: activeLotId, group_name: $("groupName").value.trim(), base_price: Number($("groupBasePrice").value || 0), tier: $("groupTier").value, sort_order: sortOrder, target_qty: targetRaw ? Number(targetRaw) : null };
   if (!payload.group_name) return showToast("กรุณาใส่ชื่อกลุ่ม");
-  const { error } = id ? await supabaseClient.from("lot_groups").update(payload).eq("id", id) : await supabaseClient.from("lot_groups").insert(payload);
+  const { error } = await LotsRepo.saveGroup(id, payload);
   if (error) return showToast("บันทึกกลุ่มไม่สำเร็จ: " + error.message);
   showToast(id ? "แก้ไขกลุ่มแล้ว" : "เพิ่มกลุ่มแล้ว");
   resetGroupForm(); await loadGroupsForLot(); await loadLots();
@@ -324,7 +329,7 @@ $("groupForm").addEventListener("submit", async e => {
 async function deleteGroup(id) {
   const g = activeGroups.find(x => x.id === id); if (!g) return;
   if (!(await Notify.confirm({ title: `ลบกลุ่ม “${g.group_name}”?`, message: "สินค้าในกลุ่มนี้จะไม่ถูกลบ แต่จะไม่มีกลุ่มราคา", confirmText: "ลบกลุ่ม", danger: true }))) return;
-  const { error } = await supabaseClient.from("lot_groups").delete().eq("id", id);
+  const { error } = await LotsRepo.removeGroup(id);
   if (error) return showToast("ลบกลุ่มไม่สำเร็จ: " + error.message);
   showToast("ลบกลุ่มแล้ว"); await loadGroupsForLot(); await loadLots();
 }

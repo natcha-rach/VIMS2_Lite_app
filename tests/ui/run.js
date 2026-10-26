@@ -167,6 +167,17 @@ const server = http.createServer((req, res) => {
   console.log("prices after markdown:", await m.evaluate(() => window.__mockdb().items.slice(6).map((i) => i.current_price)));
   await shot(m, "09b-stale-markdown");
 
+  // ---------- ล็อต: ต้นทุนเฉลี่ย + บันทึก Lot (LotCalc + LotsRepo) ----------
+  await m.goto("http://localhost:8765/lots.html");
+  await m.waitForTimeout(500);
+  await m.fill("#lotName", "Lot ทดสอบ");
+  await m.fill("#totalCost", "3000");
+  await m.fill("#totalItems", "50");
+  console.log("lot avg preview:", await m.$eval("#avgCostPreview", (e) => e.textContent));
+  await m.click("#lotForm button[type=submit]");
+  await m.waitForTimeout(600);
+  console.log("lots in db:", await m.evaluate(() => window.__mockdb().lots.map((l) => l.lot_name)));
+
   // ---------- ภาษี + บัญชี ----------
   await m.goto("http://localhost:8765/tax.html");
   await m.waitForTimeout(600);

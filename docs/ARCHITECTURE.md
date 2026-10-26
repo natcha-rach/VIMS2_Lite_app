@@ -1,6 +1,6 @@
 # สถาปัตยกรรมโค้ด (Clean Architecture แบบเบา — ไม่มี build step)
 
-ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)**, **บัญชี (accounting)**, **รายงาน (reports)** · ยังไม่ย้าย: lots, items, tax, dashboard
+ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)**, **บัญชี (accounting)**, **รายงาน (reports)**, **ล็อต (lots)** · ยังไม่ย้าย: tax, items, dashboard
 
 ## ชั้นของโค้ด (เรียกได้ทางเดียว: UI → Domain/Data → Infra)
 
@@ -8,9 +8,9 @@
 UI (page controller)   assets/js/sell.js …        อ่าน/เขียน DOM, ผูก event, แสดง Notify
    │ เรียก
    ├─ Domain (กฎธุรกิจล้วน) assets/js/domain/*.js   ไม่แตะ DOM / Supabase → เทสต์ด้วย node ได้
-   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · insightsCalc.js
+   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · insightsCalc.js · lotCalc.js
    └─ Data (repository)   assets/js/data/*.js      ที่เดียวที่เรียก Supabase ของหน้านั้น
-         salesRepo.js · catalogRepo.js · shiftRepo.js · accountingRepo.js · reportsRepo.js   คืน { data, error } แบบ supabase-js เสมอ
+         salesRepo.js · catalogRepo.js · shiftRepo.js · accountingRepo.js · reportsRepo.js · lotsRepo.js   คืน { data, error } แบบ supabase-js เสมอ
             │ ใช้
 Infra                    supabaseClient.js (client, fetchAllRows, debounce) · notify.js · offline.js · sw.js · realtime.js
 ```
@@ -60,3 +60,11 @@ Infra                    supabaseClient.js (client, fetchAllRows, debounce) · n
 | `data/reportsRepo.js` | Data | sales/expenses ตามช่วง, แนวโน้ม, RPC Lot/กลุ่มราคา/แหล่งซื้อ, ข้อมูลอะไรขายดี (อ่านอย่างเดียว) | reports.js, insights.js |
 | `reports.js` | UI | สรุปยอด, แยกช่องทาง/วิธีจ่าย/Tier, กราฟแนวโน้ม, ตาราง Lot/กลุ่ม/แหล่งซื้อ | reports.html |
 | `insights.js` | UI | การ์ด "อะไรขายดี" | reports.html |
+
+## แผนที่หน้าล็อต (lots.html)
+
+| ไฟล์ | ชั้น | หน้าที่ | ใครเรียก |
+| --- | --- | --- | --- |
+| `domain/lotCalc.js` | Domain | ต้นทุนรวมแยกส่วน, ต้นทุนเฉลี่ยต่อชิ้น, นับชิ้นต่อกลุ่ม | lots.js |
+| `data/lotsRepo.js` | Data | CRUD Lot/กลุ่มราคา, สรุป Lot, ความคืบหน้ากลุ่ม, คิดต้นทุนใหม่ (recost_lot) | lots.js |
+| `lots.js` | UI | ฟอร์ม Lot, การ์ด Lot, ปิด/เปิด Lot, จัดการกลุ่มราคา | lots.html |
