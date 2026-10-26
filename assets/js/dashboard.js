@@ -3,7 +3,9 @@ let dashboardRows = null;
 let periodMode = "day"; // "day" | "month" | "year"
 let periodValue = new Date(); // วันที่/เดือน/ปีอ้างอิงของโหมดที่เลือกอยู่
 let monthlyGoal = 0; // เป้ายอดขายเดือนนี้ (บาท) โหลดจาก app_settings คีย์ monthly_sales_goal
-const $ = (id) => document.getElementById(id);
+// V19.4: หน้าหลักตัดการ์ดกราฟ/สต็อก/เป้า/Lot ออกแล้ว — ถ้าหา element ไม่เจอให้คืนกล่องเปล่า (ไม่แสดงผล)
+// เพื่อให้ฟังก์ชันเดิมทำงานต่อได้โดยไม่ error และไม่ต้องรื้อโค้ดคำนวณ
+const $ = (id) => document.getElementById(id) || document.createElement("div");
 
 const CHANNEL_LABELS = { street_market: "ถนนคนเดิน", facebook: "Facebook", instagram: "Instagram" };
 const TIER_LABELS = { normal: "ปกติ", head: "งานหัว / Premium" };
@@ -175,8 +177,8 @@ async function fetchLotPerformance() {
 // Lot Recovery: การ์ดเดียวที่เหลืออยู่บน Dashboard ที่ต้องใช้ยอดสะสมตลอดอายุ Lot
 // (ตาราง Performance ตาม Lot แบบเต็มย้ายไปอยู่หน้า Reports แล้ว ไม่ซ้ำกันอีกต่อไป)
 async function renderLotRecovery() {
-  const el = $("lotRecovery");
-  if (!el) return;
+  const el = document.getElementById("lotRecovery");
+  if (!el) return; // ไม่มีการ์ดนี้บนหน้า → ไม่ต้องเรียก RPC
   try {
     const rows = (await fetchLotPerformance())
       .filter(x => Number(x.revenue) > 0)
@@ -417,7 +419,7 @@ function renderDashboard(data, range) {
 // 1) Lot ที่ยังค้างลง (สถานะ receiving/sorting และรอคัด > 0)
 // 2) Lot ที่ใกล้คืนทุน (เหลือคืนทุนไม่เกิน 20% ของต้นทุน)
 async function renderTodayTasks() {
-  const el = $("todayTasks"); if (!el) return;
+  const el = document.getElementById("todayTasks"); if (!el) return; // ไม่มีการ์ดนี้บนหน้า → ไม่ต้องเรียก RPC
   const { data, error } = await supabaseClient.rpc("get_lot_summary");
   if (error) { console.error(error); el.innerHTML = `<div class="empty-state">โหลดไม่สำเร็จ</div>`; Notify.error("โหลดงานวันนี้ไม่สำเร็จ", error); return; }
   const lots = (data || []);
