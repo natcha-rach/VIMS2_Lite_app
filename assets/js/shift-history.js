@@ -2,11 +2,11 @@
    shift-history.js — ประวัติรอบร้าน (หน้าบัญชี) V20
    อ่านจาก shifts.summary ที่ close_shift() เก็บ snapshot ไว้ตอนปิดร้าน (ตัวเลขไม่เปลี่ยนย้อนหลัง)
    แสดง: สรุปตามทำเล (ขายเฉลี่ยต่อรอบ / กำไรจริงเฉลี่ย / ขาด-เกินรวม) + รายการรอบร้านล่าสุด
-   เชื่อมต่อ: accounting.html → #shiftHistory · ตาราง shifts (migration_v19)
+   ชั้น UI · เรียกต่อ: AccountingRepo.closedShifts (data/accountingRepo.js) · แสดงใน accounting.html → #shiftHistory
    ========================================================== */
 (function () {
   const el = document.getElementById("shiftHistory");
-  if (!el || !window.supabaseClient) return;
+  if (!el || !window.AccountingRepo) return;
   const n = (v) => Number(v || 0);
   const esc = (v = "") => String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
   const dateTh = (v) => new Date(v).toLocaleDateString("th-TH", { weekday: "short", day: "numeric", month: "short", year: "2-digit" });
@@ -14,13 +14,8 @@
   let range = "90";
 
   async function load() {
-    const build = () => {
-      let q = supabaseClient.from("shifts").select("id,location,opened_at,closed_at,opening_cash,counted_cash,cash_diff,diff_reason,summary")
-        .not("closed_at", "is", null).order("opened_at", { ascending: false });
-      if (range !== "all") q = q.gte("opened_at", new Date(Date.now() - Number(range) * 86400000).toISOString());
-      return q;
-    };
-    const { data, error } = await fetchAllRows(build);
+    const since = range === "all" ? null : new Date(Date.now() - Number(range) * 86400000).toISOString();
+    const { data, error } = await AccountingRepo.closedShifts(since);
     if (error) {
       el.innerHTML = /shifts|relation|PGRST205|42P01/i.test(`${error.message} ${error.code}`)
         ? `<div class="empty-state">ยังไม่มีข้อมูล — รัน sql/migration_v19_pos_shift.sql ก่อน</div>`

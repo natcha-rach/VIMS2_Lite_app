@@ -1,6 +1,6 @@
 # สถาปัตยกรรมโค้ด (Clean Architecture แบบเบา — ไม่มี build step)
 
-ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)** · ยังไม่ย้าย: accounting, reports, lots, items, tax, dashboard
+ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)**, **บัญชี (accounting)** · ยังไม่ย้าย: reports, lots, items, tax, dashboard
 
 ## ชั้นของโค้ด (เรียกได้ทางเดียว: UI → Domain/Data → Infra)
 
@@ -8,9 +8,9 @@
 UI (page controller)   assets/js/sell.js …        อ่าน/เขียน DOM, ผูก event, แสดง Notify
    │ เรียก
    ├─ Domain (กฎธุรกิจล้วน) assets/js/domain/*.js   ไม่แตะ DOM / Supabase → เทสต์ด้วย node ได้
-   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js
+   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js
    └─ Data (repository)   assets/js/data/*.js      ที่เดียวที่เรียก Supabase ของหน้านั้น
-         salesRepo.js · catalogRepo.js · shiftRepo.js   คืน { data, error } แบบ supabase-js เสมอ
+         salesRepo.js · catalogRepo.js · shiftRepo.js · accountingRepo.js   คืน { data, error } แบบ supabase-js เสมอ
             │ ใช้
 Infra                    supabaseClient.js (client, fetchAllRows, debounce) · notify.js · offline.js · sw.js · realtime.js
 ```
@@ -41,3 +41,13 @@ Infra                    supabaseClient.js (client, fetchAllRows, debounce) · n
 | `data/shiftRepo.js` | Data | รอบร้านที่เปิด, shift_totals, เปิด/ปิดร้าน, เพิ่ม/ลบค่าใช้จ่าย | shift.js |
 | `data/salesRepo.js` | Data | ให้ offline.js ส่งบิลค้างจากหน้าภาพรวมได้ด้วย | offline.js |
 | `shift.js` | UI | การ์ดร้านวันนี้, ฟอร์มค่าใช้จ่ายด่วน, โมดอลนับเงิน & ปิดร้าน | index.html |
+
+## แผนที่หน้าบัญชี (accounting.html)
+
+| ไฟล์ | ชั้น | หน้าที่ | ใครเรียก |
+| --- | --- | --- | --- |
+| `domain/cashBalance.js` | Domain | "เงินสด + เงินโอน ที่มีจริงตอนนี้" = ยอดนับล่าสุด + รายการหลังนับ ± ขาด/เกินปิดร้าน, ยอดโครงการรัฐ | accounting.js |
+| `data/accountingRepo.js` | Data | lots/expenses/sales/capital/shifts/app_settings, ประวัติรอบร้าน, storage_usage, รูป + Storage | accounting.js, shift-history.js, storage-tools.js, การ์ดพื้นที่ |
+| `accounting.js` | UI | ฟอร์มเงินทุน/นับเงิน/ค่าใช้จ่าย/ถังเงิน, สรุป, ทุนตาม Lot, สมุดบัญชี + CSV | accounting.html |
+| `shift-history.js` | UI | ประวัติรอบร้าน + สรุปตามทำเล | accounting.html |
+| `storage-tools.js` | UI | สร้างรูปย่อ / ลบรูปเต็มของที่ขายเกิน 6 เดือน | accounting.html |

@@ -1,3 +1,11 @@
+/* ==========================================================
+   accounting.js — ชั้น UI ของหน้าบัญชี (accounting.html)
+   หน้าที่: ฟอร์มเงินทุน/นับเงินจริง/ค่าใช้จ่าย/ถังเงิน, การ์ดสรุป, ทุนตาม Lot, สมุดบัญชี + CSV
+   เรียกต่อ:
+     Data   AccountingRepo ← lots/expenses/sales/capital/shifts/app_settings  (data/accountingRepo.js)
+     Domain CashBalance    ← "เงินสด + เงินโอน ที่มีจริงตอนนี้"              (domain/cashBalance.js)
+   ไฟล์คู่กันบนหน้าเดียวกัน: shift-history.js (ประวัติรอบร้าน), storage-tools.js (ลดพื้นที่รูป)
+   ========================================================== */
 let editingExpenseId = null;
 let expensesCache = [];
 let baseAmountTouched = false;
@@ -10,7 +18,7 @@ function escapeHtml(v = "") {
 document.getElementById("expenseDate").valueAsDate = new Date(); document.getElementById("expenseTime").value = nowTime();
 
 /* ---------- เงินทุน / ปรับยอดเงิน ---------- */
-const CAP_SIGN = { opening: 0, capital_in: 1, old_stock_income: 1, adjust_up: 1, withdraw: -1, adjust_down: -1 };
+const CAP_SIGN = CashBalance.CAP_SIGN; // + / − ของเงินทุนแต่ละประเภท (Domain)
 const CAP_LABELS = { opening: "ตั้งยอดเงินจริง", capital_in: "เพิ่มเงินทุน", old_stock_income: "เงินขายของเก่า", withdraw: "ถอนเงิน", adjust_up: "ปรับยอด(+)", adjust_down: "ปรับยอด(−)" };
 let currentBalance = 0;
 let hasAnchor = false;
@@ -21,7 +29,7 @@ async function addCapitalEntry(entry_type, amount, reason, entry_date) {
   reason = (reason || "").trim();
   if (!(amount > 0) && !(entry_type === "opening" && amount >= 0)) return showToast("กรุณาใส่จำนวนเงินมากกว่า 0");
   if (reason.length < 3) return showToast("ต้องใส่เหตุผล/รายละเอียดทุกครั้ง");
-  const { error } = await supabaseClient.from("capital_entries").insert({ entry_type, amount, reason, entry_date });
+  const { error } = await AccountingRepo.addCapital({ entry_type, amount, reason, entry_date });
   if (error) { console.error(error); return showToast("บันทึกไม่สำเร็จ: " + error.message); }
   showToast("บันทึกเรียบร้อย");
   loadAll();
@@ -73,7 +81,7 @@ document.getElementById("adjBtn").addEventListener("click", async () => {
   const today = new Date().toISOString().slice(0, 10);
   const ok = await addCapitalEntry("opening", real, reason, today);
   if (!ok) return;
-  await supabaseClient.from("app_settings").upsert({ key: "cash_count", value: { cash, transfer, date: today }, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  await AccountingRepo.saveSetting("cash_count", { cash, transfer, date: today });
   ["realCashOnHand", "realTransfer", "adjReason"].forEach((id) => (document.getElementById(id).value = ""));
   document.getElementById("countPreview").textContent = "";
 });
@@ -88,11 +96,7 @@ const pctInputs = {
 const bucketBaseAmountEl = document.getElementById("bucketBaseAmount");
 
 async function loadBucketSettings() {
-  const { data, error } = await supabaseClient
-    .from("app_settings")
-    .select("*")
-    .eq("key", "bucket_split")
-    .maybeSingle();
+  const { data, error } = await AccountingRepo.getSetting("bucket_split");
 
   if (error) {
     console.error(error);
@@ -118,9 +122,7 @@ document.getElementById("bucketForm").addEventListener("submit", async (e) => {
     other: Number(pctInputs.other.value) || 0,
   };
 
-  const { error } = await supabaseClient
-    .from("app_settings")
-    .upsert({ key: "bucket_split", value, updated_at: new Date().toISOString() }, { onConflict: "key" });
+  const { error } = await AccountingRepo.saveSetting("bucket_split", value);
 
   if (error) {
     console.error(error);
@@ -173,7 +175,7 @@ document.getElementById("expenseForm").addEventListener("submit", async (e) => {
   };
 
   if (editingExpenseId) {
-    const { error } = await supabaseClient.from("expenses").update(payload).eq("id", editingExpenseId);
+    const { error } = await AccountingRepo.updateExpense(editingExpenseId, payload);
     if (error) {
       console.error(error);
       showToast("บันทึกไม่สำเร็จ: " + error.message);
@@ -182,7 +184,7 @@ document.getElementById("expenseForm").addEventListener("submit", async (e) => {
     showToast("แก้ไขค่าใช้จ่ายเรียบร้อย");
     exitEditMode();
   } else {
-    const { error } = await supabaseClient.from("expenses").insert(payload);
+    const { error } = await AccountingRepo.addExpense(payload);
     if (error) {
       console.error(error);
       showToast("บันทึกไม่สำเร็จ: " + error.message);
@@ -222,7 +224,7 @@ async function handleDeleteExpense(id) {
   const ok = await Notify.confirm({ title: "ลบรายการค่าใช้จ่ายนี้?", message: "ลบแล้วกู้คืนไม่ได้ ยอดค่าใช้จ่ายและกำไรจะคำนวณใหม่", confirmText: "ลบ", danger: true });
   if (!ok) return;
 
-  const { error } = await supabaseClient.from("expenses").delete().eq("id", id);
+  const { error } = await AccountingRepo.deleteExpense(id);
   if (error) {
     console.error(error);
     showToast("ลบไม่สำเร็จ: " + error.message);
@@ -279,11 +281,11 @@ async function loadAll() {
   // fetchAllRows กัน sales/expenses ตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
   const [{ data: lots, error: lotsErr }, { data: expenses, error: expErr }, { data: sales, error: salesErr }, { data: items, error: itemsErr }, { data: capital, error: capErr }] =
     await Promise.all([
-      fetchAllRows(() => supabaseClient.from("lots").select("*")),
-      fetchAllRows(() => supabaseClient.from("expenses").select("*")),
-      fetchAllRows(() => supabaseClient.from("sales").select("*, items(item_name)").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
-      fetchAllRows(() => supabaseClient.from("items").select("id,lot_id")),
-      fetchAllRows(() => supabaseClient.from("capital_entries").select("*")),
+      AccountingRepo.allLots(),
+      AccountingRepo.allExpenses(),
+      AccountingRepo.allSales(), // ไม่นับรายการที่ถูกยกเลิก
+      AccountingRepo.allItemLots(),
+      AccountingRepo.allCapital(),
     ]);
 
   if (lotsErr || expErr || salesErr || itemsErr || capErr) {
@@ -297,7 +299,7 @@ async function loadAll() {
 
   // V20: เงินขาด/เกินตอนปิดร้าน (shifts.cash_diff) = เงินจริงที่หาย/เกินจากที่ระบบคิด → ต้องรวมในยอดเงินจริงด้วย
   // ตาราง shifts มาจาก migration_v19 — ยังไม่ได้รัน ก็ข้ามไป (ไม่ทำให้หน้าบัญชีพัง)
-  const { data: closedShifts } = await supabaseClient.from("shifts").select("closed_at,cash_diff").not("closed_at", "is", null);
+  const { data: closedShifts } = await AccountingRepo.closedShiftDiffs();
   const shiftDiffs = closedShifts || [];
 
   const totalCapital = lots.reduce((sum, l) => sum + Number(l.total_cost || 0), 0);
@@ -305,33 +307,12 @@ async function loadAll() {
   const totalRevenue = sales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0);
   const totalCostSold = sales.reduce((sum, s) => sum + Number(s.cost_price || 0), 0);
 
-  // ยอดเงินจริง = ยอดที่นับได้ล่าสุด (anchor) + รายการที่เกิดหลังจากนั้น — ของก่อนหน้านั้นถือว่ารวมอยู่ในยอดที่นับแล้ว
-  let anchor = capital.filter((c) => c.entry_type === "opening").sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
-  // ยังไม่เคยนับเงินจริง แต่มีเงินทุนที่บันทึกไว้: ใช้ยอดเงินทุนรวมเป็นยอดตั้งต้นชั่วคราว (นับเฉพาะรายการหลังจากเงินทุนล่าสุด)
-  const provisional = !anchor && capital.length > 0;
+  // ยอดเงินจริง = ยอดที่นับได้ล่าสุด + รายการหลังจากนั้น (คำนวณที่ Domain: domain/cashBalance.js)
   hasCapitalEntries = capital.length > 0;
-  if (provisional) {
-    const last = [...capital].sort((x, y) => new Date(y.created_at) - new Date(x.created_at))[0];
-    anchor = {
-      amount: capital.reduce((s, c) => s + CAP_SIGN[c.entry_type] * Number(c.amount), 0),
-      entry_date: last.entry_date,
-      created_at: last.created_at,
-    };
-  }
-  let newFlow = { cap: 0, sales: 0, lots: 0, exp: 0, drawer: 0 };
-  if (anchor) {
-    const aDate = anchor.entry_date, aTs = new Date(anchor.created_at);
-    newFlow.cap = capital
-      .filter((c) => c.entry_type !== "opening" && (c.entry_date > aDate || (c.entry_date === aDate && new Date(c.created_at) > aTs)))
-      .reduce((s, c) => s + CAP_SIGN[c.entry_type] * Number(c.amount), 0);
-    newFlow.sales = sales.filter((s) => new Date(s.sale_date) > aTs).reduce((s, x) => s + Number(x.sale_price || 0), 0);
-    const afterCount = (d, row) => d > aDate || (d === aDate && new Date(row.created_at) > aTs); // วันเดียวกับวันนับ: ถ้าลงในระบบหลังเวลานับ ถือว่าเป็นรายการใหม่
-    newFlow.lots = lots.filter((l) => afterCount(l.purchase_date, l)).reduce((s, l) => s + Number(l.total_cost || 0), 0);
-    newFlow.exp = expenses.filter((e) => (e.expense_at ? new Date(e.expense_at) > aTs : afterCount(e.expense_date, e))).reduce((s, e) => s + Number(e.amount || 0), 0);
-    newFlow.drawer = shiftDiffs.filter((s) => new Date(s.closed_at) > aTs).reduce((s, x) => s + Number(x.cash_diff || 0), 0);
-    currentBalance = Number(anchor.amount) + newFlow.cap + newFlow.sales - newFlow.lots - newFlow.exp + newFlow.drawer;
-  } else currentBalance = 0;
-  hasAnchor = !!anchor && !provisional;
+  const cb = CashBalance.compute({ capital, sales, lots, expenses, shiftDiffs });
+  const { anchor, provisional, flow: newFlow } = cb;
+  currentBalance = cb.balance;
+  hasAnchor = cb.hasAnchor;
 
   const balEl = document.getElementById("accCashBalance");
   const noBase = !anchor;
@@ -342,9 +323,8 @@ async function loadAll() {
     ? "ใส่เงินสดและเงินโอนที่มีจริงตอนนี้ในช่อง \"นับเงินจริง\" ด้านล่าง ระบบจะใช้เป็นจุดเริ่มต้น แล้วบวก/ลบเฉพาะรายการที่เกิดหลังจากนั้น"
     : `${provisional ? "เงินทุนที่บันทึกไว้" : "ยอดที่นับ"} ${formatBaht(anchor.amount)} (${formatDate(anchor.entry_date)}) + ขายใหม่ ${formatBaht(newFlow.sales)} ± เงินทุนใหม่ ${formatBaht(newFlow.cap)} − ซื้อล็อตใหม่ ${formatBaht(newFlow.lots)} − ค่าใช้จ่ายใหม่ ${formatBaht(newFlow.exp)}${newFlow.drawer ? ` ${newFlow.drawer > 0 ? "+" : "−"} เงิน${newFlow.drawer > 0 ? "เกิน" : "ขาด"}ตอนปิดร้าน ${formatBaht(Math.abs(newFlow.drawer))}` : ""}`;
   if (noBase) document.getElementById("countBox").open = true;
-  const govSales = anchor ? sales.filter((s) => new Date(s.sale_date) > new Date(anchor.created_at)) : [];
-  const gov = govSales.filter((s) => s.payment_method === "government").reduce((s, x) => s + Number(x.sale_price || 0), 0);
-  const { data: cc } = await supabaseClient.from("app_settings").select("value").eq("key", "cash_count").maybeSingle();
+  const gov = CashBalance.governmentSince(sales, anchor);
+  const { data: cc } = await AccountingRepo.getSetting("cash_count");
   document.getElementById("cashCountNote").textContent =
     (cc && cc.value ? `นับล่าสุด ${formatDate(cc.value.date)}: เงินสด ${formatBaht(cc.value.cash)} · เงินโอน ${formatBaht(cc.value.transfer)}. ` : "") +
     (provisional ? "ยังไม่ได้นับเงินจริง — ใช้เงินทุนที่บันทึกไว้เป็นยอดตั้งต้นชั่วคราว ตั้งยอดนับจริงเพื่อให้ตรงกับเงินในมือ. " : "") +

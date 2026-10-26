@@ -7,25 +7,22 @@
    2) ลบรูปเต็มของชิ้นที่ขายไปเกิน 6 เดือน: เหลือรูปย่อไว้ดูย้อนหลัง
       ลบไฟล์ใน Storage แล้วเปลี่ยน image_url → รูปย่อ + จด full_removed_at (migration_v21)
       ทำเมื่อเจ้าของกดเองเท่านั้น (ลบแล้วกู้ไม่ได้) — ไม่ตั้งเวลาอัตโนมัติ
+   ชั้น UI · เรียกต่อ: AccountingRepo (รายการรูป, อัป/ลบไฟล์ใน Storage, แก้แถว item_images)
    ========================================================== */
 (function () {
   const box = document.getElementById("storageTools");
-  if (!box || !window.supabaseClient) return;
-  const BUCKET = "item-images";
+  if (!box || !window.AccountingRepo) return;
   const SOLD_MONTHS = 6;
   let busy = false;
   let stop = false;
 
   async function countMissingThumbs() {
-    const { count, error } = await supabaseClient.from("item_images").select("id", { count: "exact", head: true }).is("thumb_url", null);
+    const { count, error } = await AccountingRepo.countImagesWithoutThumb();
     return error ? null : count;
   }
   function oldSoldQuery(head) {
     const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - SOLD_MONTHS);
-    return supabaseClient.from("item_images")
-      .select(head ? "id,items!inner(id)" : "id,item_id,storage_path,thumb_url,thumb_path,items!inner(status,sold_at)", head ? { count: "exact", head: true } : undefined)
-      .eq("items.status", "sold").lt("items.sold_at", cutoff.toISOString())
-      .not("thumb_url", "is", null).not("storage_path", "is", null).is("full_removed_at", null);
+    return AccountingRepo.oldSoldFullImages(cutoff.toISOString(), head);
   }
 
   async function render() {
@@ -67,7 +64,7 @@
   }
 
   async function backfillThumbs() {
-    const { data, error } = await fetchAllRows(() => supabaseClient.from("item_images").select("id,item_id,image_url").is("thumb_url", null));
+    const { data, error } = await AccountingRepo.imagesWithoutThumb();
     if (error) return Notify.error("โหลดรายการรูปไม่สำเร็จ", error);
     let ok = 0; const failed = [];
     for (let i = 0; i < data.length && !stop; i++) {
@@ -76,11 +73,11 @@
       try {
         const blob = await makeThumb(img.image_url);
         const path = `${img.item_id}/thumb_${crypto.randomUUID()}.jpg`;
-        const up = await supabaseClient.storage.from(BUCKET).upload(path, blob, { upsert: false, contentType: "image/jpeg" });
+        const up = await AccountingRepo.uploadImage(path, blob);
         if (up.error) throw up.error;
-        const thumbUrl = supabaseClient.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
-        const { error: e2 } = await supabaseClient.from("item_images").update({ thumb_url: thumbUrl, thumb_path: path }).eq("id", img.id);
-        if (e2) { await supabaseClient.storage.from(BUCKET).remove([path]); throw e2; }
+        const thumbUrl = AccountingRepo.publicImageUrl(path);
+        const { error: e2 } = await AccountingRepo.updateImage(img.id, { thumb_url: thumbUrl, thumb_path: path });
+        if (e2) { await AccountingRepo.removeImages([path]); throw e2; }
         ok++;
       } catch (err) {
         failed.push(err?.message || String(err));
@@ -104,12 +101,11 @@
     for (let i = 0; i < data.length && !stop; i += 50) {
       const batch = data.slice(i, i + 50);
       progress(i, data.length, `กำลังลบ ${i + 1}–${i + batch.length} / ${data.length}`);
-      const rm = await supabaseClient.storage.from(BUCKET).remove(batch.map((x) => x.storage_path));
+      const rm = await AccountingRepo.removeImages(batch.map((x) => x.storage_path));
       if (rm.error) { Notify.error("ลบไฟล์ใน Storage ไม่สำเร็จ", rm.error, { hint: `ลบไปแล้ว ${done} รูป — กดอีกครั้งเพื่อทำต่อ` }); break; }
       // ชี้รูปหลักไปที่รูปย่อแทน · storage_path = รูปย่อ เพื่อให้การลบสินค้าภายหลังลบไฟล์ถูกตัว
       for (const x of batch) {
-        const { error: e2 } = await supabaseClient.from("item_images")
-          .update({ image_url: x.thumb_url, storage_path: x.thumb_path, full_removed_at: new Date().toISOString() }).eq("id", x.id);
+        const { error: e2 } = await AccountingRepo.updateImage(x.id, { image_url: x.thumb_url, storage_path: x.thumb_path, full_removed_at: new Date().toISOString() });
         if (!e2) done++;
       }
     }
