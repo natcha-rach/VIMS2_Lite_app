@@ -40,46 +40,67 @@
   }
 
   // Realtime event จาก Supabase จะเรียก listener ของหน้าปัจจุบัน เช่น sell.js / reports.js / accounting.js
+  //
+  // V19.2 แก้บั๊ก "cannot add postgres_changes callbacks ... after subscribe()"
+  // สาเหตุ: ตอนเปิดหน้า subscribeRealtime() ถูกเรียก 2 ครั้งติดกัน (จาก updateNetworkState + init)
+  //        ก่อน subscribe เสร็จ และตอนเชื่อมต่อหลุด (CLOSED) ไม่ได้ removeChannel ทิ้ง
+  //        supabase-js จึงคืน channel ชื่อเดิมที่ subscribe ไปแล้ว → .on() ซ้ำแล้ว error
+  // วิธีแก้: (1) มี channel อยู่แล้ว/กำลังเชื่อม = ไม่สร้างใหม่  (2) ลบ channel เก่าทิ้งทุกครั้งก่อนต่อใหม่
+  //         (3) ตั้งชื่อ channel ไม่ซ้ำทุกครั้ง  (4) ห่อ try/catch ไม่ให้หน้าพังเพราะ Realtime
+  let retryTimer = null;
+  let attempt = 0;
+
+  async function dropChannel() {
+    const old = channel;
+    channel = null;
+    subscribed = false;
+    if (old && window.supabaseClient) {
+      try { await window.supabaseClient.removeChannel(old); } catch (_) { /* ปิดไม่ได้ก็ช่างมัน */ }
+    }
+  }
+
+  function scheduleRetry(ms) {
+    clearTimeout(retryTimer);
+    retryTimer = window.setTimeout(() => {
+      if (!subscribed && navigator.onLine !== false) subscribeRealtime();
+    }, ms);
+  }
+
   function subscribeRealtime() {
-    if (subscribed || !window.supabaseClient) return;
+    if (subscribed || channel || !window.supabaseClient) return; // กำลังเชื่อม/เชื่อมอยู่แล้ว
+    attempt += 1;
+    try {
+      const ch = window.supabaseClient.channel(`vims2-lite-realtime-${Date.now()}-${attempt}`);
+      channel = ch;
+      TABLES.forEach((table) => {
+        ch.on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table },
+          (payload) => {
+            setSyncStatus('syncing', 'กำลัง Sync…');
+            emitChange(table, payload, 'realtime');
+            window.setTimeout(() => setSyncStatus('online', 'Realtime พร้อม'), 500);
+          }
+        );
+      });
 
-    channel = window.supabaseClient.channel('vims2-lite-realtime');
-
-    TABLES.forEach((table) => {
-      channel.on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table },
-        (payload) => {
-          setSyncStatus('syncing', 'กำลัง Sync…');
-          emitChange(table, payload, 'realtime');
-          window.setTimeout(() => setSyncStatus('online', 'Realtime พร้อม'), 500);
+      ch.subscribe((status) => {
+        if (ch !== channel) return; // event ของ channel เก่าที่ถูกทิ้งไปแล้ว
+        if (status === 'SUBSCRIBED') {
+          subscribed = true;
+          attempt = 0;
+          setSyncStatus('online', 'Realtime พร้อม');
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setSyncStatus('offline', status === 'CLOSED' ? 'Realtime ถูกตัด · กำลังเชื่อมใหม่' : 'Realtime ขัดข้อง · กำลังลองใหม่');
+          dropChannel().then(() => scheduleRetry(Math.min(30000, 1500 * attempt)));
         }
-      );
-    });
-
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        subscribed = true;
-        setSyncStatus('online', 'Realtime พร้อม');
-      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-        subscribed = false;
-        if (channel && window.supabaseClient) {
-          window.supabaseClient.removeChannel(channel);
-          channel = null;
-        }
-        setSyncStatus('offline', 'Realtime ขัดข้อง · กำลังลองใหม่');
-        window.setTimeout(() => {
-          if (!subscribed) subscribeRealtime();
-        }, 3000);
-      } else if (status === 'CLOSED') {
-        subscribed = false;
-        channel = null;
-        setSyncStatus('offline', 'Realtime ถูกตัด · กำลังเชื่อมใหม่');
-        window.setTimeout(() => {
-          if (!subscribed) subscribeRealtime();
-        }, 1500);
-      }
-    });
+      });
+    } catch (err) {
+      // Realtime เป็นตัวช่วยเท่านั้น — ล้มเหลวก็ยังใช้แอปได้ (มี refresh สำรองตอนกลับมาที่หน้า)
+      console.warn('Realtime เชื่อมต่อไม่สำเร็จ', err);
+      setSyncStatus('offline', 'Realtime ขัดข้อง · กำลังลองใหม่');
+      dropChannel().then(() => scheduleRetry(Math.min(30000, 3000 * attempt)));
+    }
   }
 
   // Refresh สำรองเมื่อผู้ใช้กลับมาที่ tab/page เพื่อป้องกันกรณี browser หยุด WebSocket ตอนอยู่เบื้องหลัง
@@ -115,8 +136,10 @@
       if (document.visibilityState === 'visible') requestPageRefresh('visibility');
     });
     window.addEventListener('pageshow', () => requestPageRefresh('pageshow'));
-
-    subscribeRealtime();
+    // กลับมาจากพื้นหลังบนมือถือ: ถ้าหลุดไปแล้วให้ต่อใหม่
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && !subscribed && !channel) subscribeRealtime();
+    });
   }
 
   window.VIMSRealtime = { initRealtimeSync, setSyncStatus, emitChange };
