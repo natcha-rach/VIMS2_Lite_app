@@ -214,8 +214,11 @@
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="assets/js/reports.js"></script>
-    <script src="assets/js/insights.js?v=20"></script>
+    <!-- Clean Architecture: Domain → Data → UI (docs/ARCHITECTURE.md) -->
+    <script src="assets/js/domain/insightsCalc.js?v=1"></script>
+    <script src="assets/js/data/reportsRepo.js?v=1"></script>
+    <script src="assets/js/reports.js?v=21"></script>
+    <script src="assets/js/insights.js?v=21"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

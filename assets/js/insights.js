@@ -4,51 +4,25 @@
      - แยกตาม ไซซ์ / สภาพ / ประเภท / Tier / ช่วงราคา
        → ขายไปกี่ชิ้น, ขายเฉลี่ย, กำไรเฉลี่ย, ใช้กี่วันกว่าจะขาย (มัธยฐาน), ค้างอยู่, % ขายออก
      - Lot คืนทุนกี่วัน (วันที่ยอดขายสะสม ≥ ทุนทั้ง Lot)
-   ข้อมูล: sales (ไม่นับที่ยกเลิก) + items + lots — คำนวณใน browser ไม่ต้องรัน SQL เพิ่ม
+   ชั้น UI · เรียกต่อ: Data ReportsRepo (โหลดแถว) → Domain InsightsCalc (จัดกลุ่ม/มัธยฐาน/คืนทุน) → วาดตาราง
    ช่วงเวลาของส่วนนี้แยกจากตัวเลือกด้านบนของหน้า (ต้องการข้อมูลยาวพอให้เห็นแนวโน้ม)
    ========================================================== */
 (function () {
   const root = document.getElementById("insights");
-  if (!root || !window.supabaseClient) return;
+  if (!root || !window.ReportsRepo || !window.InsightsCalc) return;
   const n = (v) => Number(v || 0);
   const esc = (v = "") => String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
   const DAY = 86400000;
-  const PRICE_BANDS = [[0, 100, "ต่ำกว่า 100"], [100, 200, "100–199"], [200, 300, "200–299"], [300, 500, "300–499"], [500, Infinity, "500 ขึ้นไป"]];
-  const DIMS = {
-    size: { label: "ไซซ์", key: (i) => (i.size || "").trim().toUpperCase() || "ไม่ระบุ" },
-    condition: { label: "สภาพ", key: (i) => (i.condition ? `เกรด ${i.condition}` : "ไม่ระบุ") },
-    item_type: { label: "ประเภท", key: (i) => (i.item_type || "").trim() || "ไม่ระบุ" },
-    tier: { label: "Tier", key: (i) => (i.tier === "head" ? "งานหัว" : "ปกติ") },
-    price: { label: "ช่วงราคา", key: (i, price) => PRICE_BANDS.find(([a, b]) => price >= a && price < b)?.[2] || "-", order: PRICE_BANDS.map((x) => x[2]) },
-  };
+  const DIMS = InsightsCalc.DIMS; // มิติจัดกลุ่ม (Domain)
   let range = "180";
   let dim = "size";
   let cache = null;
 
-  const median = (arr) => {
-    if (!arr.length) return null;
-    const s = [...arr].sort((a, b) => a - b);
-    const m = Math.floor(s.length / 2);
-    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-  };
-  const listedAt = (i) => new Date(i.listed_at || i.created_at);
-
   async function load() {
     root.querySelector(".ins-body").innerHTML = `<div class="empty-state">กำลังคำนวณ...</div>`;
     const since = range === "all" ? null : new Date(Date.now() - Number(range) * DAY).toISOString();
-    const salesQ = () => {
-      let q = supabaseClient.from("sales")
-        .select("sale_date,sale_price,cost_price,list_price,item_id,items(size,condition,tier,item_type,created_at,listed_at,lot_id)")
-        .is("voided_at", null);
-      if (since) q = q.gte("sale_date", since);
-      return q;
-    };
     const [salesR, stockR, lotsR, lotSalesR] = await Promise.all([
-      fetchAllRows(salesQ),
-      fetchAllRows(() => supabaseClient.from("items").select("size,condition,tier,item_type,current_price,created_at,listed_at").eq("status", "available").eq("intake_status", "listed")),
-      fetchAllRows(() => supabaseClient.from("lots").select("id,lot_name,purchase_date,total_cost")),
-      // คืนทุน Lot ต้องใช้ยอดขายทั้งหมดตั้งแต่ซื้อ (ไม่ตัดตามช่วง)
-      fetchAllRows(() => supabaseClient.from("sales").select("sale_date,sale_price,items(lot_id)").is("voided_at", null)),
+      ReportsRepo.salesForInsights(since), ReportsRepo.stockForInsights(), ReportsRepo.lotsBasic(), ReportsRepo.salesByLot(),
     ]);
     const err = salesR.error || stockR.error || lotsR.error || lotSalesR.error;
     if (err) {
@@ -60,49 +34,12 @@
     render();
   }
 
-  // จัดกลุ่มตามมิติที่เลือก
-  function groupBy(d) {
-    const g = {};
-    const row = (k) => (g[k] ||= { key: k, sold: 0, revenue: 0, profit: 0, days: [], stock: 0, stale: 0 });
-    cache.sales.forEach((s) => {
-      const price = n(s.list_price ?? s.sale_price);
-      const r = row(DIMS[d].key(s.items, price));
-      r.sold++; r.revenue += n(s.sale_price); r.profit += n(s.sale_price) - n(s.cost_price);
-      const days = (new Date(s.sale_date) - listedAt(s.items)) / DAY;
-      if (days >= 0) r.days.push(days);
-    });
-    const now = Date.now();
-    cache.stock.forEach((i) => {
-      const r = row(DIMS[d].key(i, n(i.current_price)));
-      r.stock++;
-      if ((now - listedAt(i)) / DAY >= 60) r.stale++;
-    });
-    const rows = Object.values(g).map((r) => ({ ...r, med: median(r.days), through: r.sold + r.stock ? (r.sold / (r.sold + r.stock)) * 100 : 0 }));
-    const order = DIMS[d].order;
-    return order ? rows.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key)) : rows.sort((a, b) => b.sold - a.sold);
-  }
-
-  // Lot คืนทุน: เรียงยอดขายตามวัน แล้วหาวันแรกที่ยอดสะสม ≥ ทุนทั้ง Lot
-  function lotPayback() {
-    const byLot = {};
-    cache.lotSales.forEach((s) => { const id = s.items?.lot_id; if (id) (byLot[id] ||= []).push(s); });
-    return cache.lots.filter((l) => n(l.total_cost) > 0 && byLot[l.id]?.length).map((l) => {
-      const sales = byLot[l.id].sort((a, b) => new Date(a.sale_date) - new Date(b.sale_date));
-      const start = new Date(l.purchase_date);
-      let sum = 0, paidAt = null;
-      for (const s of sales) { sum += n(s.sale_price); if (!paidAt && sum >= n(l.total_cost)) paidAt = new Date(s.sale_date); }
-      const days = Math.max(0, Math.round(((paidAt || new Date()) - start) / DAY));
-      return { lot: l, sum, pct: (sum / n(l.total_cost)) * 100, paid: !!paidAt, days };
-    }).sort((a, b) => (b.paid - a.paid) || (a.days - b.days));
-  }
-
   function render() {
-    const rows = groupBy(dim);
-    const best = rows.filter((r) => r.sold >= 3 && r.med !== null).sort((a, b) => a.med - b.med)[0];
-    const slow = rows.filter((r) => r.stock >= 5).sort((a, b) => a.through - b.through)[0];
+    const rows = InsightsCalc.groupBy(dim, cache.sales, cache.stock);
+    const { best, slow } = InsightsCalc.tips(rows);
     const tips = [
       best ? `ขายออกเร็วสุด: <b>${esc(best.key)}</b> (ครึ่งหนึ่งขายได้ภายใน ${Math.round(best.med)} วัน)` : "",
-      slow && slow !== best ? `ค้างเยอะ: <b>${esc(slow.key)}</b> ขายออกแค่ ${slow.through.toFixed(0)}% · ค้าง ${slow.stock} ชิ้น${slow.stale ? ` (60+ วัน ${slow.stale})` : ""}` : "",
+      slow ? `ค้างเยอะ: <b>${esc(slow.key)}</b> ขายออกแค่ ${slow.through.toFixed(0)}% · ค้าง ${slow.stock} ชิ้น${slow.stale ? ` (60+ วัน ${slow.stale})` : ""}` : "",
     ].filter(Boolean);
 
     const table = rows.length ? `<div class="table-scroll"><table class="ins-table">
@@ -117,7 +54,7 @@
         <td class="num"><span class="ins-bar"><i style="width:${r.through.toFixed(0)}%"></i></span>${r.through.toFixed(0)}%</td>
       </tr>`).join("")}</tbody></table></div>` : `<div class="empty-state">ยังไม่มีข้อมูลการขายในช่วงนี้</div>`;
 
-    const lots = lotPayback();
+    const lots = InsightsCalc.lotPayback(cache.lots, cache.lotSales);
     const lotTable = lots.length ? `<div class="table-scroll"><table class="ins-table">
       <thead><tr><th>Lot</th><th class="num">ทุน</th><th class="num">ขายสะสม</th><th class="num">คืนทุน</th><th class="num">ใช้เวลา</th></tr></thead>
       <tbody>${lots.map((x) => `<tr>

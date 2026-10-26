@@ -1,6 +1,6 @@
 # สถาปัตยกรรมโค้ด (Clean Architecture แบบเบา — ไม่มี build step)
 
-ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)**, **บัญชี (accounting)** · ยังไม่ย้าย: reports, lots, items, tax, dashboard
+ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)**, **บัญชี (accounting)**, **รายงาน (reports)** · ยังไม่ย้าย: lots, items, tax, dashboard
 
 ## ชั้นของโค้ด (เรียกได้ทางเดียว: UI → Domain/Data → Infra)
 
@@ -8,9 +8,9 @@
 UI (page controller)   assets/js/sell.js …        อ่าน/เขียน DOM, ผูก event, แสดง Notify
    │ เรียก
    ├─ Domain (กฎธุรกิจล้วน) assets/js/domain/*.js   ไม่แตะ DOM / Supabase → เทสต์ด้วย node ได้
-   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js
+   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · insightsCalc.js
    └─ Data (repository)   assets/js/data/*.js      ที่เดียวที่เรียก Supabase ของหน้านั้น
-         salesRepo.js · catalogRepo.js · shiftRepo.js · accountingRepo.js   คืน { data, error } แบบ supabase-js เสมอ
+         salesRepo.js · catalogRepo.js · shiftRepo.js · accountingRepo.js · reportsRepo.js   คืน { data, error } แบบ supabase-js เสมอ
             │ ใช้
 Infra                    supabaseClient.js (client, fetchAllRows, debounce) · notify.js · offline.js · sw.js · realtime.js
 ```
@@ -51,3 +51,12 @@ Infra                    supabaseClient.js (client, fetchAllRows, debounce) · n
 | `accounting.js` | UI | ฟอร์มเงินทุน/นับเงิน/ค่าใช้จ่าย/ถังเงิน, สรุป, ทุนตาม Lot, สมุดบัญชี + CSV | accounting.html |
 | `shift-history.js` | UI | ประวัติรอบร้าน + สรุปตามทำเล | accounting.html |
 | `storage-tools.js` | UI | สร้างรูปย่อ / ลบรูปเต็มของที่ขายเกิน 6 เดือน | accounting.html |
+
+## แผนที่หน้ารายงาน (reports.html)
+
+| ไฟล์ | ชั้น | หน้าที่ | ใครเรียก |
+| --- | --- | --- | --- |
+| `domain/insightsCalc.js` | Domain | จัดกลุ่มไซซ์/สภาพ/ประเภท/Tier/ช่วงราคา, มัธยฐานวันขายออก, คำแนะนำ, Lot คืนทุนกี่วัน | insights.js |
+| `data/reportsRepo.js` | Data | sales/expenses ตามช่วง, แนวโน้ม, RPC Lot/กลุ่มราคา/แหล่งซื้อ, ข้อมูลอะไรขายดี (อ่านอย่างเดียว) | reports.js, insights.js |
+| `reports.js` | UI | สรุปยอด, แยกช่องทาง/วิธีจ่าย/Tier, กราฟแนวโน้ม, ตาราง Lot/กลุ่ม/แหล่งซื้อ | reports.html |
+| `insights.js` | UI | การ์ด "อะไรขายดี" | reports.html |

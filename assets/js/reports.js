@@ -1,8 +1,7 @@
 /* ==========================================================
-   reports.js — รายงานยอดขาย/กำไร/เงินรับ
-   Data flow:
-   reports.html -> reports.js -> Supabase (sales, expenses, items, lots)
-   หน้านี้เป็น read-only report: ไม่แก้ข้อมูลธุรกรรมโดยตรง
+   reports.js — ชั้น UI ของหน้ารายงาน (reports.html): สรุปยอด/กำไร/เงินรับ, แนวโน้ม, Lot, กลุ่มราคา, แหล่งซื้อ
+   เรียกต่อ: Data ReportsRepo (data/reportsRepo.js) — อ่านอย่างเดียว ไม่แก้ข้อมูลธุรกรรม
+   ไฟล์คู่กันบนหน้าเดียวกัน: insights.js (การ์ด "อะไรขายดี")
    ========================================================== */
 const CHANNEL_LABELS = { street_market: "ถนนคนเดิน", facebook: "Facebook", instagram: "Instagram" };
 function escapeHtml(v="") { return String(v).replace(/[&<>'"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;","\"":"&quot;"}[c])); }
@@ -53,8 +52,8 @@ async function loadReport() {
     // - Tier breakdown ใช้ items(...).tier ที่ join มากับ sales อยู่แล้ว ไม่ต้อง query items แยก
     // - Performance ตาม Lot ย้ายไปคำนวณผ่าน RPC get_lot_performance() แทน (ดู renderLotBreakdown)
     const [salesR, expensesR] = await Promise.all([
-      fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method,note,items(item_name,size,condition,tier)").is("voided_at",null).order("sale_date",{ascending:false})), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
-      fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,amount,category,note").gte("expense_date",start.toISOString().slice(0,10)).lte("expense_date",new Date(end.getTime()-86400000).toISOString().slice(0,10)))
+      ReportsRepo.allSalesWithItem(), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
+      ReportsRepo.expensesBetween(start.toISOString().slice(0,10), new Date(end.getTime()-86400000).toISOString().slice(0,10))
     ]);
     const err=salesR.error||expensesR.error; if(err) throw err;
     const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[];
@@ -88,7 +87,7 @@ function renderTierBreakdown(sales) {
 // ทั้งตารางมา group ฝั่ง browser — ลดข้อมูลที่ต้องโหลดเมื่อร้านมีสินค้า/รายการขายเยอะขึ้นเรื่อยๆ
 async function renderLotBreakdown() {
   const el = document.getElementById("repLotBreakdown");
-  const { data, error } = await supabaseClient.rpc("get_lot_performance");
+  const { data, error } = await ReportsRepo.lotPerformance();
   if (error) { console.error(error); Notify.error("โหลด Performance ตาม Lot ไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=10 class=empty-state>โหลด Performance ตาม Lot ไม่สำเร็จ</td></tr>"; return; }
   const rows = (data||[]).filter(x=>Number(x.total_items)>0||Number(x.sold)>0);
   el.innerHTML=rows.length?rows.map(x=>`<tr>
@@ -106,7 +105,7 @@ async function renderLotBreakdown() {
 }
 async function renderGroupPerformance() {
   const el = document.getElementById("repGroupPerformance");
-  const { data, error } = await supabaseClient.rpc("get_group_performance");
+  const { data, error } = await ReportsRepo.groupPerformance();
   if (error) { console.error(error); Notify.error("โหลดผลงานตามกลุ่มราคาไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
   const rows = (data || []).filter(x => Number(x.listed) > 0).sort((a, b) => Number(b.profit) - Number(a.profit));
   el.innerHTML = rows.length ? rows.map(x => `<tr>
@@ -122,7 +121,7 @@ async function renderGroupPerformance() {
 
 async function renderSourceQuality() {
   const el = document.getElementById("repSourceQuality");
-  const { data, error } = await supabaseClient.rpc("get_source_quality");
+  const { data, error } = await ReportsRepo.sourceQuality();
   if (error) { console.error(error); Notify.error("โหลดคุณภาพแหล่งซื้อไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=7 class=empty-state>โหลดข้อมูลไม่สำเร็จ</td></tr>"; return; }
   const rows = (data || []).filter(x => Number(x.lots_count) > 0);
   el.innerHTML = rows.length ? rows.map(x => `<tr>
@@ -175,7 +174,7 @@ async function renderTrend(start,end) {
   if(currentPeriod==="day"){title.textContent="แนวโน้ม 7 วันล่าสุด";col.textContent="วันที่";trendStart.setDate(trendStart.getDate()-6);labelFn=d=>formatDate(d).split(" ").slice(0,2).join(" ");}
   else if(currentPeriod==="month"){title.textContent="แนวโน้มรายวันในเดือนนี้";col.textContent="วันที่";labelFn=d=>formatDate(d).split(" ").slice(0,2).join(" ");}
   else {title.textContent="แนวโน้มรายเดือนในปีนี้";col.textContent="เดือน";labelFn=d=>new Intl.DateTimeFormat("th-TH",{month:"short"}).format(d);}
-  const {data,error}=await supabaseClient.from("sales").select("sale_date,sale_price,cost_price").is("voided_at",null).gte("sale_date",trendStart.toISOString()).lt("sale_date",trendEnd.toISOString()); if(error){console.error(error);return;}
+  const {data,error}=await ReportsRepo.salesBetween(trendStart.toISOString(),trendEnd.toISOString()); if(error){console.error(error);return;}
   if(error){ Notify.error("โหลดกราฟแนวโน้มไม่สำเร็จ", error); return; }
   const buckets={}; data.forEach(s=>{const d=new Date(s.sale_date);const key=currentPeriod==="year"?`${d.getFullYear()}-${d.getMonth()}`:d.toDateString();buckets[key] ||= {count:0,revenue:0,profit:0,label:labelFn(d)};buckets[key].count++;buckets[key].revenue+=Number(s.sale_price||0);buckets[key].profit+=Number(s.sale_price||0)-Number(s.cost_price||0);});
   const rows=Object.values(buckets);
