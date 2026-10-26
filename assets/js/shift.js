@@ -1,6 +1,6 @@
 /* ==========================================================
-   shift.js — การ์ด "กะวันนี้" บนหน้าภาพรวม (index.html) V19
-   เปิดกะ → ลงค่าใช้จ่ายด่วน → ดู "เหลือวันนี้" → นับเงิน & ปิดกะ → แชร์สรุปไป LINE
+   shift.js — การ์ด "ร้านวันนี้" บนหน้าภาพรวม (index.html) V19
+   เปิดร้าน → ลงค่าใช้จ่ายด่วน → ดู "เหลือวันนี้" → นับเงิน & ปิดร้าน → แชร์สรุปไป LINE
 
    เชื่อมต่อ:
      RPC open_shift / shift_totals / close_shift  (sql/migration_v19_pos_shift.sql)
@@ -29,21 +29,21 @@
   const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
   const timeStr = (v) => new Date(v).toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
 
-  let shift = null;       // กะที่เปิดอยู่ (หรือ null)
+  let shift = null;       // รอบร้านที่เปิดอยู่ (หรือ null)
   let totals = null;      // ผลจาก shift_totals
-  let expenses = [];      // ค่าใช้จ่ายของกะ/วันนี้ (มี id ไว้ลบ)
-  let today = null;       // ตัวเลขวันนี้ตอนยังไม่เปิดกะ
+  let expenses = [];      // ค่าใช้จ่ายของรอบร้าน/วันนี้ (มี id ไว้ลบ)
+  let today = null;       // ตัวเลขวันนี้ตอนยังไม่เปิดร้าน
   let expenseForm = null; // หมวดที่กำลังกรอก
 
   async function load() {
     const { data, error } = await supabaseClient.from("shifts").select("*").is("closed_at", null).maybeSingle();
     if (error && !/shifts|relation|schema cache|PGRST205|42P01/i.test(`${error.message} ${error.code}`)) {
-      card.innerHTML = `<div class="shift-missing"><b>โหลดกะวันนี้ไม่สำเร็จ</b><span>${esc(Notify.friendlyError(error).detail)}</span></div>`;
-      Notify.error("โหลดกะวันนี้ไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: load }] });
+      card.innerHTML = `<div class="shift-missing"><b>โหลดร้านวันนี้ไม่สำเร็จ</b><span>${esc(Notify.friendlyError(error).detail)}</span></div>`;
+      Notify.error("โหลดร้านวันนี้ไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: load }] });
       return;
     }
     if (error) {
-      card.innerHTML = `<div class="shift-missing"><b>กะขาย / ค่าใช้จ่ายรายวัน</b><span>ยังใช้ไม่ได้ — รัน <code>sql/migration_v19_pos_shift.sql</code> ใน Supabase SQL Editor ก่อน</span></div>`;
+      card.innerHTML = `<div class="shift-missing"><b>รอบเปิดร้าน / ค่าใช้จ่ายรายวัน</b><span>ยังใช้ไม่ได้ — รัน <code>sql/migration_v19_pos_shift.sql</code> ใน Supabase SQL Editor ก่อน</span></div>`;
       return;
     }
     shift = data;
@@ -60,7 +60,7 @@
     render();
   }
 
-  // ยังไม่เปิดกะ: สรุปจากวันที่ตามปฏิทิน
+  // ยังไม่เปิดร้าน: สรุปจากวันที่ตามปฏิทิน
   async function loadTodayWithoutShift() {
     const start = new Date(); start.setHours(0, 0, 0, 0);
     const [s, e] = await Promise.all([
@@ -86,16 +86,16 @@
     card.innerHTML = `
       <div class="shift-head">
         ${open
-          ? `<span class="shift-pill open">● กะเปิดอยู่</span><span class="shift-where">${esc(shift.location)} · ตั้งแต่ ${timeStr(shift.opened_at)} · เงินทอนตั้งต้น ${thb(S(shift.opening_cash))}</span>
-             <button type="button" class="btn btn-primary shift-close-btn" data-act="close">นับเงิน &amp; ปิดกะ</button>`
-          : `<span class="shift-pill">ยังไม่เปิดกะ</span><span class="shift-where">ตัวเลขด้านล่างคือของวันนี้ตามปฏิทิน</span>`}
+          ? `<span class="shift-pill open">● ร้านเปิดอยู่</span><span class="shift-where">${esc(shift.location)} · ตั้งแต่ ${timeStr(shift.opened_at)} · เงินทอนตั้งต้น ${thb(S(shift.opening_cash))}</span>
+             <button type="button" class="btn btn-primary shift-close-btn" data-act="close">นับเงิน &amp; ปิดร้าน</button>`
+          : `<span class="shift-pill">ยังไม่เปิดร้าน</span><span class="shift-where">ตัวเลขด้านล่างคือของวันนี้ตามปฏิทิน</span>`}
       </div>
       ${open ? "" : `
       <form class="shift-open" data-form="open">
         <label>เงินทอนตั้งต้น<input type="number" name="opening" min="0" step="1" inputmode="numeric" value="${esc(get("vims_shift_opening") || "500")}"></label>
         <label>ที่ขาย<input type="text" name="location" list="shiftLocations" value="${esc(get("vims_shift_location") || "ถนนคนเดิน")}"></label>
         <datalist id="shiftLocations"><option value="ถนนคนเดิน"><option value="ตลาดนัด"><option value="ไลฟ์ / ออนไลน์"></datalist>
-        <button type="submit" class="btn btn-primary">เปิดกะ</button>
+        <button type="submit" class="btn btn-primary">เปิดร้าน</button>
       </form>`}
       <div class="shift-summary">
         <div class="ss-row ss-sales"><span>ยอดขาย${open ? ` <small>${totals?.bills || 0} บิล · ${totals?.items || 0} ชิ้น</small>` : ` <small>${today.items} ชิ้น</small>`}</span><b>${thb(revenue)}</b></div>
@@ -155,10 +155,10 @@
       const opening = Number(form.opening.value) || 0;
       const location = form.location.value.trim() || "ถนนคนเดิน";
       const { error } = await supabaseClient.rpc("open_shift", { p_opening_cash: opening, p_location: location });
-      if (error) return Notify.error("เปิดกะไม่สำเร็จ", error);
+      if (error) return Notify.error("เปิดร้านไม่สำเร็จ", error);
       set("vims_shift_opening", String(opening));
       set("vims_shift_location", location);
-      Notify.success("เปิดกะแล้ว", `${location} · เงินทอนตั้งต้น ${thb(S(opening))} — ขายได้เลย ทุกบิลจะนับเข้ากะนี้`);
+      Notify.success("เปิดร้านแล้ว", `${location} · เงินทอนตั้งต้น ${thb(S(opening))} — ขายได้เลย ทุกบิลจะนับเข้ารอบร้านนี้`);
       load();
     }
     if (form.dataset.form === "expense") {
@@ -185,7 +185,7 @@
   });
 
   // ==========================================================
-  // นับเงิน & ปิดกะ
+  // นับเงิน & ปิดร้าน
   // ==========================================================
   const modal = document.getElementById("closeShiftModal");
   function openCloseModal() {
@@ -223,9 +223,9 @@
       btn.disabled = true;
       const { data, error } = await supabaseClient.rpc("close_shift", { p_shift_id: shift.id, p_counted_cash: counted, p_reason: reason || null });
       btn.disabled = false;
-      if (error) return Notify.error("ปิดกะไม่สำเร็จ", error, { hint: "กะยังเปิดอยู่ ตัวเลขไม่หาย ลองกดปิดกะอีกครั้ง" });
+      if (error) return Notify.error("ปิดร้านไม่สำเร็จ", error, { hint: "รอบร้านยังเปิดอยู่ ตัวเลขไม่หาย ลองกดปิดร้านอีกครั้ง" });
       const d = Number(data.cash_diff || 0);
-      Notify.success("ปิดกะแล้ว", `ขาย ${thb(S(data.revenue))} · เหลือ ${thb(S(data.left_today))} · ลิ้นชัก${d === 0 ? "ตรงพอดี" : d < 0 ? ` ขาด ${thb(S(-d))}` : ` เกิน ${thb(S(d))}`}`);
+      Notify.success("ปิดร้านแล้ว", `ขาย ${thb(S(data.revenue))} · เหลือ ${thb(S(data.left_today))} · ลิ้นชัก${d === 0 ? "ตรงพอดี" : d < 0 ? ` ขาด ${thb(S(-d))}` : ` เกิน ${thb(S(d))}`}`);
       showCloseResult(data);
       load();
     });
@@ -237,7 +237,7 @@
     const lines = (t.expense_lines || []).map((x) => `${x.category} ${n(x.amount)}`).join(", ");
     const diff = Number(t.cash_diff || 0);
     return [
-      `สรุปกะ ${t.location} ${d}`,
+      `สรุปปิดร้าน ${t.location} ${d}`,
       `ขาย ${n(t.revenue)} บาท (${t.bills} บิล ${t.items} ชิ้น)`,
       `สด ${n(t.cash_sales)} · โอน ${n(t.transfer_sales)} · รัฐ ${n(t.government_sales)}`,
       `ค่าใช้จ่าย ${n(t.expenses)}${lines ? ` (${lines})` : ""}`,
@@ -257,7 +257,7 @@
       try {
         if (navigator.share) { await navigator.share({ text }); return; }
         await navigator.clipboard.writeText(text);
-        Notify.success("คัดลอกสรุปกะแล้ว", "ไปวางในแชตได้เลย");
+        Notify.success("คัดลอกสรุปปิดร้านแล้ว", "ไปวางในแชตได้เลย");
       } catch (_) { /* ผู้ใช้กดยกเลิก */ }
     };
   }

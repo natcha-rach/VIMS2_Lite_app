@@ -46,7 +46,7 @@ Bulk Table metadata ถูกเก็บใน `localStorage`. File object ข�
 - Bulk: ถ้า upload รูปกอง 200 ล้มเหลว จะ cleanup รูปที่ upload แล้วและลบ Items ที่เพิ่ง insert ทั้งกอง
 
 
-## V19 — POS / กะ / จอง / ภาษี
+## V19 — POS / รอบร้าน / จอง / ภาษี
 
 ```text
 sell.html → sell.js
@@ -60,7 +60,7 @@ sell.html → sell.js
 index.html → shift.js
   ├── shifts (closed_at is null) → RPC shift_totals
   ├── ปุ่มค่าใช้จ่ายด่วน → insert expenses(shift_id, paid_from)
-  └── ปิดกะ → RPC close_shift → สรุป → LINE share
+  └── ปิดร้าน → RPC close_shift → สรุป → LINE share
 
 tax.html → tax.js → sales + expenses ของปี + app_settings.tax_inputs
 auth.js → ทุกหน้า (ทำงานเมื่อ AUTH_REQUIRED = true)
@@ -70,4 +70,4 @@ business rules V19
 - เงินคิดเป็นสตางค์ (int) ฝั่ง browser ทุกครั้งก่อนบวก/หาร (`money.js`)
 - ห้ามลบเงิน: บิล/การขายใช้ void + เหตุผลเสมอ
 - เงินที่ควรมีในลิ้นชัก = เงินทอนตั้งต้น + ขายเงินสด − ค่าใช้จ่ายที่ "หยิบจากลิ้นชัก"
-- ปิดกะแล้วแก้ค่าใช้จ่ายของกะนั้นไม่ได้ (trigger `trg_expenses_closed_shift`)
+- ปิดร้านแล้วแก้ค่าใช้จ่ายของรอบร้านนั้นไม่ได้ (trigger `trg_expenses_closed_shift`)

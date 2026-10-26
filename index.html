@@ -63,8 +63,8 @@
             Download
           </button>
         </div>
-        <!-- V19: กะวันนี้ — เปิดกะ / ค่าใช้จ่ายรายวัน / เหลือวันนี้ / ปิดกะ (assets/js/shift.js) -->
-        <section class="tag-card shift-card" id="shiftCard" aria-label="กะวันนี้"><div class="empty-state">กำลังโหลดกะวันนี้...</div></section>
+        <!-- V19: ร้านวันนี้ — เปิดร้าน / ค่าใช้จ่ายรายวัน / เหลือวันนี้ / ปิดร้าน (assets/js/shift.js) -->
+        <section class="tag-card shift-card" id="shiftCard" aria-label="ร้านวันนี้"><div class="empty-state">กำลังโหลดร้านวันนี้...</div></section>
         <div class="dashboard-head">
           <div class="period-control">
             <select id="periodModeSelect" class="period-mode-select">
@@ -241,21 +241,21 @@
       </div>
     </div>
     
-    <!-- V19: นับเงิน & ปิดกะ -->
+    <!-- V19: นับเงิน & ปิดร้าน -->
     <div class="modal-backdrop hidden" id="closeShiftModal">
       <div class="modal-sheet shift-modal" role="dialog" aria-labelledby="csTitle">
         <form id="csForm">
-          <h2 id="csTitle">นับเงิน &amp; ปิดกะ</h2>
+          <h2 id="csTitle">นับเงิน &amp; ปิดร้าน</h2>
           <div class="cs-expected"><span>เงินสดในลิ้นชักควรมี</span><b id="csExpected">-</b></div>
           <label for="csCounted">นับได้จริง (บาท)</label>
           <input type="number" id="csCounted" min="0" step="1" inputmode="numeric" required />
           <div class="cs-diff" id="csDiff"></div>
           <label for="csReason">เหตุผล (บังคับถ้าขาด/เกิน)</label>
           <input type="text" id="csReason" placeholder="เช่น ทอนผิด / ซื้อน้ำ ลืมลง" />
-          <div class="cs-actions"><button type="button" class="btn btn-ghost" id="csCancel">ยังไม่ปิด</button><button type="submit" class="btn btn-primary" id="csSubmit">ปิดกะ</button></div>
+          <div class="cs-actions"><button type="button" class="btn btn-ghost" id="csCancel">ยังไม่ปิด</button><button type="submit" class="btn btn-primary" id="csSubmit">ปิดร้าน</button></div>
         </form>
         <div id="csResult" class="hidden">
-          <h2>ปิดกะแล้ว</h2>
+          <h2>ปิดร้านแล้ว</h2>
           <pre class="cs-summary"></pre>
           <div class="cs-actions"><button type="button" class="btn btn-primary" id="csLine">แชร์ไป LINE</button><button type="button" class="btn btn-ghost" id="csShare">แชร์/คัดลอก</button></div>
           <button type="button" class="btn btn-ghost" id="csDone" style="width:100%;margin-top:8px">เสร็จ</button>
@@ -271,7 +271,7 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="assets/js/dashboard.js"></script>
     <script src="assets/js/money.js?v=19"></script>
-    <script src="assets/js/shift.js?v=19"></script>
+    <script src="assets/js/shift.js?v=193"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

@@ -1,6 +1,6 @@
 # VIMS2 Lite / Bubbles Gumps
 
-> **อัปเกรดเป็น V19 (หน้าร้าน POS · กะขาย · จอง · สรุปภาษี):** รัน `sql/migration_v19_pos_shift.sql` ก่อน แล้วค่อยอัปโหลดไฟล์เว็บ — รายละเอียดและขั้นตอนอยู่ที่ [`docs/CHANGELOG_V19.md`](docs/CHANGELOG_V19.md)
+> **อัปเกรดเป็น V19 (หน้าร้าน POS · รอบเปิดร้าน · จอง · สรุปภาษี):** รัน `sql/migration_v19_pos_shift.sql` ก่อน แล้วค่อยอัปโหลดไฟล์เว็บ — รายละเอียดและขั้นตอนอยู่ที่ [`docs/CHANGELOG_V19.md`](docs/CHANGELOG_V19.md)
 
 ระบบหลังบ้านร้านเสื้อมือสองสำหรับใช้งานคนเดียว โดยตั้งใจให้เล็กและดูแลง่าย: **HTML/CSS/JS + Supabase** ไม่มี Express/Prisma และไม่มี API backend ของเราเอง
 
