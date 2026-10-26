@@ -54,8 +54,8 @@
     delete() { this.op = "delete"; return this; }
     then(res, rej) { return Promise.resolve(this.run()).then(res, rej); }
     run() {
-      const T = (db[this.t] ||= []);
-      if (this.op === "insert") { [].concat(this.row).forEach((r) => T.push({ id: uid(), created_at: now(), ...r })); save(); return { data: null, error: null }; }
+      const T = this.t === "v_items_list" ? db.items : (db[this.t] ||= []); // view → ตาราง items
+      if (this.op === "insert") { const added = [].concat(this.row).map((r) => ({ id: uid(), created_at: now(), ...(this.t === "items" ? { intake_status: "listed" } : {}), ...r })); T.push(...added); /* items: default intake_status เหมือน DB */ save(); return { data: this.one ? added[0] : added, error: null }; }
       if (this.op === "upsert") { [].concat(this.row).forEach((r) => { const i = T.findIndex((x) => x.key === r.key); if (i >= 0) T[i] = r; else T.push(r); }); save(); return { data: null, error: null }; }
       let rows = T.filter((r) => { const e = embed(this.t, r); return this.f.every((f) => f(e)); });
       if (this.op === "delete") { db[this.t] = T.filter((r) => !rows.includes(r)); save(); return { data: null, error: null }; }

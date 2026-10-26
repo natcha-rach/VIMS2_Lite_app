@@ -1,3 +1,12 @@
+/* ==========================================================
+   items.js — ชั้น UI ของหน้าสินค้า (items.html): ลงของทีละชิ้น, ตารางสต็อก + ตัวกรอง, แก้ไขสินค้า,
+              กลุ่มราคา, ลงของหลายชิ้น (Bulk 200 / Photo Queue / Excel)
+   เรียกต่อ:
+     Data  ItemsRepo   ← Lot/กลุ่ม, สร้าง/ลบ/แก้สินค้า, ตารางสต็อก, ประวัติ  (data/itemsRepo.js)
+     VimsContext       ← จำ Lot/กลุ่มล่าสุด (vimsContext.js)
+   ยังเรียก supabaseClient ตรง (รอบถัดไปจะย้าย): uploadItemImages() และ Bulk insert/listed
+   ไฟล์คู่กันบนหน้าเดียวกัน: stale.js (การ์ดของค้าง → ลดราคา)
+   ========================================================== */
 let allLots = [];
 let allGroups = [];
 let itemsCache = [];
@@ -120,10 +129,7 @@ let contextApplied = false;
 
 async function loadLots(preferredLotId = null) {
   // โหลดเฉพาะ field ที่หน้า Item ใช้จริง และเรียง Lot ล่าสุดก่อน
-  const { data, error } = await supabaseClient
-    .from('lots')
-    .select('id, lot_name, purchase_date, total_cost, total_items')
-    .order('purchase_date', { ascending: false });
+  const { data, error } = await ItemsRepo.lotsForPicker();
 
   const selects = ['lotSelect', 'bulkLot']
     .map(id => $(id))
@@ -179,7 +185,7 @@ async function loadLots(preferredLotId = null) {
 
 async function loadGroups(lotId = $('lotSelect')?.value) {
   if (!lotId) { allGroups=[]; renderGroups(); renderGroupOptions(); renderContextBar(); return; }
-  const { data, error } = await supabaseClient.from('lot_groups').select('*').eq('lot_id', lotId).order('sort_order');
+  const { data, error } = await ItemsRepo.groupsOfLot(lotId);
   if (error) return showToast('โหลดกลุ่มไม่สำเร็จ: ' + error.message);
   allGroups = data || [];
   renderGroups(); renderGroupOptions();
@@ -206,7 +212,7 @@ async function renderContextBar() {
 
   let progressText = '';
   if (group) {
-    const { data } = await supabaseClient.rpc('get_group_progress', { p_lot_id: lotId });
+    const { data } = await ItemsRepo.groupProgress(lotId);
     const p = (data || []).find(x => x.group_id === group.id);
     if (p) progressText = group.target_qty ? `${p.listed}/${group.target_qty} ชิ้น` : `${p.listed} ชิ้น`;
   }
@@ -314,7 +320,7 @@ $('createGroup')?.addEventListener('click', async () => {
   const price = Number($('newGroupPrice').value || 0);
   const tier = $('newGroupTier').value;
   if (!lotId || !name) return showToast('เลือก Lot และใส่ชื่อกลุ่มก่อน');
-  const { error } = await supabaseClient.from('lot_groups').insert({lot_id:lotId, group_name:name, base_price:price, tier, sort_order:allGroups.length});
+  const { error } = await ItemsRepo.addGroup({lot_id:lotId, group_name:name, base_price:price, tier, sort_order:allGroups.length});
   if (error) return showToast('สร้างกลุ่มไม่สำเร็จ: ' + error.message);
   $('newGroupName').value=''; await loadGroups(lotId); showToast('เพิ่มกลุ่มแล้ว');
 });
@@ -334,14 +340,14 @@ $('itemForm')?.addEventListener('submit', async e => {
   };
   if (!payload.item_name) return showToast('กรุณาใส่ชื่อสินค้า');
   const files = Array.from($('singleImages').files || []).slice(0,2);
-  const { data, error } = await supabaseClient.from('items').insert(payload).select().single();
+  const { data, error } = await ItemsRepo.create(payload);
   if (error) return showToast('บันทึกไม่สำเร็จ: ' + error.message);
 
   try {
     if (files.length) await uploadItemImages(data.id, files);
   } catch (imageError) {
     // ถ้ารูปบันทึกไม่ครบ ให้ลบ Item ที่เพิ่งสร้าง เพื่อไม่ให้เกิดสินค้าไร้รูปจากขั้นตอนเดียวกัน
-    await supabaseClient.from('items').delete().eq('id', data.id);
+    await ItemsRepo.remove(data.id);
     return showToast('บันทึกรูปไม่สำเร็จ จึงยกเลิก Item นี้: ' + imageError.message);
   }
 
@@ -502,11 +508,11 @@ $('quickEntryForm')?.addEventListener('submit', async e=>{
   const files=bulkState.photoPairs ? bulkState.photoPairs[bulkState.index].filter(Boolean) : Array.from($('bulkImages').files||[]).slice(0,2); // V18: ไม่มีรูปก็บันทึกได้
   const payload={lot_id:bulkState.lotId,group_id:bulkState.group.id,item_name:$('bulkName').value.trim(),size:$('bulkSize').value.trim(),condition:$('bulkCondition').value,tier:$('bulkTier').value,cost_price:Number($('bulkCost').value||0),base_price:Number(bulkState.group.base_price||0),current_price:Number($('bulkPrice').value||0),status:'available',listed_at:new Date().toISOString()};
   if(!payload.item_name) return showToast('กรุณาใส่ชื่อสินค้า');
-  const {data,error}=await supabaseClient.from('items').insert(payload).select().single(); if(error) return showToast('บันทึกไม่สำเร็จ: '+error.message);
+  const {data,error}=await ItemsRepo.create(payload); if(error) return showToast('บันทึกไม่สำเร็จ: '+error.message);
   try {
     if (files.length) await uploadItemImages(data.id,files);
   } catch (imageError) {
-    await supabaseClient.from('items').delete().eq('id', data.id);
+    await ItemsRepo.remove(data.id);
     return showToast('อัปโหลดรูปไม่สำเร็จ จึงยกเลิก Item นี้: ' + imageError.message);
   }
   bulkState.rows[bulkState.index]=data; bulkState.inserted++; bulkState.index++;
@@ -525,17 +531,7 @@ async function loadItems(){
   const extra=$('filterExtra')?.value||'';
   // ใช้ v_items_list แทน items ตรงๆ เพื่อได้ image_count/age_days/ชื่อ Lot-Group มาในคำสั่งเดียว กรองฝั่ง server ได้ครบ
   // (ยังคง fetchAllRows กันตกหล่นเมื่อเกิน 1000 แถว)
-  const {data,error}=await fetchAllRows(()=>{
-    let query=supabaseClient.from('v_items_list').select('*').eq('intake_status','listed').order('created_at',{ascending:false});
-    if(status!=='all') query=query.eq('status',status);
-    if(q) query=query.or(`item_name.ilike.%${q}%,sku.ilike.%${q}%`);
-    if(extra==='no_photo') query=query.eq('image_count',0);
-    if(extra==='no_price') query=query.or('current_price.is.null,current_price.eq.0');
-    if(extra==='age30') query=query.gte('age_days',30);
-    if(extra==='age60') query=query.gte('age_days',60);
-    if(extra==='age90') query=query.gte('age_days',90);
-    return query;
-  });
+  const {data,error}=await ItemsRepo.list({ status, q, extra });
   if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: '+error.message+'</div>';return;}
   itemsCache=data||[];
   selectedItemIds = new Set([...selectedItemIds].filter(id => itemsCache.some(i => i.id === id)));
@@ -544,7 +540,7 @@ async function loadItems(){
 async function renderItems(){
   if(!itemsCache.length){$('itemList').innerHTML='<div class="empty-state">ไม่มีสินค้าในรายการนี้</div>';return;}
   const ids=itemsCache.map(i=>i.id);
-  const {data:imgs}=await fetchAllRows(()=>supabaseClient.from('item_images').select('*').in('item_id',ids).order('sort_order'));
+  const {data:imgs}=await ItemsRepo.imagesOfItems(ids);
   const byItem={}; (imgs||[]).forEach(x=>(byItem[x.item_id]??=[]).push(x));
   $('itemList').innerHTML=itemsCache.map(i=>{
     const itemImages=byItem[i.id]||[]; const im=itemImages[0];
@@ -580,7 +576,7 @@ $('filterExtra')?.addEventListener('change', loadItems);
 async function callBulkUpdate(patch, successMsg){
   if(!selectedItemIds.size) return showToast('ยังไม่ได้เลือกรายการ');
   const ids=[...selectedItemIds];
-  const {data,error}=await supabaseClient.rpc('bulk_update_items',{p_ids:ids,...patch});
+  const {data,error}=await ItemsRepo.bulkUpdate(ids,patch);
   if(error) return showToast('อัปเดตไม่สำเร็จ: '+error.message);
   showToast(`${successMsg} (${data} รายการ)`);
   selectedItemIds.clear();
@@ -604,7 +600,7 @@ $('bulkApplyStorage')?.addEventListener('click', () => {
 });
 $('bulkApplyDamaged')?.addEventListener('click', () => callBulkUpdate({p_status:'damaged'}, 'ทำเครื่องหมายเสียแล้ว'));
 $('bulkApplyAvailable')?.addEventListener('click', () => callBulkUpdate({p_status:'available'}, 'คืนเป็นพร้อมขายแล้ว'));
-async function updateQuickStats(){ const {data,error}=await fetchAllRows(()=>supabaseClient.from('items').select('status,cost_price').eq('intake_status','listed')); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`<div><span>สินค้าทั้งหมด</span><b>${rows.length}</b></div><div><span>พร้อมขาย</span><b>${available.length}</b></div><div><span>ขายแล้ว</span><b>${sold.length}</b></div><div><span>ต้นทุนคงเหลือ</span><b>${formatBaht(value)}</b></div>`; }
+async function updateQuickStats(){ const {data,error}=await ItemsRepo.statsRows(); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`<div><span>สินค้าทั้งหมด</span><b>${rows.length}</b></div><div><span>พร้อมขาย</span><b>${available.length}</b></div><div><span>ขายแล้ว</span><b>${sold.length}</b></div><div><span>ต้นทุนคงเหลือ</span><b>${formatBaht(value)}</b></div>`; }
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 // V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
 function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
@@ -1280,13 +1276,13 @@ async function openEditItem(itemId) {
   $('editImages').value = '';
 
   // Group ต้องเป็น Group ของ Lot เดิมเท่านั้น เพื่อไม่ทำให้ relation Lot/Group ผิด
-  const { data: groups, error: groupError } = await supabaseClient.from('lot_groups').select('*').eq('lot_id', item.lot_id).order('sort_order');
+  const { data: groups, error: groupError } = await ItemsRepo.groupsOfLot(item.lot_id);
   if (groupError) return showToast('โหลดกลุ่มไม่สำเร็จ: ' + groupError.message);
   $('editGroup').innerHTML = '<option value="">ไม่ระบุกลุ่ม</option>' + (groups || []).map(g => `<option value="${g.id}">${escapeHtml(g.group_name)} · ${formatBaht(g.base_price)}</option>`).join('');
   $('editGroup').value = item.group_id || '';
 
   // โหลดรูปปัจจุบันเพื่อให้ผู้ใช้เห็นว่ามีรูป 1 หรือ 2 รูป
-  const { data: images, error: imageError } = await supabaseClient.from('item_images').select('*').eq('item_id', itemId).order('sort_order');
+  const { data: images, error: imageError } = await ItemsRepo.imagesOfItem(itemId);
   if (imageError) return showToast('โหลดรูปไม่สำเร็จ: ' + imageError.message);
   editItemImages = images || [];
   renderEditCurrentImages();
@@ -1312,7 +1308,7 @@ function renderEditCurrentImages() {
 
 // โหลดประวัติการแก้ไขจาก Supabase; ใช้สำหรับ audit trail ของ Item แต่ละตัว
 async function loadItemHistory(itemId) {
-  const { data, error } = await supabaseClient.from('item_change_history').select('*').eq('item_id', itemId).order('created_at', {ascending:false}).limit(30);
+  const { data, error } = await ItemsRepo.history(itemId, 30);
   if (error) {
     $('itemHistoryList').innerHTML = '<div class="empty-state">ยังไม่ได้รัน migration_v7.sql</div>';
     return;
@@ -1375,7 +1371,7 @@ $('editItemForm')?.addEventListener('submit', async event => {
     if (!next.item_name) return showToast('กรุณาใส่ชื่อสินค้า');
     if (next.status !== 'sold' && item.status === 'sold') return showToast('สินค้าที่ขายแล้วเปลี่ยนกลับไม่ได้');
     const changed = changedFieldMap(item, next);
-    const { error } = await supabaseClient.rpc('update_item_with_history', {
+    const { error } = await ItemsRepo.updateWithHistory({
       p_item_id: editingItemId, p_item_name: next.item_name, p_size: next.size, p_condition: next.condition, p_tier: next.tier,
       p_status: next.status, p_group_id: next.group_id, p_cost_price: next.cost_price, p_base_price: next.base_price,
       p_current_price: next.current_price, p_changed_fields: changed
@@ -1387,11 +1383,11 @@ $('editItemForm')?.addEventListener('submit', async event => {
     if (newFiles.length) {
       for (const oldImage of editItemImages) {
         const oldPaths = [oldImage.storage_path, oldImage.thumb_path].filter(Boolean); // V19: ลบรูปย่อด้วย
-        if (oldPaths.length) await supabaseClient.storage.from('item-images').remove(oldPaths);
+        if (oldPaths.length) await ItemsRepo.removeImageFiles(oldPaths);
       }
-      await supabaseClient.from('item_images').delete().eq('item_id', editingItemId);
+      await ItemsRepo.removeImagesOfItem(editingItemId);
       await uploadItemImages(editingItemId, newFiles);
-      await supabaseClient.from('item_change_history').insert({item_id: editingItemId, action:'image_replace', changed_fields:{old_count:editItemImages.length,new_count:newFiles.length}});
+      await ItemsRepo.addHistory({item_id: editingItemId, action:'image_replace', changed_fields:{old_count:editItemImages.length,new_count:newFiles.length}});
     }
 
     showToast('บันทึกการแก้ไขแล้ว');

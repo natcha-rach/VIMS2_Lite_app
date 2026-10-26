@@ -2,14 +2,14 @@
    stale.js — การ์ด "ของค้าง" บนหน้าสินค้า (items.html) V20
    ของพร้อมขายที่ลงไว้นานเกิน N วัน → เลือกหลายชิ้น → ลด % หรือตั้งราคาใหม่ทีเดียว
    เชื่อมต่อ:
-     RPC markdown_items(p_item_ids, p_percent | p_price, p_reason)  ← sql/migration_v21_*.sql
+     Data ItemsRepo.staleSince / ItemsRepo.markdown (RPC markdown_items · sql/migration_v21_*.sql)
        (atomic + เก็บประวัติราคาใน item_change_history แบบเดียวกับหน้าแก้สินค้า)
      items.js → หลังลดราคาเรียก loadItems() ให้ตารางสต็อกอัปเดต
    แยกไฟล์จาก items.js (90KB) เพื่อไม่ให้ไปแตะโค้ดลงของ/Bulk ที่ซับซ้อน
    ========================================================== */
 (function () {
   const card = document.getElementById("staleCard");
-  if (!card || !window.supabaseClient || !window.Money) return;
+  if (!card || !window.ItemsRepo || !window.Money) return;
   const S = Money.toSatang;
   const thb = (satang) => "฿" + Money.toBaht(satang).toLocaleString("th-TH", { maximumFractionDigits: 0 });
   const esc = (v = "") => String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
@@ -21,10 +21,7 @@
 
   async function load() {
     const cutoff = new Date(Date.now() - days * DAY).toISOString();
-    const { data, error } = await fetchAllRows(() => supabaseClient.from("items")
-      .select("id,item_name,sku,size,condition,cost_price,current_price,created_at,listed_at,lots(lot_name),lot_groups(group_name)")
-      .eq("status", "available").eq("intake_status", "listed").lte("created_at", cutoff)
-      .order("created_at", { ascending: true }));
+    const { data, error } = await ItemsRepo.staleSince(cutoff);
     if (error) {
       card.querySelector(".stale-body").innerHTML = `<div class="empty-state">โหลดของค้างไม่สำเร็จ</div>`;
       return Notify.error("โหลดของค้างไม่สำเร็จ", error, { actions: [{ label: "ลองใหม่", onClick: load }] });
@@ -119,11 +116,11 @@
       message: `ราคารวม ${thb(sel.reduce((s, i) => s + S(i.current_price), 0))} → ${thb(after)}${below ? `\n⚠ ${below} ชิ้นจะขายต่ำกว่าทุน` : ""}\nประวัติราคาเดิมเก็บไว้ในหน้าแก้สินค้า`,
       confirmText: "ลดราคา",
     }))) return;
-    const { data, error } = await supabaseClient.rpc("markdown_items", {
-      p_item_ids: sel.map((i) => i.id),
-      p_percent: action.mode === "percent" ? Number(action.value) : null,
-      p_price: action.mode === "price" ? Number(action.value) : null,
-      p_reason: `ลดราคาของค้าง ${days}+ วัน (${label})`,
+    const { data, error } = await ItemsRepo.markdown({
+      ids: sel.map((i) => i.id),
+      percent: action.mode === "percent" ? Number(action.value) : null,
+      price: action.mode === "price" ? Number(action.value) : null,
+      reason: `ลดราคาของค้าง ${days}+ วัน (${label})`,
     });
     if (error) return Notify.error("ลดราคาไม่สำเร็จ", error, { hint: /markdown_items|PGRST202/.test(error.message || "") ? "รัน sql/migration_v21_offline_markdown.sql ใน Supabase ก่อน" : undefined });
     Notify.success(`ลดราคาแล้ว ${data.updated} ชิ้น`, `ราคารวม ${thb(S(data.before_total))} → ${thb(S(data.after_total))}`);

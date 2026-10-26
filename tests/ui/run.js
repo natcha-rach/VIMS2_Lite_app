@@ -150,6 +150,19 @@ const server = http.createServer((req, res) => {
   await m.waitForTimeout(400);
   await shot(m, "09-close-shift");
 
+  // ---------- สินค้า: ลงของ 1 ชิ้น → ตารางสต็อก (ItemsRepo) ----------
+  await m.goto("http://localhost:8765/items.html");
+  await m.waitForTimeout(800);
+  const before = await m.evaluate(() => window.__mockdb().items.length);
+  await m.selectOption("#lotSelect", "lot1");
+  await m.waitForTimeout(300);
+  await m.fill("#itemName", "เสื้อทดสอบ ItemsRepo");
+  await m.fill("#sellPrice", "250");
+  await m.fill("#costPrice", "60");
+  await m.click("#itemForm button[type=submit]");
+  await m.waitForTimeout(900);
+  console.log("items added:", (await m.evaluate(() => window.__mockdb().items.length)) - before, "| in table:", await m.$eval("#itemList", (e) => e.textContent.includes("เสื้อทดสอบ ItemsRepo")));
+
   // ---------- V20: ของค้าง → ลดราคา ----------
   await m.evaluate(() => { const db = window.__mockdb(); db.items[6].created_at = new Date(Date.now() - 100 * 86400000).toISOString(); db.items[7].created_at = db.items[6].created_at; sessionStorage.setItem("__mockdb", JSON.stringify(db)); });
   await m.goto("http://localhost:8765/items.html");
