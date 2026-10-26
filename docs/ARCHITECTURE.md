@@ -1,6 +1,6 @@
 # สถาปัตยกรรมโค้ด (Clean Architecture แบบเบา — ไม่มี build step)
 
-ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)**, **บัญชี (accounting)**, **รายงาน (reports)**, **ล็อต (lots)** · ยังไม่ย้าย: tax, items, dashboard
+ทยอยย้ายทีละหน้า · ย้ายแล้ว: **หน้าขาย (sell)**, **ร้านวันนี้ (shift)**, **บัญชี (accounting)**, **รายงาน (reports)**, **ล็อต (lots)**, **ภาษี (tax)** · ยังไม่ย้าย: items, dashboard
 
 ## ชั้นของโค้ด (เรียกได้ทางเดียว: UI → Domain/Data → Infra)
 
@@ -8,9 +8,9 @@
 UI (page controller)   assets/js/sell.js …        อ่าน/เขียน DOM, ผูก event, แสดง Notify
    │ เรียก
    ├─ Domain (กฎธุรกิจล้วน) assets/js/domain/*.js   ไม่แตะ DOM / Supabase → เทสต์ด้วย node ได้
-   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · insightsCalc.js · lotCalc.js
+   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · insightsCalc.js · lotCalc.js · taxCalc.js
    └─ Data (repository)   assets/js/data/*.js      ที่เดียวที่เรียก Supabase ของหน้านั้น
-         salesRepo.js · catalogRepo.js · shiftRepo.js · accountingRepo.js · reportsRepo.js · lotsRepo.js   คืน { data, error } แบบ supabase-js เสมอ
+         salesRepo.js · catalogRepo.js · shiftRepo.js · accountingRepo.js · reportsRepo.js · lotsRepo.js · taxRepo.js   คืน { data, error } แบบ supabase-js เสมอ
             │ ใช้
 Infra                    supabaseClient.js (client, fetchAllRows, debounce) · notify.js · offline.js · sw.js · realtime.js
 ```
@@ -68,3 +68,11 @@ Infra                    supabaseClient.js (client, fetchAllRows, debounce) · n
 | `domain/lotCalc.js` | Domain | ต้นทุนรวมแยกส่วน, ต้นทุนเฉลี่ยต่อชิ้น, นับชิ้นต่อกลุ่ม | lots.js |
 | `data/lotsRepo.js` | Data | CRUD Lot/กลุ่มราคา, สรุป Lot, ความคืบหน้ากลุ่ม, คิดต้นทุนใหม่ (recost_lot) | lots.js |
 | `lots.js` | UI | ฟอร์ม Lot, การ์ด Lot, ปิด/เปิด Lot, จัดการกลุ่มราคา | lots.html |
+
+## แผนที่หน้าภาษี (tax.html)
+
+| ไฟล์ | ชั้น | หน้าที่ | ใครเรียก |
+| --- | --- | --- | --- |
+| `domain/taxCalc.js` | Domain | ยอดรายเดือน (เวลาไทย), หักเหมา 60% vs ตามจริง, % เกณฑ์ VAT 1.8 ล้าน | tax.js |
+| `data/taxRepo.js` | Data | ยอดขาย/ค่าใช้จ่ายของปี, รายรับ 12 เดือน, app_settings.tax_inputs | tax.js |
+| `tax.js` | UI | เลือกปี/ครึ่งปี, ช่องรายได้นอกแอป, ตาราง, CSV/พิมพ์ | tax.html |

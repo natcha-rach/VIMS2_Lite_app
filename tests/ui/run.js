@@ -181,6 +181,7 @@ const server = http.createServer((req, res) => {
   // ---------- ภาษี + บัญชี ----------
   await m.goto("http://localhost:8765/tax.html");
   await m.waitForTimeout(600);
+  console.log("tax income/net:", await m.$eval("#taxIncome", (e) => e.textContent), await m.$eval("#taxNet", (e) => e.textContent), "|", await m.$eval("#taxAdvice", (e) => e.textContent));
   await shot(m, "10-tax");
   await m.goto("http://localhost:8765/accounting.html");
   await m.waitForTimeout(900);
