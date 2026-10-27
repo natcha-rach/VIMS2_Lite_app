@@ -134,6 +134,13 @@ const server = http.createServer((req, res) => {
   await m.goto("http://localhost:8765/index.html");
   await m.waitForSelector(".shift-close-btn");
   await shot(m, "08-main-after-sale");
+  // V21: รายการรายรับ/รายจ่ายใต้ PULSE — ต้องมีบิลขาย (รายรับ) + ค่าแผง (รายจ่าย) และแตะแล้วเห็นรายละเอียด
+  await m.waitForSelector("#moneyList .money-row");
+  console.log("money rows:", await m.$$eval("#moneyList .money-row summary", (r) => r.map((x) => x.textContent.replace(/\s+/g, " ").trim())));
+  console.log("detail hidden before tap:", !(await m.isVisible("#moneyList .money-row.in .money-detail")));
+  await m.click("#moneyList .money-row.in summary");
+  console.log("money detail:", await m.$eval("#moneyList .money-row.in .money-detail", (e) => e.textContent.replace(/\s+/g, " ").trim()));
+  await m.screenshot({ path: path.join(OUT, "08c-money-list.png"), fullPage: true });
   await m.click('[data-del]');
   await m.waitForSelector(".notify-dialog");
   await m.waitForTimeout(400);

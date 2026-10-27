@@ -22,6 +22,8 @@ const ICONS = {
   check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9.5 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.5 9 9 12 2"/></svg>',
   target: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/></svg>',
+  moneyIn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="15 17 7 17 7 9"/></svg>',
+  moneyOut: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="9 7 17 7 17 15"/></svg>',
   baht: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v18"/><path d="M7 4h7a4 4 0 0 1 0 8H7"/><path d="M7 12h6a4 4 0 0 1 0 8H7"/><line x1="4" y1="9" x2="10" y2="9"/></svg>',
 };
 
@@ -65,8 +67,8 @@ async function fetchDashboardData() {
   // RPC get_lot_performance() (คำนวณใน Postgres) แทนการดึงมา group ฝั่ง browser — ดู renderLotRecovery()
   const [itemsR, salesR, expensesR, settingsR] = await Promise.all([
     fetchAllRows(() => supabaseClient.from("items").select("id,lot_id,item_name,size,condition,tier,cost_price,current_price,status,created_at,listed_at,sold_at,group_id").eq("intake_status","listed")), // V15: ไม่นับ Item ที่ยังเป็น draft (รอรูป)
-    fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,sale_date,channel,sale_price,cost_price,payment_method").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว
-    fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,amount,category")),
+    fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,bill_id,sale_date,channel,sale_price,cost_price,payment_method,items(item_name,sku)").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว · V21: bill_id/items ใช้ในรายการรายรับ
+    fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,expense_at,amount,category,note,paid_from")),
     supabaseClient.from("app_settings").select("key,value").eq("key", "monthly_sales_goal").maybeSingle()
   ]);
   const err = itemsR.error || salesR.error || expensesR.error;
@@ -347,6 +349,55 @@ function renderV11Charts(periodSales, items, range, revenue, grossProfit, margin
 }
 
 
+// V21: รายการรายรับ/รายจ่ายแบบแอปจดเงิน — 1 บิล = 1 รายรับ (รวมหลายชิ้น), 1 ค่าใช้จ่าย = 1 รายจ่าย
+// แถวปิดอยู่โชว์แค่ประเภท + ยอด; ใช้ <details> ของเบราว์เซอร์ให้แตะเปิดดูรายละเอียดได้โดยไม่ต้องมี JS เพิ่ม
+const PAID_FROM_LABELS = { drawer: "หยิบจากลิ้นชัก", transfer: "โอน", other: "อื่นๆ" };
+const MONEY_LIST_LIMIT = 200; // shortcut: แสดงแค่ 200 รายการล่าสุดของช่วง (โหมดรายปีอาจมีหลายพัน) — ถ้าต้องดูครบให้ทำแบ่งหน้า
+
+function buildMoneyEntries(periodSales, periodExpenses) {
+  const bills = new Map();
+  periodSales.forEach(s => {
+    const key = s.bill_id || s.id; // การขายเก่าก่อน V19 ไม่มี bill_id → นับเป็นบิลละชิ้น
+    const b = bills.get(key) || { kind: "in", at: s.sale_date, amount: 0, lines: [], channel: s.channel, pay: s.payment_method };
+    b.amount += Number(s.sale_price || 0);
+    b.lines.push(s);
+    if (new Date(s.sale_date) < new Date(b.at)) b.at = s.sale_date;
+    bills.set(key, b);
+  });
+  const outs = periodExpenses.map(e => ({ kind: "out", at: e.expense_at || `${e.expense_date}T12:00:00`, amount: Number(e.amount || 0), e }));
+  return [...bills.values(), ...outs].sort((a, b) => new Date(b.at) - new Date(a.at));
+}
+
+function moneyEntryDetail(x) {
+  const time = new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(x.at));
+  if (x.kind === "in") {
+    const lines = x.lines.map(s => `<li><span>${escapeHtml(s.items?.item_name || "สินค้า")}${s.items?.sku ? ` <small>${escapeHtml(s.items.sku)}</small>` : ""}</span><b>${formatBaht(s.sale_price)}</b></li>`).join("");
+    return `<p>ขาย ${x.lines.length} ชิ้น · ${escapeHtml(CHANNEL_LABELS[x.channel] || x.channel || "-")} · ${escapeHtml(PAYMENT_LABELS[x.pay] || x.pay || "-")} · ${time}</p><ul>${lines}</ul>`;
+  }
+  const e = x.e;
+  return `<p>${escapeHtml(e.category || "-")} · ${escapeHtml(PAID_FROM_LABELS[e.paid_from] || "-")}${e.expense_at ? ` · ${time}` : ""}</p>${e.note ? `<p class="money-note">${escapeHtml(e.note)}</p>` : ""}`;
+}
+
+function renderMoneyList(periodSales, periodExpenses) {
+  const box = document.getElementById("moneyList"); if (!box) return;
+  const all = buildMoneyEntries(periodSales, periodExpenses);
+  const entries = all.slice(0, MONEY_LIST_LIMIT);
+  $("moneyListMeta").textContent = all.length > entries.length ? `${entries.length} จาก ${all.length} รายการล่าสุด` : `${all.length} รายการ`;
+  if (!entries.length) { box.innerHTML = `<div class="empty-state">ยังไม่มีรายรับหรือรายจ่ายในช่วงนี้</div>`; return; }
+
+  const days = new Map();
+  entries.forEach(x => { const k = dateKey(x.at); (days.get(k) || days.set(k, []).get(k)).push(x); });
+  const dayFmt = new Intl.DateTimeFormat("th-TH", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+  box.innerHTML = [...days.entries()].map(([k, list]) => {
+    const net = sum(list, x => x.kind === "in" ? x.amount : -x.amount);
+    const rows = list.map(x => `<details class="money-row ${x.kind}">
+        <summary><span class="money-ic" aria-hidden="true">${x.kind === "in" ? ICONS.moneyIn : ICONS.moneyOut}</span><span class="money-label">${x.kind === "in" ? "รายรับ" : "รายจ่าย"}</span><b class="money-amt">${x.kind === "in" ? "+" : "−"}${formatBaht(x.amount)}</b></summary>
+        <div class="money-detail">${moneyEntryDetail(x)}</div>
+      </details>`).join("");
+    return `<div class="money-day"><div class="money-day-head"><span>${dayFmt.format(new Date(`${k}T00:00:00`))}</span><b class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : "−"}${formatBaht(Math.abs(net))}</b></div>${rows}</div>`;
+  }).join("");
+}
+
 function renderDashboard(data, range) {
   const { items, sales, expenses } = data;
   renderGoalCard(sales);
@@ -360,7 +411,6 @@ function renderDashboard(data, range) {
   const expensesTotal = sum(periodExpenses, e => e.amount);
   const netProfit = grossProfit - expensesTotal;
   const margin = percent(grossProfit, revenue);
-  const cash = sum(periodSales.filter(s => s.payment_method === "cash"), s => s.sale_price);
   const available = items.filter(i => i.status === "available");
 
   renderV11Charts(periodSales, items, range, revenue, grossProfit, margin);
@@ -371,9 +421,7 @@ function renderDashboard(data, range) {
   $("statExpenses").textContent = formatBaht(expensesTotal);
   $("statNetProfit").textContent = formatBaht(netProfit);
   $("statNetProfit").className = `value ${netProfit >= 0 ? "positive" : "negative"}`;
-  $("statCash").textContent = formatBaht(cash);
-  $("statAvailable").textContent = `${available.length} ชิ้น`;
-  $("statAvailableMeta").textContent = `มูลค่าทุน ${formatBaht(sum(available,i=>i.cost_price))} · ไม่ขึ้นกับช่วงเวลาที่เลือก`;
+  renderMoneyList(periodSales, periodExpenses);
 
   // Period-over-period: เทียบกับช่วงก่อนหน้าที่มีความยาวเท่ากันเสมอ (วันก่อนหน้า/เดือนก่อนหน้า/ปีก่อนหน้า)
   const prevRange = previousRange(range);
@@ -383,12 +431,10 @@ function renderDashboard(data, range) {
   const prevGrossProfit = prevRevenue - sum(prevSales, s => s.cost_price);
   const prevExpensesTotal = sum(prevExpenses, e => e.amount);
   const prevNetProfit = prevGrossProfit - prevExpensesTotal;
-  const prevCash = sum(prevSales.filter(s => s.payment_method === "cash"), s => s.sale_price);
   renderDelta("statRevenueDelta", revenue, prevRevenue);
   renderDelta("statGrossProfitDelta", grossProfit, prevGrossProfit);
   renderDelta("statExpensesDelta", expensesTotal, prevExpensesTotal);
   renderDelta("statNetProfitDelta", netProfit, prevNetProfit);
-  renderDelta("statCashDelta", cash, prevCash);
 
   const sold = items.filter(i => i.status === "sold");
   const damaged = items.filter(i => i.status === "damaged");

@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/dashboard.css" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=21" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/pos.css?v=21" />
     <link rel="stylesheet" href="assets/css/shift.css?v=19" />
@@ -110,20 +110,14 @@
               <div class="value" id="statNetProfit">-</div>
               <div class="stat-meta-row"><small>กำไรขั้นต้น - ค่าใช้จ่าย</small><span class="stat-delta" id="statNetProfitDelta"></span></div>
             </div>
-            <div class="stat-card">
-              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3v18"/><path d="M7 4h7a4 4 0 0 1 0 8H7"/><path d="M7 12h6a4 4 0 0 1 0 8H7"/><line x1="4" y1="9" x2="10" y2="9"/></svg></span> เงินสดรับ</div>
-              <div class="value" id="statCash">-</div>
-              <div class="stat-meta-row"><small>เฉพาะรายการที่จ่ายเงินสด</small><span class="stat-delta" id="statCashDelta"></span></div>
-            </div>
-            <div class="stat-card">
-              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span> พร้อมขายตอนนี้</div>
-              <div class="value" id="statAvailable">-</div>
-              <div class="stat-meta-row"><small id="statAvailableMeta"></small></div>
-            </div>
           </div>
         </section>
 
-        <!-- V19.4: หน้าหลักเหลือแค่ ร้านวันนี้ + ตัวเลขสำคัญ (PULSE) — กราฟ/สต็อก/Lot ดูได้ที่หน้ารายงาน -->
+        <!-- V21: รายการรายรับ/รายจ่ายของช่วงที่เลือก แบบแอปจดเงิน — แถวโชว์แค่ รายรับ/รายจ่าย + ยอด, แตะเพื่อดูรายละเอียด (dashboard.js → renderMoneyList) -->
+        <section class="tag-card money-list-card" aria-label="รายการรายรับรายจ่าย">
+          <div class="money-list-head"><h2>รายการ</h2><span id="moneyListMeta"></span></div>
+          <div id="moneyList"><div class="empty-state">กำลังโหลดรายการ...</div></div>
+        </section>
       </div>
     </div>
     
@@ -155,7 +149,7 @@
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="assets/js/dashboard.js?v=194"></script>
+    <script src="assets/js/dashboard.js?v=195"></script>
     <script src="assets/js/money.js?v=19"></script>
     <!-- Clean Architecture: Domain → Data → Infra → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/shiftCalc.js?v=1"></script>
