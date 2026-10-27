@@ -350,7 +350,8 @@ function renderV11Charts(periodSales, items, range, revenue, grossProfit, margin
 
 
 // V21: รายการรายรับ/รายจ่ายแบบแอปจดเงิน — 1 บิล = 1 รายรับ (รวมหลายชิ้น), 1 ค่าใช้จ่าย = 1 รายจ่าย
-// แถวปิดอยู่โชว์แค่ประเภท + ยอด; ใช้ <details> ของเบราว์เซอร์ให้แตะเปิดดูรายละเอียดได้โดยไม่ต้องมี JS เพิ่ม
+// การ์ดพับไว้ (<details> ใน index.html) แตะการ์ดแล้วแถวค่อยโผล่; แถวโชว์รายละเอียดเลย ไม่เขียนคำว่ารายรับ/รายจ่าย
+// เข้า/ออกดูจากสีไอคอน (เขียว/แดง) — ไอคอนมี aria-label ให้โปรแกรมอ่านหน้าจอ
 const PAID_FROM_LABELS = { drawer: "หยิบจากลิ้นชัก", transfer: "โอน", other: "อื่นๆ" };
 const MONEY_LIST_LIMIT = 200; // shortcut: แสดงแค่ 200 รายการล่าสุดของช่วง (โหมดรายปีอาจมีหลายพัน) — ถ้าต้องดูครบให้ทำแบ่งหน้า
 
@@ -368,14 +369,15 @@ function buildMoneyEntries(periodSales, periodExpenses) {
   return [...bills.values(), ...outs].sort((a, b) => new Date(b.at) - new Date(a.at));
 }
 
-function moneyEntryDetail(x) {
+// คืน {title, sub}: บิล → ชื่อสินค้า / "ขาย N ชิ้น · ทำเล · วิธีจ่าย · เวลา"; ค่าใช้จ่าย → หมวด / "จ่ายจาก · เวลา · โน้ต"
+function moneyEntryText(x) {
   const time = new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(x.at));
   if (x.kind === "in") {
-    const lines = x.lines.map(s => `<li><span>${escapeHtml(s.items?.item_name || "สินค้า")}${s.items?.sku ? ` <small>${escapeHtml(s.items.sku)}</small>` : ""}</span><b>${formatBaht(s.sale_price)}</b></li>`).join("");
-    return `<p>ขาย ${x.lines.length} ชิ้น · ${escapeHtml(CHANNEL_LABELS[x.channel] || x.channel || "-")} · ${escapeHtml(PAYMENT_LABELS[x.pay] || x.pay || "-")} · ${time}</p><ul>${lines}</ul>`;
+    const names = x.lines.map(s => s.items?.item_name || "สินค้า").join(", ");
+    return { title: names, sub: [`ขาย ${x.lines.length} ชิ้น`, CHANNEL_LABELS[x.channel] || x.channel, PAYMENT_LABELS[x.pay] || x.pay, time].filter(Boolean).join(" · ") };
   }
   const e = x.e;
-  return `<p>${escapeHtml(e.category || "-")} · ${escapeHtml(PAID_FROM_LABELS[e.paid_from] || "-")}${e.expense_at ? ` · ${time}` : ""}</p>${e.note ? `<p class="money-note">${escapeHtml(e.note)}</p>` : ""}`;
+  return { title: e.category || "ค่าใช้จ่าย", sub: [PAID_FROM_LABELS[e.paid_from], e.expense_at ? time : "", e.note].filter(Boolean).join(" · ") };
 }
 
 function renderMoneyList(periodSales, periodExpenses) {
@@ -390,10 +392,11 @@ function renderMoneyList(periodSales, periodExpenses) {
   const dayFmt = new Intl.DateTimeFormat("th-TH", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
   box.innerHTML = [...days.entries()].map(([k, list]) => {
     const net = sum(list, x => x.kind === "in" ? x.amount : -x.amount);
-    const rows = list.map(x => `<details class="money-row ${x.kind}">
-        <summary><span class="money-ic" aria-hidden="true">${x.kind === "in" ? ICONS.moneyIn : ICONS.moneyOut}</span><span class="money-label">${x.kind === "in" ? "รายรับ" : "รายจ่าย"}</span><b class="money-amt">${x.kind === "in" ? "+" : "−"}${formatBaht(x.amount)}</b></summary>
-        <div class="money-detail">${moneyEntryDetail(x)}</div>
-      </details>`).join("");
+    const rows = list.map(x => { const t = moneyEntryText(x); return `<div class="money-row ${x.kind}">
+        <span class="money-ic" role="img" aria-label="${x.kind === "in" ? "รายรับ" : "รายจ่าย"}">${x.kind === "in" ? ICONS.moneyIn : ICONS.moneyOut}</span>
+        <span class="money-text"><b>${escapeHtml(t.title)}</b><small>${escapeHtml(t.sub)}</small></span>
+        <b class="money-amt">${x.kind === "in" ? "+" : "−"}${formatBaht(x.amount)}</b>
+      </div>`; }).join("");
     return `<div class="money-day"><div class="money-day-head"><span>${dayFmt.format(new Date(`${k}T00:00:00`))}</span><b class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : "−"}${formatBaht(Math.abs(net))}</b></div>${rows}</div>`;
   }).join("");
 }

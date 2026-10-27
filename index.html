@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=21" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=22" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/pos.css?v=21" />
     <link rel="stylesheet" href="assets/css/shift.css?v=19" />
@@ -113,11 +113,11 @@
           </div>
         </section>
 
-        <!-- V21: รายการรายรับ/รายจ่ายของช่วงที่เลือก แบบแอปจดเงิน — แถวโชว์แค่ รายรับ/รายจ่าย + ยอด, แตะเพื่อดูรายละเอียด (dashboard.js → renderMoneyList) -->
-        <section class="tag-card money-list-card" aria-label="รายการรายรับรายจ่าย">
-          <div class="money-list-head"><h2>รายการ</h2><span id="moneyListMeta"></span></div>
+        <!-- V21: รายการรายรับ/รายจ่ายของช่วงที่เลือก — การ์ดพับไว้ แตะแล้วรายการค่อยแสดง (dashboard.js → renderMoneyList) -->
+        <details class="tag-card money-list-card">
+          <summary class="money-list-head"><h2>รายการ</h2><span id="moneyListMeta"></span></summary>
           <div id="moneyList"><div class="empty-state">กำลังโหลดรายการ...</div></div>
-        </section>
+        </details>
       </div>
     </div>
     
@@ -149,7 +149,7 @@
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="assets/js/dashboard.js?v=195"></script>
+    <script src="assets/js/dashboard.js?v=196"></script>
     <script src="assets/js/money.js?v=19"></script>
     <!-- Clean Architecture: Domain → Data → Infra → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/shiftCalc.js?v=1"></script>

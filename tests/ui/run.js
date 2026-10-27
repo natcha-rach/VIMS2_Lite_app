@@ -134,12 +134,11 @@ const server = http.createServer((req, res) => {
   await m.goto("http://localhost:8765/index.html");
   await m.waitForSelector(".shift-close-btn");
   await shot(m, "08-main-after-sale");
-  // V21: รายการรายรับ/รายจ่ายใต้ PULSE — ต้องมีบิลขาย (รายรับ) + ค่าแผง (รายจ่าย) และแตะแล้วเห็นรายละเอียด
-  await m.waitForSelector("#moneyList .money-row");
-  console.log("money rows:", await m.$$eval("#moneyList .money-row summary", (r) => r.map((x) => x.textContent.replace(/\s+/g, " ").trim())));
-  console.log("detail hidden before tap:", !(await m.isVisible("#moneyList .money-row.in .money-detail")));
-  await m.click("#moneyList .money-row.in summary");
-  console.log("money detail:", await m.$eval("#moneyList .money-row.in .money-detail", (e) => e.textContent.replace(/\s+/g, " ").trim()));
+  // V21: การ์ด "รายการ" พับไว้ แตะแล้วเห็นแถว — แถวโชว์รายละเอียด (ชื่อสินค้า/หมวด) ไม่ใช่คำว่ารายรับ/รายจ่าย
+  await m.waitForSelector("#moneyList .money-row", { state: "attached" });
+  console.log("list hidden before tap:", !(await m.isVisible("#moneyList .money-row")));
+  await m.click(".money-list-card summary");
+  console.log("money rows:", await m.$$eval("#moneyList .money-row", (r) => r.map((x) => x.textContent.replace(/\s+/g, " ").trim())));
   await m.screenshot({ path: path.join(OUT, "08c-money-list.png"), fullPage: true });
   await m.click('[data-del]');
   await m.waitForSelector(".notify-dialog");

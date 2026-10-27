@@ -223,30 +223,25 @@
 .empty-state.small{padding:10px;font-size:12.5px}
 @media(max-width:720px){.today-tasks-list{grid-template-columns:1fr}}
 
-/* ---------- V21: รายการรายรับ/รายจ่าย (แบบแอปจดเงิน) — แถวปิดโชว์แค่ประเภท+ยอด แตะเพื่อดูรายละเอียด ---------- */
+/* ---------- V21: การ์ด "รายการ" พับไว้ แตะแล้วแสดงรายการ — แถวโชว์รายละเอียดเลย สีไอคอนบอกเข้า/ออก ---------- */
 .money-list-card { margin-top: 16px; }
-.money-list-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
-.money-list-head h2 { margin: 0; font-size: 16px; }
+.money-list-head { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; list-style: none; }
+.money-list-head::-webkit-details-marker { display: none; }
+.money-list-head h2 { margin: 0; font-size: 16px; flex: 1; }
 .money-list-head span { font-size: 12px; color: var(--color-ink-soft); }
+.money-list-head::after { content: "›"; color: var(--color-ink-soft); font-size: 20px; transition: transform .15s; }
+.money-list-card[open] .money-list-head::after { transform: rotate(90deg); }
 .money-day-head { display: flex; justify-content: space-between; padding: 12px 2px 6px; font-size: 13px; color: var(--color-ink-soft); border-bottom: 1px solid var(--v11-border, #e7e9f2); }
 .money-day-head .positive { color: var(--ok, #12a15e); }
 .money-day-head .negative { color: var(--bad, #e5483a); }
-.money-row { border-bottom: 1px solid var(--v11-border, #e7e9f2); }
-.money-row summary { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 4px 2px; cursor: pointer; list-style: none; }
-.money-row summary::-webkit-details-marker { display: none; }
-.money-row summary::after { content: "›"; color: var(--color-ink-soft); font-size: 18px; transition: transform .15s; }
-.money-row[open] summary::after { transform: rotate(90deg); }
+.money-row { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 6px 2px; border-bottom: 1px solid var(--v11-border, #e7e9f2); }
 .money-ic { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .money-ic svg { width: 18px; height: 18px; }
 .money-row.in .money-ic { background: #ecfdf3; color: var(--ok, #12a15e); }
 .money-row.out .money-ic { background: #fef3f2; color: var(--bad, #e5483a); }
-.money-label { flex: 1; font-size: 15px; }
-.money-amt { font-size: 15px; }
+.money-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.money-text b { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.money-text small { font-size: 12px; color: var(--color-ink-soft); }
+.money-amt { font-size: 15px; white-space: nowrap; }
 .money-row.in .money-amt { color: var(--ok, #12a15e); }
 .money-row.out .money-amt { color: var(--bad, #e5483a); }
-.money-detail { padding: 0 2px 12px 48px; font-size: 13px; color: var(--color-ink-soft); }
-.money-detail p { margin: 0 0 6px; }
-.money-detail ul { list-style: none; margin: 0; padding: 0; }
-.money-detail li { display: flex; justify-content: space-between; gap: 8px; padding: 4px 0; color: var(--v11-text, #161923); }
-.money-detail li small { color: var(--color-ink-soft); }
-.money-note { color: var(--v11-text, #161923); }
