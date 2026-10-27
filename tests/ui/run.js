@@ -140,6 +140,13 @@ const server = http.createServer((req, res) => {
   await m.click(".money-list-card summary");
   console.log("money rows:", await m.$$eval("#moneyList .money-row", (r) => r.map((x) => x.textContent.replace(/\s+/g, " ").trim())));
   await m.screenshot({ path: path.join(OUT, "08c-money-list.png"), fullPage: true });
+  // V21: ปุ่ม + ลอย → แผ่นเพิ่มค่าใช้จ่ายเปิดที่หมวดล่าสุด, แตะพื้นหลังมืดแล้วปิด
+  await m.click("#addExpenseFab");
+  console.log("fab sheet open:", await m.isVisible("#expenseSheet [data-form=expense]"), "cat:", await m.inputValue("#expenseSheet [name=category]"));
+  await m.waitForTimeout(400);
+  await m.screenshot({ path: path.join(OUT, "08d-fab-sheet.png") });
+  await m.mouse.click(5, 5);
+  console.log("fab sheet closed:", !(await m.isVisible("#expenseSheet [data-form=expense]")));
   await m.click('[data-del]');
   await m.waitForSelector(".notify-dialog");
   await m.waitForTimeout(400);

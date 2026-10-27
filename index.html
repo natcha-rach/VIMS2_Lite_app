@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="assets/css/dashboard.css?v=22" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/pos.css?v=21" />
-    <link rel="stylesheet" href="assets/css/shift.css?v=19" />
+    <link rel="stylesheet" href="assets/css/shift.css?v=20" />
     <link rel="stylesheet" href="assets/css/polish.css?v=200" />
   </head>
   <body>
@@ -142,6 +142,14 @@
         </div>
       </div>
     </div>
+    <!-- V21: ปุ่ม + ลอย และแผ่นเพิ่มค่าใช้จ่าย (shift.js) — อยู่นอก #mainWrap เพื่อลอยเหนือเมนูล่างมือถือ -->
+    <button type="button" class="money-fab" id="addExpenseFab" aria-label="เพิ่มค่าใช้จ่าย"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <div class="modal-backdrop hidden" id="expenseSheet">
+      <div class="modal-sheet shift-modal" role="dialog" aria-labelledby="exTitle">
+        <h2 id="exTitle">เพิ่มค่าใช้จ่าย</h2>
+        <div id="exBody"></div>
+      </div>
+    </div>
     <div class="toast" id="toast"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="assets/js/supabaseClient.js"></script>
@@ -156,7 +164,7 @@
     <script src="assets/js/data/shiftRepo.js?v=1"></script>
     <script src="assets/js/data/salesRepo.js?v=1"></script>
     <script src="assets/js/offline.js?v=21"></script>
-    <script src="assets/js/shift.js?v=201"></script>
+    <script src="assets/js/shift.js?v=202"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

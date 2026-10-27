@@ -67,7 +67,7 @@
     today = ShiftCalc.todayFromRows(s.data || [], expenses);
   }
 
-  function render(focusAmount = false) {
+  function render() {
     const open = !!shift;
     const revenue = open ? S(totals?.revenue) : today.revenue;
     const cogs = open ? S(totals?.cogs) : today.cogs;
@@ -96,10 +96,16 @@
         <div class="ss-row ss-profit"><span>กำไรจริง <small>หักต้นทุนเสื้อ ${thb(cogs)} แล้ว</small></span><b class="${profit >= 0 ? "pos" : "neg"}">${thb(profit)}</b></div>
         ${open ? `<div class="ss-row ss-drawer"><span>เงินสดในลิ้นชักควรมี <small>ทอน ${thb(S(totals?.opening_cash))} + ขายสด ${thb(S(totals?.cash_sales))} − จ่ายจากลิ้นชัก ${thb(S(totals?.expenses_drawer))}</small></span><b>${thb(S(totals?.expected_cash))}</b></div>` : ""}
       </div>
-      <div class="shift-quick">
-        ${QUICK.map((q) => `<button type="button" class="pos-chip${expenseForm?.cat === q.cat ? " active" : ""}" data-quick="${esc(q.cat)}">+ ${esc(q.label)}</button>`).join("")}
-      </div>
-      ${expenseForm ? `
+      <div class="shift-quick">${quickChips()}</div>`;
+  }
+
+  // V21: ฟอร์มค่าใช้จ่ายย้ายไปอยู่ในแผ่นล่าง (#expenseSheet) — เปิดได้ทั้งจากปุ่มด่วนในการ์ด และปุ่ม + ลอยบนหน้าแรก
+  const sheet = document.getElementById("expenseSheet");
+  const quickChips = () => QUICK.map((q) => `<button type="button" class="pos-chip${expenseForm?.cat === q.cat ? " active" : ""}" data-quick="${esc(q.cat)}">+ ${esc(q.label)}</button>`).join("");
+
+  function renderSheet() {
+    sheet.querySelector("#exBody").innerHTML = `
+      <div class="shift-quick">${quickChips()}</div>
       <form class="shift-expense" data-form="expense">
         <input type="text" name="category" value="${esc(expenseForm.cat)}" aria-label="หมวด" required>
         <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="บาท" value="${esc(get("vims_exp_last_" + expenseForm.cat) || "")}" aria-label="จำนวนเงิน" required>
@@ -109,24 +115,36 @@
         </div>
         <input type="text" name="note" placeholder="หมายเหตุ (ไม่บังคับ)" aria-label="หมายเหตุ">
         <div class="shift-expense-actions"><button type="button" class="btn btn-ghost" data-act="cancel-exp">ยกเลิก</button><button type="submit" class="btn btn-primary">บันทึก</button></div>
-      </form>` : ""}`;
-
-    const amt = card.querySelector('[data-form="expense"] [name="amount"]');
-    if (amt && focusAmount) { amt.focus(); amt.select?.(); }
+      </form>`;
+    const amt = sheet.querySelector('[name="amount"]');
+    amt.focus(); amt.select?.();
   }
 
+  function openExpense(cat) {
+    expenseForm = { cat, paid: shift ? "drawer" : "transfer" };
+    renderSheet();
+    sheet.classList.remove("hidden");
+  }
+  function closeExpense() { expenseForm = null; sheet.classList.add("hidden"); render(); }
+
+  document.getElementById("addExpenseFab")?.addEventListener("click", () => openExpense(get("vims_exp_last_cat") || QUICK[0].cat));
+
   // ---------- events (delegation: การ์ดถูก render ใหม่ทั้งก้อน) ----------
+  sheet.addEventListener("click", (e) => {
+    if (e.target === sheet || e.target.closest('[data-act="cancel-exp"]')) return closeExpense(); // แตะพื้นหลังมืด = ปิด
+    const q = e.target.closest("[data-quick]");
+    if (q) { expenseForm.cat = q.dataset.quick; renderSheet(); return; }
+    const paid = e.target.closest("[data-paid]");
+    if (paid) {
+      expenseForm.paid = paid.dataset.paid;
+      sheet.querySelectorAll("[data-paid]").forEach((b) => b.classList.toggle("active", b === paid));
+    }
+  });
+
   card.addEventListener("click", async (e) => {
     const q = e.target.closest("[data-quick]");
-    if (q) { expenseForm = { cat: q.dataset.quick, paid: shift ? "drawer" : "transfer" }; render(true); return; }
-    const paid = e.target.closest("[data-paid]");
-    if (paid && expenseForm) {
-      expenseForm.paid = paid.dataset.paid;
-      card.querySelectorAll("[data-paid]").forEach((b) => b.classList.toggle("active", b === paid));
-      return;
-    }
+    if (q) { openExpense(q.dataset.quick); return; }
     const act = e.target.closest("[data-act]")?.dataset.act;
-    if (act === "cancel-exp") { expenseForm = null; render(); return; }
     if (act === "close") { openCloseModal(); return; }
     const del = e.target.closest("[data-del]");
     if (del) {
@@ -152,6 +170,11 @@
       Notify.success("เปิดร้านแล้ว", `${location} · เงินทอนตั้งต้น ${thb(S(opening))} — ขายได้เลย ทุกบิลจะนับเข้ารอบร้านนี้`);
       load();
     }
+  });
+
+  sheet.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
     if (form.dataset.form === "expense") {
       const amount = Number(form.amount.value);
       const category = form.category.value.trim();
@@ -169,9 +192,11 @@
       const { error } = await ShiftRepo.addExpense(row);
       if (error) return Notify.error(`บันทึก ${category} ไม่สำเร็จ`, error);
       set("vims_exp_last_" + expenseForm.cat, String(amount)); // ครั้งหน้ากรอกยอดเดิมให้
+      set("vims_exp_last_cat", expenseForm.cat); // ปุ่ม + เปิดมาที่หมวดล่าสุด
       Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, row.paid_from === "drawer" ? "หักจากเงินในลิ้นชักที่ควรมีแล้ว" : row.paid_from === "transfer" ? "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)" : "นับเป็นค่าใช้จ่ายของวันนี้");
-      expenseForm = null;
+      closeExpense();
       load();
+      window.dispatchEvent(new CustomEvent("vims:realtime", { detail: { table: "expenses" } })); // ให้ PULSE + การ์ดรายการ (dashboard.js) โหลดใหม่ทันที
     }
   });
 
