@@ -30,7 +30,7 @@ For a fresh/empty database, run these three files in the Supabase SQL Editor, **
 
 If you're running it via `psql`/CLI instead of the web editor, the combined single file `sql/schema.sql` works fine too — same content.
 
-If a run fails partway through and leaves some tables half-created, run `sql/reset_before_retry.sql` first to clear them out, then start again from part 1.
+If a run fails partway through and leaves some tables half-created, run `sql/tools/reset_before_retry.sql` first to clear them out, then start again from part 1.
 
 Do not run anything in `sql/archive/` on a fresh database — those are old incremental migrations (V2 through V17), kept only for upgrading an existing pre-V14 database without a full reset.
 

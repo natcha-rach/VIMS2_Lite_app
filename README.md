@@ -6,24 +6,36 @@
 
 ## โครงสร้างโฟลเดอร์
 
+ป้าย: 🟢 ใช้งานจริง (ขึ้นเว็บ) · 🗄️ ฐานข้อมูล · 🧪 ทดสอบ · 📄 เอกสาร · ⚠️ อันตราย · 📦 เก็บไว้ดูประวัติ (ไม่ได้ใช้แล้ว)
+
 ```
-├── index.html, items.html, lots.html,        ← หน้าเว็บ (อัปโหลดทั้งหมดขึ้น hosting)
-│   sell.html, reports.html, accounting.html,
-│   tax.html, login.html                      ← V19
-├── assets/
-│   ├── css/            ← ไฟล์สไตล์ที่ใช้งานจริงทั้งหมด (ของไม่ได้ใช้เก็บใน css/archive/)
-│   └── js/              ← ไฟล์ JS ที่ใช้งานจริงทั้งหมด
-├── sql/
-│   ├── schema_part1_tables_and_rls.sql  ← รัน 3 ไฟล์นี้ตามลำดับสำหรับโปรเจกต์ Supabase ใหม่
-│   ├── schema_part2_functions.sql
-│   ├── schema_part3_cost_reports.sql
-│   ├── schema.sql                        ← เนื้อหาเดียวกันรวมไฟล์เดียว (ใช้กับ CLI/psql)
-│   ├── reset_before_retry.sql            ← ใช้เมื่อรันค้างกลางทางแล้วต้องล้างแล้วเริ่มใหม่
-│   └── archive/                          ← migration ของเวอร์ชันเก่าๆ (V2-V17) เก็บไว้เป็นประวัติ ไม่ต้องรันถ้าเริ่มจากศูนย์
-└── docs/
-    ├── SUPABASE_SETUP.md   ← คู่มือติดตั้งฉบับเต็ม
-    ├── CODE_MAP.md          ← แผนที่โค้ดปัจจุบัน
-    └── archive/             ← CHANGELOG/DESIGN ของเวอร์ชันเก่า เก็บไว้อ้างอิงประวัติ
+├── 🟢 index.html            หน้าแรก: ร้านวันนี้ · PULSE · การ์ดรายการ · ปุ่ม +
+├── 🟢 sell.html             ขายของ (POS) · บิล & คืน · จอง
+├── 🟢 items.html, lots.html สต็อก (แท็บ สินค้า / Lot)
+├── 🟢 reports.html          รายงาน 4 แท็บ (ขายดี · ล็อต · ทำเล · แนวโน้ม)
+├── 🟢 accounting.html       บัญชี: เงินจริงตอนนี้ · กันเงินหนี้ · ประวัติรอบร้าน · พื้นที่
+├── 🟢 tax.html, login.html  สรุปภาษี · เข้าสู่ระบบ (ปิดอยู่ AUTH_REQUIRED=false)
+├── 🟢 sw.js                 service worker — ขายตอนเน็ตหลุด
+├── 🟢 assets/
+│   ├── css/                 สไตล์ทุกหน้า (polish.css โหลดท้ายสุด) · 📦 css/archive/ = ธีมเก่าไม่ได้ใช้
+│   └── js/
+│       ├── *.js             ชั้น UI ของแต่ละหน้า + ของกลาง (supabaseClient, notify, nav, realtime, money)
+│       ├── domain/          สูตรคำนวณล้วน ไม่แตะหน้าจอ/ฐานข้อมูล (มี unit test ใน tests/)
+│       └── data/            คุยกับ Supabase (repo ละหน้า) — ดู docs/ARCHITECTURE.md
+├── 🗄️ sql/
+│   ├── schema_part1..3_*.sql  โปรเจกต์ Supabase ใหม่: รัน 3 ไฟล์ตามลำดับ (schema.sql = รวมไฟล์เดียว)
+│   ├── migration_v19_pos_shift.sql        ต้องมี (POS · รอบร้าน · จอง) — รันซ้ำได้
+│   ├── migration_v21_offline_markdown.sql ต้องมี (ขายตอนเน็ตหลุด · ลดราคา) — รันซ้ำได้
+│   ├── migration_v20_auth_lock.sql        ไม่ต้องรัน จนกว่าจะเปิดระบบ login (อ่านหัวไฟล์ก่อน)
+│   ├── ⚠️ tools/              ล้างข้อมูล/ล้างตาราง — ลบถาวร ใช้เมื่อตั้งใจเท่านั้น
+│   └── 📦 archive/            migration เก่า (V2–V17) + ของยุค Flutter — ไม่ต้องรัน
+├── 🧪 tests/
+│   ├── *.test.js            unit test: node --test tests/*.test.js
+│   └── ui/                  Playwright + Supabase จำลอง: node run.js · VP=devices node shots.js devices
+├── 📄 docs/                 ARCHITECTURE.md (แผนที่โค้ดปัจจุบัน) · CHANGELOG_V19/V20 · SUPABASE_SETUP · 📦 archive/
+├── scripts/build-site.sh    คัดเฉพาะไฟล์เว็บ → dist/ (dist/ ไม่เก็บใน git)
+├── .github/workflows/       ci.yml (unit test) · backup.yml (pg_dump ทุกคืน)
+└── CLAUDE.md                สรุปงานสำหรับ Claude Code (กฎธุรกิจ · convention · สถานะ)
 ```
 
 ## Business flow
@@ -107,7 +119,7 @@ Excel รองรับ:
 
 หรือถ้ารันผ่าน CLI/psql (ไม่ผ่านเว็บ SQL Editor) ใช้ไฟล์รวมไฟล์เดียวได้เลยคือ `sql/schema.sql` (เนื้อหาเหมือนกับ 3 ไฟล์ข้างบนรวมกัน)
 
-ถ้ารันแล้วเจอ error กลางทาง (เช่นมีตารางค้างจากความพยายามครั้งก่อน) ให้รัน `sql/reset_before_retry.sql` ก่อน แล้วเริ่มรัน part1-3 ใหม่ตั้งแต่ต้น
+ถ้ารันแล้วเจอ error กลางทาง (เช่นมีตารางค้างจากความพยายามครั้งก่อน) ให้รัน `sql/tools/reset_before_retry.sql` ก่อน แล้วเริ่มรัน part1-3 ใหม่ตั้งแต่ต้น
 
 ### มีฐานข้อมูล V13 เดิมอยู่แล้ว (อัปเกรดแบบไม่ล้างของเดิม)
 ไฟล์ migration แต่ละเวอร์ชันเก็บไว้ที่ `sql/archive/` (เช่น `migration_v14_lot_reconciliation.sql` ถึง `migration_v17_reports.sql`) — รันเรียงตามเลขเวอร์ชันบนฐานข้อมูลเดิมได้โดยไม่ต้องรัน schema_part ใหม่ทั้งหมด
@@ -331,7 +343,7 @@ reports.html
 
 
 ## V10.1
-See `docs/CODE_MAP.md`, `docs/archive/CHANGELOG_V10.1.md`, and `sql/archive/migration_v10_1_realtime.sql`. Run the migration only after confirming the existing V10 tables.
+See `docs/ARCHITECTURE.md`, `docs/archive/CHANGELOG_V10.1.md`, and `sql/archive/migration_v10_1_realtime.sql`. Run the migration only after confirming the existing V10 tables.
 
 
 ## V11.2 Business Intelligence

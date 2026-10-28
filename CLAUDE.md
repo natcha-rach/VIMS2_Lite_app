@@ -52,7 +52,7 @@ sql/
 tests/money.test.js   node --test tests/money.test.js  (9 ข้อ ผ่าน)
 tests/ui/             Playwright + Supabase จำลอง (ดูข้อ 7)
 .github/workflows/backup.yml   pg_dump ทุกคืน (ต้องตั้ง secret SUPABASE_DB_URL)
-docs/CHANGELOG_V19.md, docs/CODE_MAP.md
+docs/CHANGELOG_V19.md, docs/CHANGELOG_V20.md, docs/ARCHITECTURE.md (แผนที่โค้ดปัจจุบัน)
 ```
 
 ## 3. ฐานข้อมูล (สถานะหลัง V19)
