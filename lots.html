@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/lots.css?v=21" />
+    <link rel="stylesheet" href="assets/css/lots.css?v=22" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/polish.css?v=201" />
   </head>
@@ -34,8 +34,9 @@
         <nav class="stock-tabs" aria-label="สต็อก"><a href="lots.html" aria-current="page">Lot</a><a href="items.html">สินค้า</a></nav>
         <div class="page-head"><div><h1>ล็อตสินค้า</h1><p class="muted">1 Lot = 1 ครั้งที่รับเสื้อเข้ามา และแต่ละ Lot มีวิธีคัดของของตัวเอง</p></div></div>
 
-        <div class="tag-card">
-          <h2 id="lotFormTitle">เพิ่มล็อตใหม่</h2>
+        <!-- V21: ฟอร์มพับไว้ (เพิ่มล็อตนานๆ ครั้ง) ให้รายการ Lot ขึ้นมาใกล้จอแรก · กดแก้ไข Lot แล้วกางเอง (lots.js) -->
+        <details class="tag-card lot-form-box" id="lotFormBox">
+          <summary><h2 id="lotFormTitle">เพิ่มล็อตใหม่</h2></summary>
           <p class="muted">ต้นทุนเฉลี่ยต่อชิ้นจะถูกใช้เป็นต้นทุนตั้งต้นของสินค้าใน Lot นี้</p>
           <form id="lotForm">
             <div class="field"><label for="lotName">ชื่อ/รหัสล็อต</label><input type="text" id="lotName" placeholder="เช่น Vintage กระสอบ 08/08/69" required /></div>
@@ -58,9 +59,10 @@
             <div class="field"><label for="note">หมายเหตุ</label><textarea id="note" rows="2" placeholder="เช่น กระสอบญี่ปุ่น 200 ตัว"></textarea></div>
             <div class="field-row"><button type="button" class="btn btn-ghost hidden" id="cancelLotEdit">ยกเลิกแก้ไข</button><button type="submit" class="btn btn-primary" id="lotSubmitBtn">บันทึกล๊อต</button></div>
           </form>
-        </div>
+        </details>
 
         <div class="section-head"><div><h2>ล็อตทั้งหมด</h2><p class="muted">เปิดแต่ละ Lot เพื่อจัดกลุ่มคัดสินค้า เช่น ฿40–60, ฿100, งานหัว หรือกลุ่มเฉพาะของ Lot นั้น</p></div></div>
+        <div class="lot-filter" id="lotFilter" role="group" aria-label="กรองตามสถานะ"></div>
         <div id="lotList"><div class="empty-state">กำลังโหลด...</div></div>
       </div>
     </div>
@@ -90,6 +92,6 @@
     <!-- Clean Architecture: Domain → Data → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/lotCalc.js?v=1"></script>
     <script src="assets/js/data/lotsRepo.js?v=1"></script>
-    <script src="assets/js/lots.js?v=21"></script><script src="assets/js/realtime.js?v=192"></script>
+    <script src="assets/js/lots.js?v=22"></script><script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

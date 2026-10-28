@@ -213,6 +213,9 @@ const server = http.createServer((req, res) => {
   // ---------- ล็อต: ต้นทุนเฉลี่ย + บันทึก Lot (LotCalc + LotsRepo) ----------
   await m.goto("http://localhost:8765/lots.html");
   await m.waitForTimeout(500);
+  // V21: ฟอร์มพับไว้ · การ์ดย่อไม่มี undefined / Invalid Date · รายละเอียดพับไว้
+  console.log("lot form closed:", !(await m.isVisible("#lotName")), "| card text ok:", !(await m.$eval("#lotList", (e) => /undefined|Invalid Date/.test(e.textContent))), "| filter chips:", await m.$$eval("[data-lot-filter]", (b) => b.map((x) => x.textContent)));
+  await m.click("#lotFormBox summary");
   await m.fill("#lotName", "Lot ทดสอบ");
   await m.fill("#totalCost", "3000");
   await m.fill("#totalItems", "50");

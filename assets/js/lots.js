@@ -81,6 +81,7 @@ function exitEditMode() {
   setDefaultPurchaseDate();
   updateAvgCost();
   $("lotFormTitle").textContent = "เพิ่มล็อตใหม่";
+  $("lotFormBox").open = false;
   $("lotSubmitBtn").textContent = "บันทึกล๊อต";
   $("cancelLotEdit").classList.add("hidden");
 }
@@ -105,11 +106,19 @@ function enterEditMode(lot) {
   $("lotSubmitBtn").textContent = "บันทึกการแก้ไข";
   $("cancelLotEdit").classList.remove("hidden");
   updateAvgCost();
+  $("lotFormBox").open = true;
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 // สถานะ Lot: receiving (กำลังรับของ) → sorting (กำลังคัด/ลง) → ready (ลงครบ พร้อมขาย) → closed (ปิดล็อต)
 const LOT_STATUS_LABEL = { receiving: "กำลังรับของ", sorting: "กำลังคัด", ready: "พร้อมขาย", closed: "ปิดล็อตแล้ว" };
+// V21: ชิปกรองสถานะ — ค่าเริ่มต้น "กำลังทำ" (ยังไม่ปิด) Lot ที่ปิดแล้วไม่ต้องเลื่อนผ่านทุกครั้ง
+const LOT_FILTERS = {
+  active: { label: "กำลังทำ", keep: (l) => (l.status || "sorting") !== "closed" },
+  closed: { label: "ปิดแล้ว", keep: (l) => l.status === "closed" },
+  all: { label: "ทั้งหมด", keep: () => true },
+};
+let lotFilter = "active";
 const LOT_STATUS_NEXT = { receiving: { to: "sorting", label: "เริ่มคัด" }, sorting: { to: "ready", label: "ทำเครื่องหมายพร้อมขาย" }, ready: { to: "closed", label: "ปิดล็อต" } };
 
 async function loadLots() {
@@ -127,6 +136,7 @@ async function loadLots() {
   if (sourceList) sourceList.innerHTML = sources.map(s => `<option value="${escapeHtml(s)}"></option>`).join("");
   if (!lotsCache.length) {
     $("lotList").innerHTML = `<div class="empty-state">ยังไม่มีล็อต เพิ่มล็อตแรกด้านบนได้เลย</div>`;
+    $("lotFormBox").open = true;
     return;
   }
   const lotIds = lotsCache.map(l => l.id);
@@ -146,7 +156,14 @@ async function loadLots() {
   const summaryByLot = Object.fromEntries((summaryR.data || []).map(s => [s.lot_id, s]));
   const progressByGroup = Object.fromEntries((groupProgressR.data || []).map(g => [g.group_id, g]));
 
-  $("lotList").innerHTML = lotsCache.map(lot => {
+  const count = (f) => lotsCache.filter(LOT_FILTERS[f].keep).length;
+  $("lotFilter").innerHTML = Object.entries(LOT_FILTERS).map(([k, f]) => `<button type="button" class="pos-chip${lotFilter === k ? " active" : ""}" data-lot-filter="${k}" aria-pressed="${lotFilter === k}">${f.label} ${count(k)}</button>`).join("");
+  $("lotFilter").querySelectorAll("[data-lot-filter]").forEach(b => b.addEventListener("click", () => { lotFilter = b.dataset.lotFilter; loadLots(); }));
+  const shown = lotsCache.filter(LOT_FILTERS[lotFilter].keep);
+  if (!shown.length) { $("lotList").innerHTML = `<div class="empty-state">ไม่มีล็อตในกลุ่มนี้</div>`; return; }
+
+  const v = (x) => (x ?? "–"); // ข้อมูลว่าง → "–" ไม่ใช่ undefined
+  $("lotList").innerHTML = shown.map(lot => {
     const avg = Number(lot.total_items) > 0 ? Number(lot.total_cost) / Number(lot.total_items) : 0;
     const st = summaryByLot[lot.id] || { received: lot.total_items, listed: 0, available: 0, sold: 0, rejected: lot.rejected_qty || 0, damaged: lot.damaged_qty || 0, pending: lot.total_items, items_total: 0, revenue: 0, profit: 0, remaining_to_breakeven: lot.total_cost };
     const groups = groupsByLot[lot.id] || [];
@@ -155,41 +172,49 @@ async function loadLots() {
     const nextStep = LOT_STATUS_NEXT[status];
     const canAdvance = nextStep && (status !== "sorting" || st.pending <= 0); // ต้องคัดครบก่อนกด "พร้อมขาย"
     const hasHistory = Number(st.items_total) > 0 || Number(st.sold) > 0;
+    const cost = Number(lot.total_cost) || 0;
+    const recoverPct = cost > 0 ? Math.min(100, Math.max(0, (cost - Number(st.remaining_to_breakeven || 0)) / cost * 100)) : 0;
+    const continueUrl = (() => {
+      // "ทำต่อ" พาไปกลุ่มแรกที่ยังไม่ครบเป้า (ถ้ามีกำหนดเป้าไว้) — ถ้าไม่มีกลุ่มไหนตั้งเป้า ให้พาไปหน้า Items ของ Lot เฉยๆ
+      if (status === "closed" || !window.VimsContext) return "";
+      const openGroup = groups.find(g => g.target_qty && (progressByGroup[g.id]?.listed || 0) < g.target_qty);
+      return openGroup ? VimsContext.itemsUrl({ lotId: lot.id, groupId: openGroup.id, mode: "rapid" }) : VimsContext.itemsUrl({ lotId: lot.id, mode: "bulk" });
+    })();
+    const itemsUrl = window.VimsContext ? VimsContext.itemsUrl({ lotId: lot.id }) : `items.html?lot=${encodeURIComponent(lot.id)}`;
+    // V21: การ์ดย่อ — ข้อมูลที่ดูบ่อยอยู่บน · ตัวเลขละเอียด/ปุ่มคัด/กลุ่ม/คำสั่งอื่นพับไว้ใน "รายละเอียด & จัดการ"
     return `<div class="tag-card lot-card">
       <div class="lot-row">
-        <div class="lot-title-block"><div class="lot-name">${escapeHtml(lot.lot_name)} <span class="lot-status-badge lot-status-${status}">${LOT_STATUS_LABEL[status] || status}</span></div><div class="lot-meta">${formatDate(lot.purchase_date)}${lot.source ? " · " + escapeHtml(lot.source) : ""}</div></div>
-        <div class="lot-summary"><div class="lot-cost">${formatBaht(lot.total_cost)}</div><div class="lot-meta">${lot.total_items} ชิ้น · เฉลี่ย ${formatBaht(avg)}/ชิ้น</div></div>
+        <div class="lot-title-block"><div class="lot-name">${escapeHtml(lot.lot_name)} <span class="lot-status-badge lot-status-${status}">${LOT_STATUS_LABEL[status] || status}</span></div><div class="lot-meta">ทุน ${formatBaht(cost)} · ลงแล้ว ${v(st.listed)}/${v(st.received)} ชิ้น · ${lot.purchase_date ? formatDate(lot.purchase_date) : "ไม่ระบุวันที่"}${lot.source ? " · " + escapeHtml(lot.source) : ""}</div></div>
       </div>
-      <div class="lot-metrics">
-        <div><b>${st.received}</b><span>รับเข้า</span></div><div><b>${st.listed}</b><span>ลงแล้ว</span></div><div><b>${st.rejected}</b><span>คัดออก</span></div><div><b>${st.damaged}</b><span>เสีย</span></div>
-        <div class="${pendingWarn ? "lot-metric-warn" : ""}"><b>${st.pending}</b><span>รอคัด</span></div><div><b>${st.sold}</b><span>ขายแล้ว</span></div><div><b>${formatBaht(st.profit)}</b><span>กำไรขายแล้ว</span></div><div><b>${formatBaht(st.remaining_to_breakeven)}</b><span>เหลือก่อนคืนทุน</span></div>
-      </div>
+      <div class="lot-recover" role="progressbar" aria-label="คืนทุน" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(recoverPct)}"><div style="width:${recoverPct.toFixed(1)}%"></div></div>
+      <div class="lot-meta">คืนทุน ${recoverPct.toFixed(0)}%${Number(st.remaining_to_breakeven) > 0 ? ` · อีก ${formatBaht(st.remaining_to_breakeven)}` : " · คืนทุนแล้ว"} · ขายแล้ว ${v(st.sold)} ชิ้น</div>
       ${pendingWarn ? `<p class="lot-warn-text">⚠️ ลงสินค้า (${st.listed}) + คัดออก (${st.rejected}) + เสีย (${st.damaged}) เกินจำนวนรับเข้า (${st.received}) อยู่ ${-st.pending} ชิ้น — ตรวจจำนวนรับเข้าหรือรายการที่ลงซ้ำ</p>` : ""}
-      <div class="lot-reject-row">
-        <span class="lot-reject-field">คัดออก <button type="button" class="stepper-btn" data-adjust="rejected_qty" data-delta="-1" data-id="${lot.id}">−</button><b>${lot.rejected_qty || 0}</b><button type="button" class="stepper-btn" data-adjust="rejected_qty" data-delta="1" data-id="${lot.id}">+</button></span>
-        <span class="lot-reject-field">เสีย (ยังไม่ลง) <button type="button" class="stepper-btn" data-adjust="damaged_qty" data-delta="-1" data-id="${lot.id}">−</button><b>${lot.damaged_qty || 0}</b><button type="button" class="stepper-btn" data-adjust="damaged_qty" data-delta="1" data-id="${lot.id}">+</button></span>
+      <div class="item-actions lot-main-actions">
+        ${continueUrl ? `<a class="btn btn-primary btn-sm" href="${continueUrl}">ทำต่อ${Number(st.pending) > 0 ? ` (รอคัด ${st.pending})` : ""}</a>` : ""}
+        <a class="btn btn-ghost btn-sm" href="${itemsUrl}">ดูสินค้า</a>
       </div>
-      <div class="group-preview"><div class="group-preview-head"><b>กลุ่มคัด ${groups.length ? `(${groups.length})` : ""}</b><button class="btn btn-primary btn-sm" data-action="groups" data-id="${lot.id}">จัดกลุ่ม / แก้ไข</button></div>
-        ${groups.length ? `<div class="group-chip-list">${groups.map(g => { const p = progressByGroup[g.id]; const targetText = g.target_qty ? ` · ${p ? p.listed : 0}/${g.target_qty}` : ""; return `<span class="group-chip"><b>${escapeHtml(g.group_name)}</b><small>${g.tier === "head" ? "งานหัว" : "ปกติ"} · ${formatBaht(g.base_price)}${targetText}</small></span>`; }).join("")}</div>` : `<div class="empty-inline">ยังไม่มีกลุ่ม — กด “จัดกลุ่ม / แก้ไข” เพื่อสร้างกลุ่มเฉพาะ Lot นี้</div>`}
-      </div>
-      ${lot.note ? `<div class="lot-note">${escapeHtml(lot.note)}</div>` : ""}
-      <div class="item-actions">
-        <a class="btn btn-ghost btn-sm" href="${window.VimsContext ? VimsContext.itemsUrl({ lotId: lot.id }) : `items.html?lot=${encodeURIComponent(lot.id)}`}">ดูสินค้าใน Lot</a>
-        ${(() => {
-          // "ทำต่อ" พาไปกลุ่มแรกที่ยังไม่ครบเป้า (ถ้ามีกำหนดเป้าไว้) — ถ้าไม่มีกลุ่มไหนตั้งเป้า ให้พาไปหน้า Items ของ Lot เฉยๆ
-          if (status === "closed" || !window.VimsContext) return "";
-          const openGroup = groups.find(g => g.target_qty && (progressByGroup[g.id]?.listed || 0) < g.target_qty);
-          const url = openGroup
-            ? VimsContext.itemsUrl({ lotId: lot.id, groupId: openGroup.id, mode: "rapid" })
-            : VimsContext.itemsUrl({ lotId: lot.id, mode: "bulk" });
-          return `<a class="btn btn-primary btn-sm" href="${url}">ทำต่อ</a>`;
-        })()}
-        <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${lot.id}">แก้ไข Lot</button>
-        ${st.available > 0 ? `<button class="btn btn-ghost btn-sm" data-action="recost" data-id="${lot.id}">คำนวณต้นทุนคงเหลือใหม่</button>` : ""}
-        ${nextStep ? `<button class="btn btn-primary btn-sm" data-action="advance" data-id="${lot.id}" ${canAdvance ? "" : `disabled title="คัดให้ครบก่อน (รอคัด ต้องเป็น 0)"`}>${nextStep.label}</button>` : ""}
-        ${status === "closed" ? `<button class="btn btn-ghost btn-sm" data-action="reopen" data-id="${lot.id}">เปิดล็อตใหม่</button>` : ""}
-        <button class="btn btn-danger btn-sm" data-action="delete" data-id="${lot.id}">${hasHistory ? "ปิด/ซ่อน Lot" : "ลบ Lot"}</button>
-      </div>
+      <details class="lot-more">
+        <summary>รายละเอียด &amp; จัดการ</summary>
+        <div class="lot-metrics">
+          <div><b>${v(st.received)}</b><span>รับเข้า</span></div><div><b>${v(st.listed)}</b><span>ลงแล้ว</span></div><div><b>${v(st.rejected)}</b><span>คัดออก</span></div><div><b>${v(st.damaged)}</b><span>เสีย</span></div>
+          <div class="${pendingWarn ? "lot-metric-warn" : ""}"><b>${v(st.pending)}</b><span>รอคัด</span></div><div><b>${v(st.sold)}</b><span>ขายแล้ว</span></div><div><b>${formatBaht(st.profit)}</b><span>กำไรขายแล้ว</span></div><div><b>${formatBaht(avg)}</b><span>ทุนเฉลี่ย/ชิ้น</span></div>
+        </div>
+        <div class="lot-reject-row">
+          <span class="lot-reject-field">คัดออก <button type="button" class="stepper-btn" data-adjust="rejected_qty" data-delta="-1" data-id="${lot.id}" aria-label="คัดออก ลด 1">−</button><b>${lot.rejected_qty || 0}</b><button type="button" class="stepper-btn" data-adjust="rejected_qty" data-delta="1" data-id="${lot.id}" aria-label="คัดออก เพิ่ม 1">+</button></span>
+          <span class="lot-reject-field">เสีย (ยังไม่ลง) <button type="button" class="stepper-btn" data-adjust="damaged_qty" data-delta="-1" data-id="${lot.id}" aria-label="เสีย ลด 1">−</button><b>${lot.damaged_qty || 0}</b><button type="button" class="stepper-btn" data-adjust="damaged_qty" data-delta="1" data-id="${lot.id}" aria-label="เสีย เพิ่ม 1">+</button></span>
+        </div>
+        <div class="group-preview"><div class="group-preview-head"><b>กลุ่มคัด ${groups.length ? `(${groups.length})` : ""}</b><button class="btn btn-primary btn-sm" data-action="groups" data-id="${lot.id}">จัดกลุ่ม / แก้ไข</button></div>
+          ${groups.length ? `<div class="group-chip-list">${groups.map(g => { const p = progressByGroup[g.id]; const targetText = g.target_qty ? ` · ${p ? p.listed : 0}/${g.target_qty}` : ""; return `<span class="group-chip"><b>${escapeHtml(g.group_name)}</b><small>${g.tier === "head" ? "งานหัว" : "ปกติ"} · ${formatBaht(g.base_price)}${targetText}</small></span>`; }).join("")}</div>` : `<div class="empty-inline">ยังไม่มีกลุ่ม — กด “จัดกลุ่ม / แก้ไข” เพื่อสร้างกลุ่มเฉพาะ Lot นี้</div>`}
+        </div>
+        ${lot.note ? `<div class="lot-note">${escapeHtml(lot.note)}</div>` : ""}
+        <div class="item-actions">
+          <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${lot.id}">แก้ไข Lot</button>
+          ${st.available > 0 ? `<button class="btn btn-ghost btn-sm" data-action="recost" data-id="${lot.id}">คำนวณต้นทุนคงเหลือใหม่</button>` : ""}
+          ${nextStep ? `<button class="btn btn-ghost btn-sm" data-action="advance" data-id="${lot.id}" ${canAdvance ? "" : `disabled title="คัดให้ครบก่อน (รอคัด ต้องเป็น 0)"`}>${nextStep.label}</button>` : ""}
+          ${status === "closed" ? `<button class="btn btn-ghost btn-sm" data-action="reopen" data-id="${lot.id}">เปิดล็อตใหม่</button>` : ""}
+          <button class="btn btn-danger btn-sm" data-action="delete" data-id="${lot.id}">${hasHistory ? "ปิด/ซ่อน Lot" : "ลบ Lot"}</button>
+        </div>
+      </details>
     </div>`;
   }).join("");
 

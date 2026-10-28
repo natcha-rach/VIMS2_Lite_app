@@ -27,3 +27,20 @@
 
 /* V21: ปุ่มท้ายการ์ด Lot ล้นจอบน Galaxy Z Flip 6 (360px) → ให้ขึ้นบรรทัดใหม่ */
 .item-actions{display:flex;flex-wrap:wrap;gap:8px}.item-actions .btn{min-height:44px}
+
+/* V21: หน้า Lot — ฟอร์มพับ · ชิปกรอง · การ์ดย่อ + แถบคืนทุน · รายละเอียดพับ */
+.lot-form-box > summary { list-style: none; cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.lot-form-box > summary::-webkit-details-marker { display: none; }
+.lot-form-box > summary h2 { margin: 0 !important; font-size: 16px; }
+.lot-form-box:not([open]) > summary h2::before { content: "+ "; color: var(--v11-purple, #4a5cf0); }
+.lot-form-box[open] > summary { margin-bottom: 8px; }
+.lot-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
+.lot-recover { height: 8px; border-radius: 999px; background: var(--v11-surface-3, #eef0f7); overflow: hidden; margin: 10px 0 4px; }
+.lot-recover > div { height: 100%; background: var(--ok, #12a15e); border-radius: 999px; }
+.lot-main-actions { margin-top: 10px; }
+.lot-more { margin-top: 10px; border-top: 1px solid var(--v11-border, #e7e9f2); padding-top: 6px; }
+.lot-more > summary { cursor: pointer; min-height: 40px; display: flex; align-items: center; color: var(--v11-muted, #5f6780); font-size: 13px; list-style: none; }
+.lot-more > summary::-webkit-details-marker { display: none; }
+.lot-more > summary::after { content: "›"; margin-left: 6px; transition: transform .15s; }
+.lot-more[open] > summary::after { transform: rotate(90deg); }
+@media (max-width: 639.98px) { .lot-page .page-head p, .lot-page .section-head p { display: none; } }
