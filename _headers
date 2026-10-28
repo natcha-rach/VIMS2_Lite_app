@@ -1,0 +1,8 @@
+# Cloudflare Pages: header ความปลอดภัยของทุกหน้า (V21) — ทดสอบใน tests/ui/run.js (เซิร์ฟเวอร์ทดสอบส่ง CSP นี้ด้วย)
+# script/style ต้องมี 'unsafe-inline' เพราะยังมี <script> ในหน้า accounting/login และ style="" ในหลายหน้า
+/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), payment=()
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'

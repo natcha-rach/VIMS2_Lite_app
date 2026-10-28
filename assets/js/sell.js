@@ -670,8 +670,8 @@ async function openItemDetail(itemId, context) {
   if (!item) return;
   detailItem = item;
   const imgs = (context === "sold" ? soldImagesById : imagesById)[item.id] || [];
-  $("detailImage1").innerHTML = imgs[0] ? `<img src="${imgs[0].image_url}" alt="">` : SHIRT_SVG;
-  $("detailImage2").innerHTML = imgs[1] ? `<img src="${imgs[1].image_url}" alt="">` : "";
+  $("detailImage1").innerHTML = imgs[0] ? `<img src="${escapeHtml(imgs[0].image_url)}" alt="">` : SHIRT_SVG;
+  $("detailImage2").innerHTML = imgs[1] ? `<img src="${escapeHtml(imgs[1].image_url)}" alt="">` : "";
   $("detailImage2").classList.toggle("hidden", !imgs[1]);
   $("detailName").textContent = item.item_name;
   $("detailMeta").textContent = `${item.sku ? item.sku + " · " : ""}${item.size || "ไม่ระบุไซซ์"} · ${item.condition || "-"} · ${item.tier === "head" ? "งานหัว" : "ปกติ"}`;
@@ -942,8 +942,9 @@ window.addEventListener("vims:offline-flushed", () => { soldLoaded = false; load
 window.OfflineSales?.list().then(renderOfflineQueue);
 
 // ---------- helpers ----------
-function paymentLabel(v) { return ({ cash: "เงินสด", transfer: "โอน", government: "โครงการรัฐ" })[v] || v || "-"; }
-function channelLabel(v) { return ({ street_market: "ถนนคนเดิน", facebook: "Facebook", instagram: "Instagram" })[v] || v || "-"; }
+// ค่าที่ไม่รู้จักมาจาก DB ตรงๆ → escape เพราะผลถูกใส่ลง innerHTML
+function paymentLabel(v) { return ({ cash: "เงินสด", transfer: "โอน", government: "โครงการรัฐ" })[v] || escapeHtml(v || "-"); }
+function channelLabel(v) { return ({ street_market: "ถนนคนเดิน", facebook: "Facebook", instagram: "Instagram" })[v] || escapeHtml(v || "-"); }
 function formatDateTime(v) { return v ? new Date(v).toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" }) : "-"; }
 function escapeHtml(v = "") { return String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c])); }
 function showToast(msg) { return Notify.auto(msg); }

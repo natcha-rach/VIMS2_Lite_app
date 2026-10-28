@@ -393,10 +393,7 @@ async function uploadItemImages(itemId, files) {
     const path = `${itemId}/${crypto.randomUUID()}.${ext}`;
 
     // 1) Upload binary file ไป Supabase Storage
-    const { error: upErr } = await supabaseClient
-      .storage
-      .from('item-images')
-      .upload(path, file, { upsert: false, contentType: file.type });
+    const { error: upErr } = await ItemsRepo.uploadImage(path, file, file.type);
 
     if (upErr) {
       // ถ้า Upload ไม่สำเร็จ ให้ส่ง error กลับไปให้ caller ตัดสินใจ rollback
@@ -406,10 +403,7 @@ async function uploadItemImages(itemId, files) {
     uploadedPaths.push(path);
 
     // 2) สร้าง Public URL สำหรับแสดงรูปใน UI
-    const { data: urlData } = supabaseClient
-      .storage
-      .from('item-images')
-      .getPublicUrl(path);
+    const urlData = { publicUrl: ItemsRepo.publicImageUrl(path) };
 
     // 2.5) V19: รูปย่อ ~400px สำหรับกริดหน้าขาย (ไฟล์ราว 30–50KB แทน 300KB+)
     //      ถ้าทำรูปย่อไม่สำเร็จ ไม่ถือว่าล้มเหลว — หน้าขายจะใช้รูปเต็มแทน
@@ -419,11 +413,10 @@ async function uploadItemImages(itemId, files) {
       const thumb = await compressImageFile(rawFiles[i], 400, 0.72);
       if (thumb !== rawFiles[i]) {
         thumbPath = `${itemId}/thumb_${crypto.randomUUID()}.jpg`;
-        const { error: thumbErr } = await supabaseClient.storage.from('item-images')
-          .upload(thumbPath, thumb, { upsert: false, contentType: 'image/jpeg' });
+        const { error: thumbErr } = await ItemsRepo.uploadImage(thumbPath, thumb, 'image/jpeg');
         if (thumbErr) throw thumbErr;
         uploadedPaths.push(thumbPath);
-        thumbUrl = supabaseClient.storage.from('item-images').getPublicUrl(thumbPath).data.publicUrl;
+        thumbUrl = ItemsRepo.publicImageUrl(thumbPath);
       }
     } catch (thumbError) {
       console.warn('ทำรูปย่อไม่สำเร็จ ใช้รูปเต็มแทน:', thumbError);
@@ -439,17 +432,17 @@ async function uploadItemImages(itemId, files) {
       sort_order: i + 1
     };
     if (thumbUrl) Object.assign(imageRow, { thumb_url: thumbUrl, thumb_path: thumbPath });
-    let { error: imageRowError } = await supabaseClient.from('item_images').insert(imageRow);
+    let { error: imageRowError } = await ItemsRepo.addImageRow(imageRow);
     // ฐานข้อมูลยังไม่ได้รัน migration_v19 (ไม่มีคอลัมน์ thumb_*) → บันทึกแบบเดิมไปก่อน
     if (imageRowError && thumbUrl && /thumb_/.test(imageRowError.message || '')) {
       delete imageRow.thumb_url;
       delete imageRow.thumb_path;
-      ({ error: imageRowError } = await supabaseClient.from('item_images').insert(imageRow));
+      ({ error: imageRowError } = await ItemsRepo.addImageRow(imageRow));
     }
 
     if (imageRowError) {
       // ลบไฟล์ที่เพิ่ง upload ถ้าสร้าง row ไม่สำเร็จ เพื่อไม่ให้ Storage มี orphan file
-      await supabaseClient.storage.from('item-images').remove([path, thumbPath].filter(Boolean));
+      await ItemsRepo.removeImageFiles([path, thumbPath].filter(Boolean));
       throw new Error(`บันทึกข้อมูลรูป ${i + 1} ไม่สำเร็จ: ${imageRowError.message}`);
     }
   }
@@ -533,7 +526,7 @@ async function loadItems(){
   // ใช้ v_items_list แทน items ตรงๆ เพื่อได้ image_count/age_days/ชื่อ Lot-Group มาในคำสั่งเดียว กรองฝั่ง server ได้ครบ
   // (ยังคง fetchAllRows กันตกหล่นเมื่อเกิน 1000 แถว)
   const {data,error}=await ItemsRepo.list({ status, q, extra });
-  if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: '+error.message+'</div>';return;}
+  if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: '+escapeHtml(error.message)+'</div>';return;}
   itemsCache=data||[];
   selectedItemIds = new Set([...selectedItemIds].filter(id => itemsCache.some(i => i.id === id)));
   renderItems(); updateQuickStats(); renderBulkActionBar();
@@ -552,7 +545,7 @@ async function renderItems(){
     return `<div class="stock-row">
       <input type="checkbox" class="stock-select" data-select-item="${i.id}" ${selectedItemIds.has(i.id)?'checked':''} ${i.status==='sold'?'disabled title="ขายแล้ว แก้ไม่ได้"':''} />
       <button type="button" class="stock-open" data-edit-item="${i.id}" aria-label="แก้ ${escapeHtml(i.item_name)}">
-      <div class="thumb">${im?`<img src="${im.image_url}" alt="">`:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
+      <div class="thumb">${im?`<img src="${escapeHtml(im.image_url)}" alt="">`:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
       <div class="stock-main"><b>${escapeHtml(i.item_name)}${i.sku?` <span class="sku-tag">${escapeHtml(i.sku)}</span>`:''}</b><span>${metaBits.join(' · ')}</span></div>
       <div class="stock-price"><small>ต้นทุน ${formatBaht(i.cost_price)}</small><b>${formatBaht(i.current_price)}</b></div>
       ${i.status==='available'?'':`<span class="badge ${i.status}">${i.status==='sold'?'ขายแล้ว':'เสีย'}</span>`}
@@ -1056,7 +1049,7 @@ async function runBulkImageUpload(lotId, group, itemRowPairs) {
     await Promise.all(chunk.map(async ({ item, row }) => {
       try {
         if (row.files?.length) await uploadItemImages(item.id, row.files); // ไม่มีรูป = ข้ามการอัปโหลด
-        await supabaseClient.from('items').update({ intake_status: 'listed', listed_at: new Date().toISOString() }).eq('id', item.id);
+        await ItemsRepo.markListed(item.id);
       } catch (imageError) {
         console.warn(`แถว "${row.item_name}" อัปโหลดไม่สำเร็จ ยังคงเป็น draft:`, imageError);
         failed.push({ item, row });
@@ -1092,7 +1085,7 @@ $('saveBulkTable')?.addEventListener('click', async () => {
       status: 'available',
       intake_status: 'draft'
     }));
-    const { data: inserted, error } = await supabaseClient.from('items').insert(payload).select();
+    const { data: inserted, error } = await ItemsRepo.createMany(payload);
     if (error) throw error;
     if (!inserted || inserted.length !== rows.length) throw new Error('Supabase คืนจำนวน Item ไม่ครบ');
 
@@ -1313,7 +1306,7 @@ function renderEditCurrentImages() {
     $('editCurrentImages').innerHTML = '<div class="edit-image-empty">ยังไม่มีรูปสินค้า</div>';
     return;
   }
-  $('editCurrentImages').innerHTML = editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${img.image_url}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
+  $('editCurrentImages').innerHTML = editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${escapeHtml(img.image_url)}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
 }
 
 // โหลดประวัติการแก้ไขจาก Supabase; ใช้สำหรับ audit trail ของ Item แต่ละตัว
@@ -1353,7 +1346,7 @@ $('editImages')?.addEventListener('change', event => {
   const files = Array.from(event.target.files || []).slice(0,2);
   if (event.target.files.length > 2) showToast('ระบบใช้รูปใหม่แค่ 2 รูปแรก');
   const previews = files.map((file, index) => `<div class="edit-image-card"><img src="${URL.createObjectURL(file)}" alt=""><span>รูปใหม่ ${index + 1}</span></div>`).join('');
-  $('editCurrentImages').innerHTML = previews || editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${img.image_url}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
+  $('editCurrentImages').innerHTML = previews || editItemImages.map((img, index) => `<div class="edit-image-card"><img src="${escapeHtml(img.image_url)}" alt=""><span>รูปที่ ${index + 1}</span></div>`).join('');
 });
 
 function changedFieldMap(before, after) {

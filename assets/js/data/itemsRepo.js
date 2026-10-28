@@ -25,7 +25,9 @@ const ItemsRepo = {
     return fetchAllRows(() => {
       let query = supabaseClient.from("v_items_list").select("*").eq("intake_status", "listed").order("created_at", { ascending: false });
       if (status !== "all") query = query.eq("status", status);
-      if (q) query = query.or(`item_name.ilike.%${q}%,sku.ilike.%${q}%`);
+      // ตัด , ( ) * % \ ออก: เป็นตัวคั่น/wildcard ของ PostgREST .or() — ถ้าปล่อยไว้ ผู้ใช้พิมพ์แล้วเงื่อนไขกรองเพี้ยนได้
+      const safe = String(q).replace(/[,()*%\\]/g, " ").trim();
+      if (safe) query = query.or(`item_name.ilike.%${safe}%,sku.ilike.%${safe}%`);
       if (extra === "no_photo") query = query.eq("image_count", 0);
       if (extra === "no_price") query = query.or("current_price.is.null,current_price.eq.0");
       if (extra === "age30") query = query.gte("age_days", 30);
@@ -46,6 +48,12 @@ const ItemsRepo = {
   history(itemId, limit = 30) { return supabaseClient.from("item_change_history").select("*").eq("item_id", itemId).order("created_at", { ascending: false }).limit(limit); },
   addHistory(row) { return supabaseClient.from("item_change_history").insert(row); },
   // เปลี่ยนรูป: ลบไฟล์เดิมใน Storage + แถว item_images เดิม (อัปรูปใหม่ยังทำใน items.js)
+  // V21: ย้ายมาจาก items.js (เดิมเรียก supabaseClient ตรงในชั้น UI)
+  uploadImage(path, file, contentType) { return supabaseClient.storage.from("item-images").upload(path, file, { upsert: false, contentType }); },
+  publicImageUrl(path) { return supabaseClient.storage.from("item-images").getPublicUrl(path).data.publicUrl; },
+  addImageRow(row) { return supabaseClient.from("item_images").insert(row); },
+  createMany(rows) { return supabaseClient.from("items").insert(rows).select(); },
+  markListed(id) { return supabaseClient.from("items").update({ intake_status: "listed", listed_at: new Date().toISOString() }).eq("id", id); },
   removeImageFiles(paths) { return supabaseClient.storage.from("item-images").remove(paths); },
   removeImagesOfItem(itemId) { return supabaseClient.from("item_images").delete().eq("item_id", itemId); },
 

@@ -2,6 +2,8 @@ const { chromium } = require("playwright");
 const path = require("path"), fs = require("fs"), http = require("http");
 const ROOT = path.resolve(__dirname, "../.."), OUT = path.join(__dirname, process.argv[2] || "before");
 fs.mkdirSync(OUT, { recursive: true });
+// ใช้ CSP เดียวกับเว็บจริง (_headers) — ถ้าหน้าไหนโหลดของนอกรายการอนุญาต จะเห็นเป็น error ในเทส
+const CSP = (fs.readFileSync(path.join(ROOT, "_headers"), "utf8").match(/Content-Security-Policy: (.+)/) || [])[1] || "";
 const MOCK = fs.readFileSync(path.join(__dirname, "mock-supabase.js"), "utf8");
 const QR = fs.readFileSync(path.join(__dirname, "node_modules/qrcode-generator/qrcode.js"), "utf8");
 const FONTS = path.join(__dirname, "fonts");
@@ -15,7 +17,7 @@ const server = http.createServer((req, res) => {
   const p = path.join(ROOT, decodeURIComponent(req.url.split("?")[0]));
   fs.readFile(p, (e, d) => { if (e) { res.writeHead(404); return res.end(); }
     const t = p.endsWith(".html") ? "text/html" : p.endsWith(".css") ? "text/css" : "application/javascript";
-    res.writeHead(200, { "content-type": t + "; charset=utf-8" }); res.end(d); });
+    res.writeHead(200, { "content-type": t + "; charset=utf-8", ...(t === "text/html" ? { "content-security-policy": CSP } : {}) }); res.end(d); });
 }).listen(8766);
 (async () => {
   const browser = await chromium.launch();

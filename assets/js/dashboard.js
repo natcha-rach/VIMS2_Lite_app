@@ -66,11 +66,11 @@ async function fetchDashboardData() {
   // หมายเหตุ V13: ไม่ดึง lots/lot_groups ที่นี่แล้ว เพราะ Lot Performance/Recovery ย้ายไปใช้
   // RPC get_lot_performance() (คำนวณใน Postgres) แทนการดึงมา group ฝั่ง browser — ดู renderLotRecovery()
   const [itemsR, salesR, expensesR, settingsR, capitalR] = await Promise.all([
-    fetchAllRows(() => supabaseClient.from("items").select("id,lot_id,item_name,size,condition,tier,cost_price,current_price,status,created_at,listed_at,sold_at,group_id").eq("intake_status","listed")), // V15: ไม่นับ Item ที่ยังเป็น draft (รอรูป)
-    fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,bill_id,sale_date,channel,sale_price,cost_price,payment_method,items(item_name,sku)").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว · V21: bill_id/items ใช้ในรายการรายรับ
-    fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,expense_at,amount,category,note,paid_from")),
-    supabaseClient.from("app_settings").select("key,value").eq("key", "monthly_sales_goal").maybeSingle(),
-    fetchAllRows(() => supabaseClient.from("capital_entries").select("id,entry_type,amount,reason,entry_date,created_at")) // V21: เติมทุน/ขายของเก่า/ถอน ในการ์ดรายการ (ไม่นับใน PULSE)
+    DashboardRepo.listedItems(), // V15: ไม่นับ Item ที่ยังเป็น draft (รอรูป)
+    DashboardRepo.sales(), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว · V21: bill_id/items ใช้ในรายการรายรับ
+    DashboardRepo.expenses(),
+    DashboardRepo.goal(),
+    DashboardRepo.capital() // V21: เติมทุน/ขายของเก่า/ถอน ในการ์ดรายการ (ไม่นับใน PULSE)
   ]);
   const err = itemsR.error || salesR.error || expensesR.error;
   if (err) throw err;
@@ -81,7 +81,7 @@ async function fetchDashboardData() {
 }
 
 async function saveMonthlyGoal(amount) {
-  const { error } = await supabaseClient.from("app_settings").upsert({ key: "monthly_sales_goal", value: { amount }, updated_at: new Date().toISOString() });
+  const { error } = await DashboardRepo.saveGoal(amount);
   if (error) throw error;
   monthlyGoal = amount;
 }
@@ -173,7 +173,7 @@ function exportDashboardCSV(range) {
 // V13: Lot Performance/Recovery คำนวณผ่าน RPC get_lot_performance() (Postgres) แทนการ
 // ดึง lots+items+sales ทั้งตารางมา group ฝั่ง browser เหมือนเดิม — ดู renderLotRecovery() ด้านล่าง
 async function fetchLotPerformance() {
-  const { data, error } = await supabaseClient.rpc("get_lot_performance");
+  const { data, error } = await DashboardRepo.lotPerformance();
   if (error) throw error;
   return data || [];
 }
@@ -479,7 +479,7 @@ function renderDashboard(data, range) {
 // 2) Lot ที่ใกล้คืนทุน (เหลือคืนทุนไม่เกิน 20% ของต้นทุน)
 async function renderTodayTasks() {
   const el = document.getElementById("todayTasks"); if (!el) return; // ไม่มีการ์ดนี้บนหน้า → ไม่ต้องเรียก RPC
-  const { data, error } = await supabaseClient.rpc("get_lot_summary");
+  const { data, error } = await DashboardRepo.lotSummary();
   if (error) { console.error(error); el.innerHTML = `<div class="empty-state">โหลดไม่สำเร็จ</div>`; Notify.error("โหลดงานวันนี้ไม่สำเร็จ", error); return; }
   const lots = (data || []);
   const pending = lots.filter(l => ["receiving","sorting"].includes(l.status) && Number(l.pending) > 0)
@@ -506,7 +506,7 @@ async function renderTodayTasks() {
 // เก็บชื่อ Lot แยกไว้เบาๆ (ไม่ผูกกับ dashboardRows) เพื่อแสดงชื่อใน Today's Tasks โดยไม่ query ซ้ำ
 let lotsMetaCache = null;
 async function loadLotsMeta() {
-  const { data } = await supabaseClient.from("lots").select("id,lot_name");
+  const { data } = await DashboardRepo.lotNames();
   lotsMetaCache = Object.fromEntries((data || []).map(l => [l.id, l]));
 }
 

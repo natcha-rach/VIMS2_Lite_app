@@ -4,6 +4,8 @@ const fs = require("fs");
 const http = require("http");
 const ROOT = path.resolve(__dirname, "../..");
 const OUT = __dirname;
+// ใช้ CSP เดียวกับเว็บจริง (_headers) — ถ้าหน้าไหนโหลดของนอกรายการอนุญาต จะเห็นเป็น error ในเทส
+const CSP = (fs.readFileSync(path.join(ROOT, "_headers"), "utf8").match(/Content-Security-Policy: (.+)/) || [])[1] || "";
 const MOCK = fs.readFileSync(path.join(__dirname, "mock-supabase.js"), "utf8");
 const QR = fs.readFileSync(path.join(__dirname, "node_modules/qrcode-generator/qrcode.js"), "utf8");
 
@@ -18,7 +20,7 @@ const server = http.createServer((req, res) => {
   fs.readFile(p, (e, d) => {
     if (e) { res.writeHead(404); return res.end(); }
     const t = p.endsWith(".html") ? "text/html" : p.endsWith(".css") ? "text/css" : "application/javascript";
-    res.writeHead(200, { "content-type": t + "; charset=utf-8" }); res.end(d);
+    res.writeHead(200, { "content-type": t + "; charset=utf-8", ...(t === "text/html" ? { "content-security-policy": CSP } : {}) }); res.end(d);
   });
 }).listen(8765);
 

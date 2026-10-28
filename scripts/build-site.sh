@@ -10,4 +10,5 @@ cp *.html dist/
 cp -r assets dist/
 rm -rf dist/assets/css/archive  # ธีมเก่าไม่ได้ใช้ ไม่ต้องขึ้นเว็บ
 [ -f sw.js ] && cp sw.js dist/
+[ -f _headers ] && cp _headers dist/  # header ความปลอดภัย (CSP ฯลฯ) ของ Cloudflare Pages
 echo "dist/ พร้อม deploy: $(find dist -type f | wc -l) ไฟล์"
