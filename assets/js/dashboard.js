@@ -394,7 +394,7 @@ function renderMoneyList(periodSales, periodExpenses, periodCapital) {
   const all = buildMoneyEntries(periodSales, periodExpenses, periodCapital);
   const entries = all.slice(0, MONEY_LIST_LIMIT);
   $("moneyListMeta").textContent = all.length > entries.length ? `${entries.length} จาก ${all.length} รายการล่าสุด` : `${all.length} รายการ`;
-  if (!entries.length) { box.innerHTML = `<div class="empty-state">ยังไม่มีรายรับหรือรายจ่ายในช่วงนี้</div>`; return; }
+  if (!entries.length) { box.innerHTML = `<div class="empty-state">ยังไม่มีรายการในช่วงนี้ · แตะ + มุมขวาล่างเพื่อจด</div>`; return; }
 
   const days = new Map();
   entries.forEach(x => { const k = dateKey(x.at); (days.get(k) || days.set(k, []).get(k)).push(x); });
@@ -430,7 +430,7 @@ function renderDashboard(data, range) {
   $("statRevenue").textContent = formatBaht(revenue);
   $("statRevenueMeta").textContent = `${periodSales.length} รายการขาย`;
   $("statGrossProfit").textContent = formatBaht(grossProfit);
-  $("statMargin").textContent = `Margin ${margin.toFixed(1)}%`;
+  $("statMargin").textContent = `อัตรากำไร ${margin.toFixed(1)}%`;
   $("statExpenses").textContent = formatBaht(expensesTotal);
   $("statNetProfit").textContent = formatBaht(netProfit);
   $("statNetProfit").className = `value ${netProfit >= 0 ? "positive" : "negative"}`;
@@ -523,7 +523,7 @@ async function loadDashboard(range) {
 
 function setPeriodMode(mode) {
   periodMode = mode;
-  $("periodModeSelect").value = mode;
+  document.querySelectorAll(".seg-period [data-mode]").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.mode === mode)));
   $("periodDate").classList.toggle("hidden", mode !== "day");
   $("periodMonth").classList.toggle("hidden", mode !== "month");
   $("periodYear").classList.toggle("hidden", mode !== "year");
@@ -552,7 +552,20 @@ function populateYearSelect() {
   sel.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
 }
 
-$("periodModeSelect").addEventListener("change", (e) => setPeriodMode(e.target.value));
+document.querySelectorAll(".seg-period [data-mode]").forEach(b => b.addEventListener("click", () => setPeriodMode(b.dataset.mode)));
+// V21: ‹ › เลื่อนทีละวัน/เดือน/ปี ตามโหมด แล้วเขียนค่ากลับลงช่องที่แสดงอยู่
+document.querySelectorAll(".period-step").forEach(b => b.addEventListener("click", () => {
+  const n = Number(b.dataset.step), d = new Date(periodValue);
+  if (periodMode === "month") d.setMonth(d.getMonth() + n, 1);
+  else if (periodMode === "year") d.setFullYear(d.getFullYear() + n, 0, 1);
+  else d.setDate(d.getDate() + n);
+  periodValue = d;
+  $("periodDate").value = dateKey(d);
+  $("periodMonth").value = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  if (![...$("periodYear").options].some(o => o.value === String(d.getFullYear()))) $("periodYear").add(new Option(d.getFullYear(), d.getFullYear()));
+  $("periodYear").value = String(d.getFullYear());
+  loadDashboard(currentRange());
+}));
 $("periodDate").addEventListener("change", () => { syncPeriodValueFromInputs(); loadDashboard(currentRange()); });
 $("periodMonth").addEventListener("change", () => { syncPeriodValueFromInputs(); loadDashboard(currentRange()); });
 $("periodYear").addEventListener("change", () => { syncPeriodValueFromInputs(); loadDashboard(currentRange()); });

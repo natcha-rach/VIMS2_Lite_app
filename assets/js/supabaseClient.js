@@ -31,7 +31,8 @@ const PAYMENT_LABELS = {
 // ฟอร์แมตตัวเลขเป็นสกุลเงินบาท
 function formatBaht(num) {
   const n = Number(num) || 0;
-  return n.toLocaleString("th-TH", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " ฿";
+  // V21: แบบเดียวทั้งแอป "฿1,234" — มีสตางค์จริงค่อยโชว์ทศนิยม (ตรงกับ thb() ใน sell/shift)
+  return (n < 0 ? "−" : "") + "฿" + Math.abs(n).toLocaleString("th-TH", { maximumFractionDigits: 2 });
 }
 
 // ฟอร์แมตวันที่แบบไทยสั้นๆ

@@ -3,15 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard | ระบบร้านเสื้อมือสอง</title>
+    <title>หน้าแรก | ระบบร้านเสื้อมือสอง</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=24" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=25" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/pos.css?v=21" />
     <link rel="stylesheet" href="assets/css/shift.css?v=21" />
-    <link rel="stylesheet" href="assets/css/polish.css?v=200" />
+    <link rel="stylesheet" href="assets/css/polish.css?v=201" />
   </head>
   <body>
     <nav id="sidebar" class="sidebar">
@@ -25,12 +25,12 @@
         </button>
       </div>
       <div class="sidebar-links">
-        <a href="index.html" title="ภาพรวม"
-          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg></span><span class="label">ภาพรวม</span></a
+        <a href="index.html" title="หน้าแรก"
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="20" x2="6" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="18" y1="20" x2="18" y2="14"/></svg></span><span class="label">หน้าแรก</span></a
         ><a href="items.html" title="สต็อก"
           ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8l-9-5-9 5 9 5 9-5z"/><path d="M3 8v8l9 5 9-5V8"/><line x1="12" y1="13" x2="12" y2="21"/></svg></span><span class="label">สต็อก</span><span class="nav-badge" id="navStockBadge" hidden>0</span></a
         ><a href="sell.html" title="ขายของ"
-          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg></span><span class="label">ขายของ</span></a
+          ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5.5 8h13l-1 12.5h-11L5.5 8z"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg></span><span class="label">ขายของ</span></a
         ><a href="reports.html" title="รายงาน"
           ><span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="16" y1="2.5" x2="16" y2="6.5"/><line x1="8" y1="2.5" x2="8" y2="6.5"/><line x1="3" y1="9.5" x2="21" y2="9.5"/></svg></span><span class="label">รายงาน</span></a
         ><a href="accounting.html" title="บัญชี"
@@ -45,7 +45,7 @@
 
     <div id="mainWrap">
       <div class="topbar">
-        <div class="subtitle">Dashboard / ภาพรวมร้าน</div>
+        <div class="subtitle">หน้าแรก</div>
       </div>
       <div class="page dashboard-page">
 
@@ -58,22 +58,27 @@
           </div>
           <button class="btn btn-ghost btn-sm dashboard-download-btn" id="exportCsvBtn" title="ดาวน์โหลดข้อมูลช่วงที่เลือกเป็น CSV">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><line x1="4" y1="20" x2="20" y2="20"/></svg>
-            Download
+            ดาวน์โหลด
           </button>
         </div>
         <!-- V19: ร้านวันนี้ — เปิดร้าน / ค่าใช้จ่ายรายวัน / เหลือวันนี้ / ปิดร้าน (assets/js/shift.js) -->
         <section class="tag-card shift-card" id="shiftCard" aria-label="ร้านวันนี้"><div class="empty-state">กำลังโหลดร้านวันนี้...</div></section>
         <div class="dashboard-head">
           <div class="period-control">
-            <select id="periodModeSelect" class="period-mode-select">
-              <option value="day" selected>รายวัน</option>
-              <option value="month">รายเดือน</option>
-              <option value="year">รายปี</option>
-            </select>
-            <div class="period-date-wrap">
-              <input type="date" id="periodDate" class="period-date-input" />
-              <input type="month" id="periodMonth" class="period-date-input hidden" />
-              <select id="periodYear" class="period-date-input hidden"></select>
+            <!-- V21: แบบเดียวกับหน้ารายงาน — ปุ่มแบ่งส่วน + ลูกศรเลื่อนวัน/เดือน/ปี (แตะวันที่ตรงกลางเพื่อเลือกเอง) -->
+            <div class="seg-period" role="group" aria-label="ช่วงเวลา">
+              <button type="button" data-mode="day" aria-pressed="true">วัน</button>
+              <button type="button" data-mode="month" aria-pressed="false">เดือน</button>
+              <button type="button" data-mode="year" aria-pressed="false">ปี</button>
+            </div>
+            <div class="period-nav">
+              <button type="button" class="period-step" data-step="-1" aria-label="ช่วงก่อนหน้า">‹</button>
+              <div class="period-date-wrap">
+                <input type="date" id="periodDate" class="period-date-input" aria-label="เลือกวันที่" />
+                <input type="month" id="periodMonth" class="period-date-input hidden" aria-label="เลือกเดือน" />
+                <select id="periodYear" class="period-date-input hidden" aria-label="เลือกปี"></select>
+              </div>
+              <button type="button" class="period-step" data-step="1" aria-label="ช่วงถัดไป">›</button>
             </div>
           </div>
         </div>
@@ -81,7 +86,7 @@
         <section class="v11-today-pulse" aria-label="ภาพรวมช่วงที่เลือก">
           <div class="pulse-heading">
             <div>
-              <span class="eyebrow">PULSE</span>
+              <span class="eyebrow">ตัวเลขสำคัญ</span>
               <h2>ร้านเป็นอย่างไรบ้าง?</h2>
               <p>ตัวเลขสำคัญของช่วงเวลาที่เลือกด้านบน</p>
             </div>
@@ -152,12 +157,12 @@
     </div>
     <div class="toast" id="toast"></div>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="assets/js/supabaseClient.js"></script>
+    <script src="assets/js/supabaseClient.js?v=21"></script>
     <script src="assets/js/notify.js?v=200"></script>
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="assets/js/dashboard.js?v=198"></script>
+    <script src="assets/js/dashboard.js?v=199"></script>
     <script src="assets/js/money.js?v=19"></script>
     <!-- Clean Architecture: Domain → Data → Infra → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/shiftCalc.js?v=1"></script>

@@ -13,7 +13,7 @@
     size: { label: "ไซซ์", key: (i) => (i.size || "").trim().toUpperCase() || "ไม่ระบุ" },
     condition: { label: "สภาพ", key: (i) => (i.condition ? `เกรด ${i.condition}` : "ไม่ระบุ") },
     item_type: { label: "ประเภท", key: (i) => (i.item_type || "").trim() || "ไม่ระบุ" },
-    tier: { label: "Tier", key: (i) => (i.tier === "head" ? "งานหัว" : "ปกติ") },
+    tier: { label: "เกรด", key: (i) => (i.tier === "head" ? "งานหัว" : "ปกติ") },
     price: { label: "ช่วงราคา", key: (i, price) => PRICE_BANDS.find(([a, b]) => price >= a && price < b)?.[2] || "-", order: PRICE_BANDS.map((x) => x[2]) },
   };
 

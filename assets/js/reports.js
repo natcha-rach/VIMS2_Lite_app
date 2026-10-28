@@ -84,7 +84,7 @@ function renderTierBreakdown(sales) {
 async function renderLotBreakdown() {
   const el = document.getElementById("repLotBreakdown");
   const { data, error } = await ReportsRepo.lotPerformance();
-  if (error) { console.error(error); Notify.error("โหลด Performance ตาม Lot ไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=10 class=empty-state>โหลด Performance ตาม Lot ไม่สำเร็จ</td></tr>"; return; }
+  if (error) { console.error(error); Notify.error("โหลดผลงานแต่ละล็อตไม่สำเร็จ", error); el.innerHTML = "<tr><td colspan=10 class=empty-state>โหลด Performance ตาม Lot ไม่สำเร็จ</td></tr>"; return; }
   const rows = (data||[]).filter(x=>Number(x.total_items)>0||Number(x.sold)>0);
   el.innerHTML=rows.length?rows.map(x=>`<tr>
     <td><b>${escapeHtml(x.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(x.purchase_date)}</small></td>
@@ -190,6 +190,7 @@ window.addEventListener('vims:realtime', (event) => {
 function showReportTab(tab) {
   document.querySelectorAll("[data-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== tab));
   document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  document.querySelector(".rep-period")?.classList.toggle("hidden", tab === "lot");
   try { localStorage.setItem("vims_report_tab", tab); } catch (_) {}
   window.dispatchEvent(new Event("resize")); // กราฟ Chart.js ที่วาดตอนแท็บซ่อนอยู่ต้องคำนวณขนาดใหม่
 }

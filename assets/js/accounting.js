@@ -118,13 +118,15 @@ async function loadAll() {
 
   const balEl = document.getElementById("accCashBalance");
   const noBase = !anchor;
-  balEl.textContent = noBase ? "ยังไม่ได้ตั้งเงินตั้งต้น" : formatBaht(currentBalance);
-  balEl.style.fontSize = noBase ? "20px" : "";
-  balEl.classList.toggle("loss", !noBase && currentBalance < 0);
+  const firstTime = noBase || provisional; // ยังไม่เคยนับเงินจริง → ตัวเลขเป็นแค่ประมาณการ
+  document.getElementById("cashFirst").classList.toggle("hidden", !firstTime);
+  balEl.textContent = noBase ? "—" : (provisional ? "ประมาณ " : "") + formatBaht(currentBalance);
+  balEl.style.fontSize = firstTime ? "18px" : "";
+  balEl.classList.toggle("loss", !firstTime && currentBalance < 0);
   document.getElementById("cashFormula").textContent = noBase
     ? "ใส่เงินสดและเงินโอนที่มีจริงตอนนี้ในช่อง \"นับเงินจริง\" ด้านล่าง ระบบจะใช้เป็นจุดเริ่มต้น แล้วบวก/ลบเฉพาะรายการที่เกิดหลังจากนั้น"
     : `${provisional ? "เงินทุนที่บันทึกไว้" : "ยอดที่นับ"} ${formatBaht(anchor.amount)} (${formatDate(anchor.entry_date)}) + ขายใหม่ ${formatBaht(newFlow.sales)} ± เงินทุนใหม่ ${formatBaht(newFlow.cap)} − ซื้อล็อตใหม่ ${formatBaht(newFlow.lots)} − ค่าใช้จ่ายใหม่ ${formatBaht(newFlow.exp)}${newFlow.drawer ? ` ${newFlow.drawer > 0 ? "+" : "−"} เงิน${newFlow.drawer > 0 ? "เกิน" : "ขาด"}ตอนปิดร้าน ${formatBaht(Math.abs(newFlow.drawer))}` : ""}`;
-  if (noBase) document.getElementById("countBox").open = true;
+  document.getElementById("cashFirstBtn").onclick = () => { const box = document.getElementById("countBox"); box.open = true; box.scrollIntoView({ behavior: "smooth", block: "center" }); document.getElementById("realCashOnHand").focus(); };
   const gov = CashBalance.governmentSince(sales, anchor);
   const { data: cc } = await AccountingRepo.getSetting("cash_count");
   document.getElementById("cashCountNote").textContent =

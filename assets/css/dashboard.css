@@ -250,3 +250,16 @@ button.money-row { width: 100%; background: none; border: 0; border-bottom: 1px 
 button.money-row:hover { background: var(--v11-surface-2, #f6f7fb); }
 /* V21: มือถือ/iPad ตั้ง — เว้นท้ายการ์ดรายการให้ปุ่ม + ลอยไม่บังยอดเงินแถวสุดท้าย */
 @media (max-width: 859.98px) { .money-list-card { margin-bottom: 72px; } }
+
+/* ---------- V21: มือถือ — ให้การ์ดรายการขึ้นมาใกล้จอแรก ---------- */
+.dashboard-head .period-control { flex-wrap: wrap; align-items: center; gap: 8px; }
+.dashboard-head .period-date-input { background: transparent !important; color: var(--v11-text, #161923) !important; border: 0 !important; text-align: center; font-weight: 600; }
+@media (max-width: 639.98px) {
+  .dashboard-page > .dashboard-head:first-child { display: none; } /* หัวหน้า + คำอธิบาย + ดาวน์โหลด (CSV มีที่หน้าบัญชี) */
+  .dashboard-head .period-control { justify-content: space-between; width: 100%; }
+  .pulse-heading p, .pulse-heading h2 { display: none; }
+  .dashboard-main-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+  .dashboard-main-kpis .stat-card { min-height: 0 !important; padding: 10px 12px !important; }
+  .dashboard-main-kpis .stat-card .value { font-size: 20px !important; margin: 2px 0 !important; }
+  .dashboard-main-kpis .stat-meta-row small, .dashboard-main-kpis .stat-spark { display: none !important; }
+}

@@ -313,3 +313,11 @@ a.btn, a.btn:hover { text-decoration: none !important; display: inline-flex; ali
 .sh-detail > div span { color: var(--v11-muted); }
 .sh-detail > div.sub { padding-left: 12px; font-size: 13px; }
 @media (max-width: 639.98px) { .sh-row summary { grid-template-columns: 1fr auto; } .sh-diff { grid-column: 1 / -1; justify-self: start; } }
+
+/* ---------- V21: ตัวเลือกช่วงเวลาแบบเดียวกันทั้งแอป (หน้าแรก + รายงาน) — ปุ่มแบ่งส่วน วัน|เดือน|ปี ---------- */
+.seg-period { display: inline-grid; grid-auto-flow: column; grid-auto-columns: minmax(56px, 1fr); gap: 3px; padding: 3px; border-radius: 12px; background: var(--v11-surface-3, #eef0f7); }
+.seg-period button, .seg-period .period-tab { min-height: 38px !important; padding: 0 12px !important; border: 0 !important; border-radius: 9px !important; background: transparent !important; color: var(--v11-muted, #5f6780) !important; font: 500 14px var(--v11-thai) !important; box-shadow: none !important; cursor: pointer; }
+.seg-period button[aria-pressed="true"], .seg-period .period-tab.active { background: #fff !important; color: var(--v11-text, #161923) !important; font-weight: 600 !important; box-shadow: 0 1px 2px rgba(16,24,40,.08) !important; }
+.period-nav { display: inline-flex; align-items: center; gap: 4px; }
+.period-step { width: 40px; height: 40px; border: 0; border-radius: 10px; background: transparent; font-size: 22px; color: var(--v11-muted, #5f6780); cursor: pointer; }
+.period-step:hover { background: var(--v11-surface-2, #f6f7fb); }

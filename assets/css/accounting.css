@@ -116,3 +116,9 @@
 .debt-note { margin: 0; font-size: 12px; }
 .acc-tools { display: flex; flex-wrap: wrap; gap: 8px; }
 .acc-tools .btn { min-height: 44px; flex: 1 1 200px; }
+/* V21: ยังไม่เคยนับเงิน → การ์ดชวนนับ · สูตรยาวพับไว้ */
+.cash-first { background: #fffaeb; color: #93370d; border-radius: 12px; padding: 12px 14px; margin: 10px 0; }
+.cash-first p { margin: 4px 0 10px; font-size: 13px; }
+.cash-first .btn { width: 100%; min-height: 44px; }
+.cash-why { margin: 8px 0 12px; } .cash-why summary { cursor: pointer; color: var(--v11-purple, #4a5cf0); font-size: 13px; min-height: 32px; list-style: none; }
+.cash-why summary::-webkit-details-marker { display: none; }
