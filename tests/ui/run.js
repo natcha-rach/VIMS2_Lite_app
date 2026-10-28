@@ -230,6 +230,9 @@ const server = http.createServer((req, res) => {
   await m.waitForTimeout(900);
   console.log("shift history rows:", await m.$$eval(".sh-row", (t) => t.length), "| tools:", await m.$$eval(".st-tool", (t) => t.length));
   await shot(m, "10b-accounting");
+  // V21: การ์ดกันเงินหนี้แทนถังเงิน · ฟอร์ม/รายการค่าใช้จ่าย + สมุดบัญชีถูกตัดออก
+  console.log("debt card:", await m.$eval("#debtBody", (e) => e.textContent.replace(/\s+/g, " ").trim()), "| old sections gone:", !(await m.$("#expenseForm")) && !(await m.$("#ledgerBody")) && !(await m.$("#bucketForm")));
+  await m.locator(".debt-card").screenshot({ path: path.join(OUT, "10g-debt-card.png") });
   await m.locator("#shiftHistory").screenshot({ path: path.join(OUT, "10d-shift-history.png") });
   await m.locator("#storageCard").screenshot({ path: path.join(OUT, "10e-storage-tools.png") });
   await m.goto("http://localhost:8765/reports.html");

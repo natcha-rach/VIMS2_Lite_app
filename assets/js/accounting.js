@@ -1,21 +1,20 @@
 /* ==========================================================
    accounting.js — ชั้น UI ของหน้าบัญชี (accounting.html)
-   หน้าที่: ฟอร์มเงินทุน/นับเงินจริง/ค่าใช้จ่าย/ถังเงิน, การ์ดสรุป, ทุนตาม Lot, สมุดบัญชี + CSV
+   หน้าที่: เงินจริงตอนนี้ (นับเงิน/เงินทุน), การ์ดกันเงินหนี้, ส่งออก CSV
+   V21: ตัดฟอร์ม/รายการค่าใช้จ่าย + สมุดบัญชี (ซ้ำกับการ์ดรายการ + ปุ่ม + หน้าแรก), ถังเงิน % (แทนด้วยกันเงินหนี้),
+        ทุนตาม Lot (ซ้ำกับหน้ารายงาน)
    เรียกต่อ:
      Data   AccountingRepo ← lots/expenses/sales/capital/shifts/app_settings  (data/accountingRepo.js)
      Domain CashBalance    ← "เงินสด + เงินโอน ที่มีจริงตอนนี้"              (domain/cashBalance.js)
+     Domain DebtPlan       ← การ์ดกันเงินหนี้ รอบ 6→28                        (domain/debtPlan.js)
    ไฟล์คู่กันบนหน้าเดียวกัน: shift-history.js (ประวัติรอบร้าน), storage-tools.js (ลดพื้นที่รูป)
    ========================================================== */
-let editingExpenseId = null;
-let expensesCache = [];
-let baseAmountTouched = false;
+let debtTarget = 35000; // app_settings.debt_plan.target — หนี้รายเดือน (จ่ายวันที่ 29/1/5)
 
 // escapeHtml: ไฟล์นี้เดิมไม่มีฟังก์ชันนี้ ทำให้ category/note ของค่าใช้จ่ายถูกยัดเข้า innerHTML ตรงๆ
 function escapeHtml(v = "") {
   return String(v).replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
 }
-
-document.getElementById("expenseDate").valueAsDate = new Date(); document.getElementById("expenseTime").value = nowTime();
 
 /* ---------- เงินทุน / ปรับยอดเงิน ---------- */
 const CAP_SIGN = CashBalance.CAP_SIGN; // + / − ของเงินทุนแต่ละประเภท (Domain)
@@ -86,226 +85,29 @@ document.getElementById("adjBtn").addEventListener("click", async () => {
   document.getElementById("countPreview").textContent = "";
 });
 
-/* ---------- ระบบแบ่งถังเงิน ---------- */
-const pctInputs = {
-  cost: document.getElementById("pctCost"),
-  debt: document.getElementById("pctDebt"),
-  reserve: document.getElementById("pctReserve"),
-  other: document.getElementById("pctOther"),
-};
-const bucketBaseAmountEl = document.getElementById("bucketBaseAmount");
-
-async function loadBucketSettings() {
-  const { data, error } = await AccountingRepo.getSetting("bucket_split");
-
-  if (error) {
-    console.error(error);
-    Notify.error("โหลดการตั้งค่าบัญชีไม่สำเร็จ", error);
-    return;
-  }
-  if (data && data.value) {
-    if (data.value.cost != null) pctInputs.cost.value = data.value.cost;
-    if (data.value.debt != null) pctInputs.debt.value = data.value.debt;
-    if (data.value.reserve != null) pctInputs.reserve.value = data.value.reserve;
-    if (data.value.other != null) pctInputs.other.value = data.value.other;
-  }
-  recalcBuckets();
-}
-
-document.getElementById("bucketForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const value = {
-    cost: Number(pctInputs.cost.value) || 0,
-    debt: Number(pctInputs.debt.value) || 0,
-    reserve: Number(pctInputs.reserve.value) || 0,
-    other: Number(pctInputs.other.value) || 0,
-  };
-
-  const { error } = await AccountingRepo.saveSetting("bucket_split", value);
-
-  if (error) {
-    console.error(error);
-    showToast("บันทึกเปอร์เซ็นต์ไม่สำเร็จ: " + error.message);
-    return;
-  }
-  showToast("บันทึกเปอร์เซ็นต์การแบ่งถังเงินเรียบร้อย ครั้งหน้าจะใช้ค่านี้ทันที");
-});
-
-function recalcBuckets() {
-  const pctCost = Number(pctInputs.cost.value) || 0;
-  const pctDebt = Number(pctInputs.debt.value) || 0;
-  const pctReserve = Number(pctInputs.reserve.value) || 0;
-  const pctOther = Number(pctInputs.other.value) || 0;
-  const total = pctCost + pctDebt + pctReserve + pctOther;
-
-  const warningEl = document.getElementById("pctTotalWarning");
-  document.getElementById("pctTotalValue").textContent = total;
-  warningEl.classList.toggle("hidden", total === 100);
-
-  const base = Number(bucketBaseAmountEl.value) || 0;
-
-  document.getElementById("bucketCostAmount").textContent = formatBaht((base * pctCost) / 100);
-  document.getElementById("bucketDebtAmount").textContent = formatBaht((base * pctDebt) / 100);
-  document.getElementById("bucketReserveAmount").textContent = formatBaht((base * pctReserve) / 100);
-  document.getElementById("bucketOtherAmount").textContent = formatBaht((base * pctOther) / 100);
-}
-
-Object.values(pctInputs).forEach((input) => input.addEventListener("input", recalcBuckets));
-bucketBaseAmountEl.addEventListener("input", () => {
-  baseAmountTouched = true;
-  recalcBuckets();
-});
-
-/* ---------- ฟอร์มเพิ่ม/แก้ไขค่าใช้จ่าย ---------- */
-function nowTime() { return new Date().toTimeString().slice(0, 5); }
-
-document.getElementById("expenseForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const payload = {
-    expense_date: document.getElementById("expenseDate").value,
-    // เวลาที่จ่ายจริง (เว้นว่างได้) — ใช้เทียบกับเวลานับเงินจริง
-    expense_at: document.getElementById("expenseTime").value
-      ? new Date(`${document.getElementById("expenseDate").value}T${document.getElementById("expenseTime").value}`).toISOString()
-      : null,
-    amount: Number(document.getElementById("expenseAmount").value),
-    category: document.getElementById("expenseCategory").value.trim(),
-    note: document.getElementById("expenseNote").value.trim(),
-  };
-
-  if (editingExpenseId) {
-    const { error } = await AccountingRepo.updateExpense(editingExpenseId, payload);
-    if (error) {
-      console.error(error);
-      showToast("บันทึกไม่สำเร็จ: " + error.message);
-      return;
-    }
-    showToast("แก้ไขค่าใช้จ่ายเรียบร้อย");
-    exitEditMode();
-  } else {
-    const { error } = await AccountingRepo.addExpense(payload);
-    if (error) {
-      console.error(error);
-      showToast("บันทึกไม่สำเร็จ: " + error.message);
-      return;
-    }
-    showToast("บันทึกค่าใช้จ่ายเรียบร้อย");
-    document.getElementById("expenseForm").reset();
-    document.getElementById("expenseDate").valueAsDate = new Date(); document.getElementById("expenseTime").value = nowTime();
-  }
-
-  loadAll();
-});
-
-document.getElementById("cancelExpenseEdit").addEventListener("click", exitEditMode);
-
-function exitEditMode() {
-  editingExpenseId = null;
-  document.getElementById("expenseForm").reset();
-  document.getElementById("expenseDate").valueAsDate = new Date(); document.getElementById("expenseTime").value = nowTime();
-  document.getElementById("expenseSubmitBtn").textContent = "บันทึกค่าใช้จ่าย";
-  document.getElementById("cancelExpenseEdit").classList.add("hidden");
-}
-
-function enterEditMode(expense) {
-  editingExpenseId = expense.id;
-  document.getElementById("expenseDate").value = expense.expense_date;
-  document.getElementById("expenseTime").value = expense.expense_at ? new Date(expense.expense_at).toTimeString().slice(0, 5) : "";
-  document.getElementById("expenseAmount").value = expense.amount;
-  document.getElementById("expenseCategory").value = expense.category || "";
-  document.getElementById("expenseNote").value = expense.note || "";
-  document.getElementById("expenseSubmitBtn").textContent = "บันทึกการแก้ไข";
-  document.getElementById("cancelExpenseEdit").classList.remove("hidden");
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-async function handleDeleteExpense(id) {
-  const ok = await Notify.confirm({ title: "ลบรายการค่าใช้จ่ายนี้?", message: "ลบแล้วกู้คืนไม่ได้ ยอดค่าใช้จ่ายและกำไรจะคำนวณใหม่", confirmText: "ลบ", danger: true });
-  if (!ok) return;
-
-  const { error } = await AccountingRepo.deleteExpense(id);
-  if (error) {
-    console.error(error);
-    showToast("ลบไม่สำเร็จ: " + error.message);
-    return;
-  }
-  showToast("ลบค่าใช้จ่ายเรียบร้อย");
-  if (editingExpenseId === id) exitEditMode();
-  loadAll();
-}
-
-function renderExpenseList() {
-  if (!expensesCache.length) {
-    document.getElementById("expenseList").innerHTML = `<div class="empty-state">ยังไม่มีรายการค่าใช้จ่าย</div>`;
-    return;
-  }
-
-  const sorted = [...expensesCache].sort((a, b) => (a.expense_date < b.expense_date ? 1 : -1));
-  const html = sorted
-    .map(
-      (exp) => `
-      <div class="tag-card expense-row">
-        <div>
-          <div class="expense-category">${escapeHtml(exp.category)}</div>
-          <div class="expense-meta">${formatDate(exp.expense_date)}${exp.expense_at ? " " + new Date(exp.expense_at).toTimeString().slice(0, 5) + " น." : ""}${exp.note ? " · " + escapeHtml(exp.note) : ""}</div>
-        </div>
-        <div class="expense-actions">
-          <div class="expense-amount">${formatBaht(exp.amount)}</div>
-          <div class="item-actions">
-            <button class="btn btn-ghost btn-sm" data-action="edit" data-id="${exp.id}">แก้ไข</button>
-            <button class="btn btn-danger btn-sm" data-action="delete" data-id="${exp.id}">ลบ</button>
-          </div>
-        </div>
-      </div>`
-    )
-    .join("");
-
-  document.getElementById("expenseList").innerHTML = html;
-
-  document.querySelectorAll('#expenseList [data-action="edit"]').forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const exp = expensesCache.find((x) => x.id === btn.dataset.id);
-      if (exp) enterEditMode(exp);
-    });
-  });
-  document.querySelectorAll('#expenseList [data-action="delete"]').forEach((btn) => {
-    btn.addEventListener("click", () => handleDeleteExpense(btn.dataset.id));
-  });
-}
-
 /* ---------- โหลดข้อมูลทั้งหมด + คำนวณสรุป + สมุดบัญชี ---------- */
 let ledgerRowsForExport = [];
 
 async function loadAll() {
   // fetchAllRows กัน sales/expenses ตกหล่นแบบเงียบๆ เมื่อเกิน 1000 แถว (default row limit ของ Supabase)
-  const [{ data: lots, error: lotsErr }, { data: expenses, error: expErr }, { data: sales, error: salesErr }, { data: items, error: itemsErr }, { data: capital, error: capErr }] =
+  const [{ data: lots, error: lotsErr }, { data: expenses, error: expErr }, { data: sales, error: salesErr }, { data: capital, error: capErr }] =
     await Promise.all([
       AccountingRepo.allLots(),
       AccountingRepo.allExpenses(),
       AccountingRepo.allSales(), // ไม่นับรายการที่ถูกยกเลิก
-      AccountingRepo.allItemLots(),
       AccountingRepo.allCapital(),
     ]);
 
-  if (lotsErr || expErr || salesErr || itemsErr || capErr) {
-    console.error(lotsErr || expErr || salesErr || itemsErr || capErr);
-    Notify.error("โหลดข้อมูลบัญชีไม่สำเร็จ", lotsErr || expErr || salesErr || itemsErr || capErr, { actions: [{ label: "ลองใหม่", onClick: () => loadAll() }] });
+  if (lotsErr || expErr || salesErr || capErr) {
+    console.error(lotsErr || expErr || salesErr || capErr);
+    Notify.error("โหลดข้อมูลบัญชีไม่สำเร็จ", lotsErr || expErr || salesErr || capErr, { actions: [{ label: "ลองใหม่", onClick: () => loadAll() }] });
     return;
   }
-
-  expensesCache = expenses;
-  renderExpenseList();
 
   // V20: เงินขาด/เกินตอนปิดร้าน (shifts.cash_diff) = เงินจริงที่หาย/เกินจากที่ระบบคิด → ต้องรวมในยอดเงินจริงด้วย
   // ตาราง shifts มาจาก migration_v19 — ยังไม่ได้รัน ก็ข้ามไป (ไม่ทำให้หน้าบัญชีพัง)
   const { data: closedShifts } = await AccountingRepo.closedShiftDiffs();
   const shiftDiffs = closedShifts || [];
-
-  const totalCapital = lots.reduce((sum, l) => sum + Number(l.total_cost || 0), 0);
-  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const totalRevenue = sales.reduce((sum, s) => sum + Number(s.sale_price || 0), 0);
-  const totalCostSold = sales.reduce((sum, s) => sum + Number(s.cost_price || 0), 0);
 
   // ยอดเงินจริง = ยอดที่นับได้ล่าสุด + รายการหลังจากนั้น (คำนวณที่ Domain: domain/cashBalance.js)
   hasCapitalEntries = capital.length > 0;
@@ -331,78 +133,8 @@ async function loadAll() {
     (gov > 0 ? `ยอดขายโครงการรัฐรวม ${formatBaht(gov)} (ถ้ายังไม่เข้าบัญชี ยอดนี้จะสูงกว่าเงินจริง)` : "");
   document.getElementById("cashCountNote").style.display = document.getElementById("cashCountNote").textContent ? "" : "none";
 
-  const netProfit = totalRevenue - totalCostSold - totalExpenses;
-  const cashflow = totalRevenue - totalCapital - totalExpenses;
-
-  document.getElementById("accCapital").textContent = formatBaht(totalCapital);
-  document.getElementById("accExpenses").textContent = formatBaht(totalExpenses);
-  document.getElementById("accRevenue").textContent = formatBaht(totalRevenue);
-
-  if (!baseAmountTouched) {
-    bucketBaseAmountEl.value = totalRevenue.toFixed(2);
-  }
-  recalcBuckets();
-
-  const netProfitEl = document.getElementById("accNetProfit");
-  netProfitEl.textContent = formatBaht(netProfit);
-  netProfitEl.classList.remove("profit", "loss");
-  netProfitEl.classList.add(netProfit >= 0 ? "profit" : "loss");
-
-  const cashflowEl = document.getElementById("accCashflow");
-  cashflowEl.textContent = formatBaht(cashflow);
-  cashflowEl.classList.remove("profit", "loss");
-  cashflowEl.classList.add(cashflow >= 0 ? "profit" : "loss");
-
-  renderLotAccounting(lots, items, sales);
+  renderDebtCard(sales, expenses);
   renderLedger(lots, expenses, sales, capital);
-}
-
-// สรุปทุน/ยอดขาย/กำไรของแต่ละ Lot สำหรับหน้าบัญชี
-// ใช้ต้นทุนจาก sales.cost_price เพื่อเก็บ snapshot ของต้นทุนตอนขาย และไม่ทำให้กำไรย้อนหลังเปลี่ยน
-function renderLotAccounting(lots, items, sales) {
-  const itemMap = Object.fromEntries(items.map(i => [i.id, i]));
-  const byLot = Object.fromEntries(lots.map(lot => [lot.id, {
-    lot,
-    totalItems: Number(lot.total_items || 0),
-    sold: 0,
-    revenue: 0,
-    costSold: 0,
-    remaining: Number(lot.total_items || 0),
-    remainingCapital: Number(lot.total_cost || 0),
-    profit: 0,
-    recoveryPct: 0,
-  }]));
-
-  sales.forEach(sale => {
-    const item = itemMap[sale.item_id];
-    const row = item && byLot[item.lot_id];
-    if (!row) return;
-    row.sold += 1;
-    row.revenue += Number(sale.sale_price || 0);
-    row.costSold += Number(sale.cost_price || 0);
-  });
-
-  Object.values(byLot).forEach(row => {
-    row.remaining = Math.max(0, row.totalItems - row.sold);
-    row.remainingCapital = Math.max(0, Number(row.lot.total_cost || 0) - row.costSold);
-    row.profit = row.revenue - row.costSold;
-    row.recoveryPct = row.lot.total_cost ? (row.revenue / Number(row.lot.total_cost)) * 100 : 0;
-  });
-
-  const rows = Object.values(byLot).filter(row => row.totalItems > 0 || row.sold > 0).sort((a, b) => b.revenue - a.revenue);
-  document.getElementById("accLotBreakdown").innerHTML = rows.length ? rows.map(row => `
-    <tr>
-      <td><b>${escapeHtml(row.lot.lot_name)}</b><small class="table-sub">ซื้อ ${formatDate(row.lot.purchase_date)}</small></td>
-      <td style="text-align:right">${formatBaht(row.lot.total_cost)}</td>
-      <td style="text-align:right">${row.totalItems}</td>
-      <td style="text-align:right">${row.sold}</td>
-      <td style="text-align:right">${row.remaining}</td>
-      <td style="text-align:right">${formatBaht(row.revenue)}</td>
-      <td style="text-align:right">${formatBaht(row.costSold)}</td>
-      <td style="text-align:right">${formatBaht(row.remainingCapital)}</td>
-      <td style="text-align:right" class="${row.profit >= 0 ? "profit" : "loss"}">${formatBaht(row.profit)}</td>
-      <td style="text-align:right">${row.recoveryPct.toFixed(1)}%</td>
-    </tr>`).join("") : `<tr><td colspan="10" class="empty-state">ยังไม่มีข้อมูล Lot</td></tr>`;
 }
 
 function renderLedger(lots, expenses, sales, capital = []) {
@@ -461,28 +193,38 @@ function renderLedger(lots, expenses, sales, capital = []) {
 
   ledgerRowsForExport = events;
 
-  if (!events.length) {
-    document.getElementById("ledgerBody").innerHTML = `<tr><td colspan="5" class="empty-state">ยังไม่มีรายการ</td></tr>`;
-    return;
-  }
-
-  // แสดงใหม่ -> เก่า
-  const html = [...events]
-    .reverse()
-    .map(
-      (ev) => `
-      <tr>
-        <td>${formatDate(ev.date)}</td>
-        <td>${escapeHtml(ev.desc)}</td>
-        <td style="text-align:right">${ev.in ? formatBaht(ev.in) : "-"}</td>
-        <td style="text-align:right">${ev.out ? formatBaht(ev.out) : "-"}</td>
-        <td style="text-align:right">${formatBaht(ev.balance)}</td>
-      </tr>`
-    )
-    .join("");
-
-  document.getElementById("ledgerBody").innerHTML = html;
 }
+
+/* ---------- V21: การ์ดกันเงินหนี้ ---------- */
+const dFmt = (d) => d.toLocaleDateString("th-TH", { day: "numeric", month: "short" });
+function renderDebtCard(sales, expenses) {
+  const el = document.getElementById("debtBody");
+  const p = DebtPlan.compute({ sales, expenses, target: debtTarget });
+  const status = p.paying ? `ช่วงจ่ายหนี้ — นัด ${p.dues.map(dFmt).join(" · ")}`
+    : p.remaining && p.daysLeft ? `ต้องอีก ${formatBaht(p.remaining)} · เหลือวันตลาด (ส-อา) ${p.daysLeft} วัน → <b>วันละ ${formatBaht(p.perDay)}</b>`
+    : p.remaining ? `ยังขาด <b>${formatBaht(p.remaining)}</b> · ไม่มีเสาร์-อาทิตย์เหลือก่อนวันที่ 28 — ต้องใช้ยอดออนไลน์หรือเงินสำรอง`
+    : "กันครบเป้าแล้ว";
+  el.innerHTML = `
+    <div class="debt-range">รอบ ${dFmt(p.start)} – ${dFmt(p.readyBy)} · เป้า ${formatBaht(debtTarget)}</div>
+    <div class="debt-amt"><b>${formatBaht(Math.max(0, p.profit))}</b> <span>กำไรจริงรอบนี้</span></div>
+    <div class="debt-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(p.pct)}"><div style="width:${p.pct.toFixed(1)}%"></div></div>
+    <p class="debt-status">${status}</p>
+    <p class="muted debt-note">นัดจ่าย ${p.dues.map(dFmt).join(" · ")} · กำไรจริง = ยอดขาย − ต้นทุนของที่ขาย − ค่าใช้จ่าย (เป็นเงินที่ควรกันไว้ ยังไม่ได้แยกบัญชีจริง)</p>`;
+}
+async function loadDebtTarget() {
+  const { data } = await AccountingRepo.getSetting("debt_plan");
+  if (data?.value?.target > 0) debtTarget = Number(data.value.target);
+}
+document.getElementById("debtEdit").addEventListener("click", async () => {
+  const v = await Notify.prompt({ title: "เป้ากันเงินหนี้ต่อเดือน", message: "ยอดหนี้ที่ต้องจ่ายรวมทั้งเดือน (บาท)", placeholder: String(debtTarget), required: true });
+  const n = Number(v);
+  if (!(n > 0)) return v == null ? undefined : Notify.warning("ใส่ตัวเลขมากกว่า 0", "เช่น 35000");
+  const { error } = await AccountingRepo.saveSetting("debt_plan", { target: n });
+  if (error) return Notify.error("บันทึกเป้าไม่สำเร็จ", error);
+  debtTarget = n;
+  Notify.success("ตั้งเป้ากันเงินหนี้แล้ว", formatBaht(n));
+  loadAll();
+});
 
 /* ---------- ส่งออก CSV ---------- */
 document.getElementById("exportCsvBtn").addEventListener("click", () => {
@@ -513,11 +255,10 @@ document.getElementById("exportCsvBtn").addEventListener("click", () => {
 // V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
 function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }
 
-loadAll();
-loadBucketSettings();
+loadDebtTarget().then(loadAll);
 
 // Realtime: บัญชีสะท้อนค่าใช้จ่าย/ยอดขาย/Lot ที่เปลี่ยนจาก Device อื่น
 const reloadAccountingDebounced = debounce(loadAll, 700);
 window.addEventListener('vims:realtime', (event) => {
-  if (event.detail?.table === 'page_refresh' || ['expenses', 'sales', 'lots', 'items'].includes(event.detail?.table)) reloadAccountingDebounced();
+  if (event.detail?.table === 'page_refresh' || ['expenses', 'sales', 'lots', 'capital_entries'].includes(event.detail?.table)) reloadAccountingDebounced();
 });
