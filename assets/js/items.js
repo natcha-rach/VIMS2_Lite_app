@@ -231,6 +231,7 @@ async function renderContextBar() {
       <a class="btn btn-ghost btn-sm" href="lots.html">กลับไป Lot</a>
     </div>`;
   $('ctxChangeLot')?.addEventListener('click', () => {
+    $('singleCard').open = true;
     $('lotSelect')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     $('lotSelect')?.focus();
   });
@@ -521,7 +522,7 @@ $('quickEntryForm')?.addEventListener('submit', async e=>{
   else { $('quickEntryForm').reset(); $('bulkCondition').value='A'; $('bulkTier').value=bulkState.group.tier; $('bulkCost').value=await getLotAvgCost(bulkState.lotId); $('bulkPrice').value=bulkState.group.base_price; $('photoPreview').innerHTML='<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:55%;height:55%"><path d="M4 8h3l2-3h6l2 3h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span><small>เลือก 1–2 รูป</small>'; renderBulkProgress(); $('bulkName').focus(); }
 });
 
-$('focusSingle')?.addEventListener('click',()=>{ $('itemName').focus(); window.scrollTo({top:0,behavior:'smooth'}); });
+$('focusSingle')?.addEventListener('click',()=>{ $('singleCard').open=true; $('singleCard').scrollIntoView({behavior:'smooth',block:'start'}); $('itemName').focus({preventScroll:true}); });
 $('filterStatus')?.addEventListener('change',loadItems); $('searchBox')?.addEventListener('input',loadItems);
 // Item ที่เลือกไว้สำหรับ Bulk Action (SKU/checkbox filter — V15/V16)
 let selectedItemIds = new Set();
@@ -550,11 +551,12 @@ async function renderItems(){
     if (Number.isFinite(i.age_days) && i.status==='available') metaBits.push(`ค้าง ${i.age_days} วัน`);
     return `<div class="stock-row">
       <input type="checkbox" class="stock-select" data-select-item="${i.id}" ${selectedItemIds.has(i.id)?'checked':''} ${i.status==='sold'?'disabled title="ขายแล้ว แก้ไม่ได้"':''} />
+      <button type="button" class="stock-open" data-edit-item="${i.id}" aria-label="แก้ ${escapeHtml(i.item_name)}">
       <div class="thumb">${im?`<img src="${im.image_url}" alt="">`:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:60%;height:60%"><path d="M8 3L4 7l2.5 2.5L8 8v13h8V8l1.5 1.5L20 7l-4-4-2 2h-4l-2-2z"/></svg>'}</div>
       <div class="stock-main"><b>${escapeHtml(i.item_name)}${i.sku?` <span class="sku-tag">${escapeHtml(i.sku)}</span>`:''}</b><span>${metaBits.join(' · ')}</span></div>
       <div class="stock-price"><small>ต้นทุน ${formatBaht(i.cost_price)}</small><b>${formatBaht(i.current_price)}</b></div>
-      <span class="badge ${i.status}">${i.status==='available'?'พร้อมขาย':i.status==='sold'?'ขายแล้ว':'เสีย'}</span>
-      <div class="stock-actions"><button class="btn btn-ghost btn-sm" data-edit-item="${i.id}">แก้ไข</button></div>
+      ${i.status==='available'?'':`<span class="badge ${i.status}">${i.status==='sold'?'ขายแล้ว':'เสีย'}</span>`}
+      </button>
     </div>`;
   }).join('');
   $('itemList').querySelectorAll('[data-edit-item]').forEach(btn=>btn.onclick=()=>openEditItem(btn.dataset.editItem));
@@ -573,6 +575,14 @@ function renderBulkActionBar(){
   if(groupSel) groupSel.innerHTML='<option value="">-- เลือกกลุ่มปลายทาง --</option>'+allGroups.map(g=>`<option value="${g.id}">${escapeHtml(g.group_name)}</option>`).join('');
 }
 $('filterExtra')?.addEventListener('change', loadItems);
+// V21: สลับมุมมอง รายการ ↔ ตารางรูป — แค่สลับคลาส CSS ของ #itemList ไม่โหลดใหม่
+function setItemView(view) {
+  $('itemList').classList.toggle('grid-view', view === 'grid');
+  document.querySelectorAll('.view-toggle [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === view)));
+  try { localStorage.setItem('vims_items_view', view); } catch (_) {}
+}
+document.querySelectorAll('.view-toggle [data-view]').forEach(b => b.addEventListener('click', () => setItemView(b.dataset.view)));
+try { setItemView(localStorage.getItem('vims_items_view') || 'list'); } catch (_) { setItemView('list'); }
 async function callBulkUpdate(patch, successMsg){
   if(!selectedItemIds.size) return showToast('ยังไม่ได้เลือกรายการ');
   const ids=[...selectedItemIds];
@@ -600,7 +610,7 @@ $('bulkApplyStorage')?.addEventListener('click', () => {
 });
 $('bulkApplyDamaged')?.addEventListener('click', () => callBulkUpdate({p_status:'damaged'}, 'ทำเครื่องหมายเสียแล้ว'));
 $('bulkApplyAvailable')?.addEventListener('click', () => callBulkUpdate({p_status:'available'}, 'คืนเป็นพร้อมขายแล้ว'));
-async function updateQuickStats(){ const {data,error}=await ItemsRepo.statsRows(); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`<div><span>สินค้าทั้งหมด</span><b>${rows.length}</b></div><div><span>พร้อมขาย</span><b>${available.length}</b></div><div><span>ขายแล้ว</span><b>${sold.length}</b></div><div><span>ต้นทุนคงเหลือ</span><b>${formatBaht(value)}</b></div>`; }
+async function updateQuickStats(){ const {data,error}=await ItemsRepo.statsRows(); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`${rows.length} ชิ้น · พร้อมขาย <b>${available.length}</b> · ขายแล้ว ${sold.length} · ทุนค้าง <b>${formatBaht(value)}</b>`; } // V21: บรรทัดเดียวแทน 4 การ์ด
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 // V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
 function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }

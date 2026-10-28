@@ -187,7 +187,7 @@ async function loadLots() {
         <div class="lot-title-block"><div class="lot-name">${escapeHtml(lot.lot_name)} <span class="lot-status-badge lot-status-${status}">${LOT_STATUS_LABEL[status] || status}</span></div><div class="lot-meta">ทุน ${formatBaht(cost)} · ลงแล้ว ${v(st.listed)}/${v(st.received)} ชิ้น · ${lot.purchase_date ? formatDate(lot.purchase_date) : "ไม่ระบุวันที่"}${lot.source ? " · " + escapeHtml(lot.source) : ""}</div></div>
       </div>
       <div class="lot-recover" role="progressbar" aria-label="คืนทุน" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(recoverPct)}"><div style="width:${recoverPct.toFixed(1)}%"></div></div>
-      <div class="lot-meta">คืนทุน ${recoverPct.toFixed(0)}%${Number(st.remaining_to_breakeven) > 0 ? ` · อีก ${formatBaht(st.remaining_to_breakeven)}` : " · คืนทุนแล้ว"} · ขายแล้ว ${v(st.sold)} ชิ้น</div>
+      <div class="lot-meta">คืนทุน ${recoverPct.toFixed(0)}%${Number(st.remaining_to_breakeven) > 0 ? ` · อีก ${formatBaht(st.remaining_to_breakeven)}` : cost > 0 ? " · คืนทุนแล้ว" : ""} · ขายแล้ว ${v(st.sold)} ชิ้น</div>
       ${pendingWarn ? `<p class="lot-warn-text">⚠️ ลงสินค้า (${st.listed}) + คัดออก (${st.rejected}) + เสีย (${st.damaged}) เกินจำนวนรับเข้า (${st.received}) อยู่ ${-st.pending} ชิ้น — ตรวจจำนวนรับเข้าหรือรายการที่ลงซ้ำ</p>` : ""}
       <div class="item-actions lot-main-actions">
         ${continueUrl ? `<a class="btn btn-primary btn-sm" href="${continueUrl}">ทำต่อ${Number(st.pending) > 0 ? ` (รอคัด ${st.pending})` : ""}</a>` : ""}

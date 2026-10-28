@@ -184,6 +184,9 @@ const server = http.createServer((req, res) => {
   await m.goto("http://localhost:8765/items.html");
   await m.waitForTimeout(800);
   const before = await m.evaluate(() => window.__mockdb().items.length);
+  // V21: ฟอร์มพับไว้ → ปุ่ม "+ เพิ่มสินค้า" กาง · ตัวเลขบรรทัดเดียว
+  console.log("single form closed:", !(await m.isVisible("#itemName")), "| stats:", await m.$eval("#quickStats", (e) => e.textContent.trim()));
+  await m.click("#focusSingle");
   await m.selectOption("#lotSelect", "lot1");
   await m.waitForTimeout(300);
   await m.fill("#itemName", "เสื้อทดสอบ ItemsRepo");
@@ -192,6 +195,17 @@ const server = http.createServer((req, res) => {
   await m.click("#itemForm button[type=submit]");
   await m.waitForTimeout(900);
   console.log("items added:", (await m.evaluate(() => window.__mockdb().items.length)) - before, "| in table:", await m.$eval("#itemList", (e) => e.textContent.includes("เสื้อทดสอบ ItemsRepo")));
+  // V21: แตะแถว = เปิดแก้ (ไม่มีปุ่ม "แก้ไข" แยก) · สลับเป็นตารางรูป
+  await m.click("#itemList .stock-open");
+  await m.waitForTimeout(400);
+  console.log("row tap opens edit:", await m.isVisible("#editItemModal"));
+  await m.keyboard.press("Escape");
+  await m.goto("http://localhost:8765/items.html");
+  await m.waitForTimeout(600);
+  await m.click('[data-view="grid"]');
+  console.log("grid view:", await m.$eval("#itemList", (e) => e.classList.contains("grid-view")));
+  await shot(m, "08e-items-grid");
+  await m.click('[data-view="list"]');
 
   // ---------- V20: ของค้าง → ลดราคา ----------
   await m.evaluate(() => { const db = window.__mockdb(); db.items[6].created_at = new Date(Date.now() - 100 * 86400000).toISOString(); db.items[7].created_at = db.items[6].created_at; sessionStorage.setItem("__mockdb", JSON.stringify(db)); });

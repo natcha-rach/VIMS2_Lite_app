@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="assets/css/base.css" />
-  <link rel="stylesheet" href="assets/css/items.css?v=21" />
+  <link rel="stylesheet" href="assets/css/items.css?v=25" />
   <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/polish.css?v=201" />
   </head>
@@ -41,15 +41,16 @@
 
     <section class="quick-stats" id="quickStats"></section>
 
-    <section class="tag-card" id="singleCard">
-      <div class="section-title"><div><h2>เพิ่มสินค้า 1 ตัว</h2><span>เหมาะกับของที่เข้ามา 2–3 ตัว</span></div></div>
+    <!-- V21: ฟอร์มเพิ่ม 1 ตัวพับไว้ ให้รายการสต็อกขึ้นมาใกล้จอแรก · ปุ่ม "+ เพิ่มสินค้า" กางให้ (items.js) -->
+    <details class="tag-card" id="singleCard">
+      <summary class="section-title single-summary"><div><h2>เพิ่มสินค้า 1 ตัว</h2><span>เหมาะกับของที่เข้ามา 2–3 ตัว</span></div></summary>
       <form id="itemForm">
         <div class="field-row three"><div class="field"><label>ล็อต</label><select id="lotSelect" required></select></div><div class="field"><label>กลุ่ม</label><select id="groupSelect"></select></div><div class="field"><label>ชื่อสินค้า</label><input id="itemName" required placeholder="เช่น Nike Vintage" /></div></div>
         <div class="field-row four"><div class="field"><label>ไซซ์</label><input id="size" placeholder="M / L / XL" /></div><div class="field"><label>สภาพ</label><select id="condition"><option value="A">A</option><option value="B">B</option></select></div><div class="field"><label>Tier</label><select id="tier"><option value="normal">ปกติ</option><option value="head">งานหัว</option></select></div><div class="field"><label>ราคาขาย</label><input id="sellPrice" type="number" min="0" step="1" required /></div></div>
         <div class="field-row"><div class="field"><label>รูปสินค้า (สูงสุด 2 รูป)</label><input id="singleImages" type="file" accept="image/*" multiple /></div><div class="field"><label>ต้นทุน/ชิ้น <small>(ดึงจากต้นทุนเฉลี่ยของ Lot ให้อัตโนมัติ แก้ได้ถ้าจำเป็น)</small></label><input id="costPrice" type="number" min="0" step="0.01" required /></div></div>
         <div class="form-actions"><button type="submit" class="btn btn-primary">บันทึกสินค้า</button></div>
       </form>
-    </section>
+    </details>
 
     <!-- V20: ของค้าง → ลดราคาหลายชิ้นทีเดียว (stale.js · RPC markdown_items) -->
     <details class="tag-card stale-card" id="staleCard">
@@ -61,7 +62,7 @@
     </details>
 
     <section class="tag-card">
-      <div class="section-title"><div><h2>สต็อก</h2></div><div class="toolbar"><input id="searchBox" placeholder="ค้นหาสินค้า / SKU..."/><select id="filterStatus"><option value="available">พร้อมขาย</option><option value="sold">ขายแล้ว</option><option value="damaged">เสีย</option><option value="all">ทั้งหมด</option></select><select id="filterExtra"><option value="">ตัวกรองเพิ่มเติม</option><option value="no_photo">ไม่มีรูป</option><option value="no_price">ยังไม่ตั้งราคา</option><option value="age30">ค้างสต็อก 30+ วัน</option><option value="age60">ค้างสต็อก 60+ วัน</option><option value="age90">ค้างสต็อก 90+ วัน</option></select></div></div>
+      <div class="section-title"><div><h2>สต็อก</h2></div><div class="toolbar"><input id="searchBox" placeholder="ค้นชื่อ หรือเลขท้าย SKU เช่น 003" aria-label="ค้นหาสินค้า"/><select id="filterStatus"><option value="available">พร้อมขาย</option><option value="sold">ขายแล้ว</option><option value="damaged">เสีย</option><option value="all">ทั้งหมด</option></select><select id="filterExtra"><option value="">ตัวกรองเพิ่มเติม</option><option value="no_photo">ไม่มีรูป</option><option value="no_price">ยังไม่ตั้งราคา</option><option value="age30">ค้างสต็อก 30+ วัน</option><option value="age60">ค้างสต็อก 60+ วัน</option><option value="age90">ค้างสต็อก 90+ วัน</option></select></div></div>
       <div id="bulkActionBar" class="bulk-action-bar hidden">
         <span id="bulkSelCount">เลือกแล้ว 0 รายการ</span>
         <div class="bulk-action-controls">
@@ -73,6 +74,7 @@
           <button type="button" class="btn btn-ghost btn-sm" id="bulkApplyAvailable">คืนเป็นพร้อมขาย</button>
         </div>
       </div>
+      <div class="seg-period view-toggle" role="group" aria-label="มุมมอง"><button type="button" data-view="list" aria-pressed="true">รายการ</button><button type="button" data-view="grid" aria-pressed="false">รูป</button></div>
       <div id="itemList"><div class="empty-state">กำลังโหลด...</div></div>
     </section>
   </main>
@@ -204,6 +206,6 @@
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="assets/js/supabaseClient.js?v=21"></script>
     <script src="assets/js/notify.js?v=200"></script>
-<script src="assets/js/auth.js"></script><script src="assets/js/vimsContext.js"></script><script src="assets/js/nav.js?v=195"></script><script src="assets/js/data/itemsRepo.js?v=1"></script><script src="assets/js/items.js?v=19"></script><script src="assets/js/money.js?v=19"></script><script src="assets/js/stale.js?v=21"></script><script src="assets/js/realtime.js?v=192"></script>
+<script src="assets/js/auth.js"></script><script src="assets/js/vimsContext.js"></script><script src="assets/js/nav.js?v=195"></script><script src="assets/js/data/itemsRepo.js?v=1"></script><script src="assets/js/items.js?v=20"></script><script src="assets/js/money.js?v=19"></script><script src="assets/js/stale.js?v=21"></script><script src="assets/js/realtime.js?v=192"></script>
 </body>
 </html>

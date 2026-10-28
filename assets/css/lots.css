@@ -44,3 +44,5 @@
 .lot-more > summary::after { content: "›"; margin-left: 6px; transition: transform .15s; }
 .lot-more[open] > summary::after { transform: rotate(90deg); }
 @media (max-width: 639.98px) { .lot-page .page-head p, .lot-page .section-head p { display: none; } }
+.lot-filter button { min-height: 40px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--v11-border-2, #dadce8); background: #fff; font: 500 14px var(--v11-thai); color: var(--v11-text, #161923); cursor: pointer; }
+.lot-filter button[aria-pressed="true"] { background: var(--v11-text, #161923); border-color: transparent; color: #fff; }
