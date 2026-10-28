@@ -29,5 +29,8 @@ const ShiftRepo = {
   // ค่าใช้จ่ายของรอบที่ปิดแล้ว trigger ใน DB จะปฏิเสธเอง (trg_expenses_closed_shift)
   addExpense(row) { return supabaseClient.from("expenses").insert(row); },
   deleteExpense(id) { return supabaseClient.from("expenses").delete().eq("id", id); },
+  updateExpense(id, row) { return supabaseClient.from("expenses").update(row).eq("id", id); },
+  // V21: เงินเข้าที่ไม่ใช่การขาย (เติมทุน/ขายของเก่า) — reason ต้อง ≥3 ตัวอักษร (check ใน DB)
+  addCapital(row) { return supabaseClient.from("capital_entries").insert(row); },
 };
 window.ShiftRepo = ShiftRepo;

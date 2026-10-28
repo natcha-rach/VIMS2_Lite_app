@@ -65,17 +65,19 @@ async function fetchDashboardData() {
   // ถ้าไม่ paginate ยอด Dashboard จะตกหล่นแบบเงียบๆ เมื่อ items/sales เกิน 1000 แถว
   // หมายเหตุ V13: ไม่ดึง lots/lot_groups ที่นี่แล้ว เพราะ Lot Performance/Recovery ย้ายไปใช้
   // RPC get_lot_performance() (คำนวณใน Postgres) แทนการดึงมา group ฝั่ง browser — ดู renderLotRecovery()
-  const [itemsR, salesR, expensesR, settingsR] = await Promise.all([
+  const [itemsR, salesR, expensesR, settingsR, capitalR] = await Promise.all([
     fetchAllRows(() => supabaseClient.from("items").select("id,lot_id,item_name,size,condition,tier,cost_price,current_price,status,created_at,listed_at,sold_at,group_id").eq("intake_status","listed")), // V15: ไม่นับ Item ที่ยังเป็น draft (รอรูป)
     fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,bill_id,sale_date,channel,sale_price,cost_price,payment_method,items(item_name,sku)").is("voided_at", null)), // V15: ไม่นับรายการที่ถูกยกเลิกแล้ว · V21: bill_id/items ใช้ในรายการรายรับ
     fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,expense_at,amount,category,note,paid_from")),
-    supabaseClient.from("app_settings").select("key,value").eq("key", "monthly_sales_goal").maybeSingle()
+    supabaseClient.from("app_settings").select("key,value").eq("key", "monthly_sales_goal").maybeSingle(),
+    fetchAllRows(() => supabaseClient.from("capital_entries").select("id,entry_type,amount,reason,entry_date,created_at")) // V21: เติมทุน/ขายของเก่า/ถอน ในการ์ดรายการ (ไม่นับใน PULSE)
   ]);
   const err = itemsR.error || salesR.error || expensesR.error;
   if (err) throw err;
   const goalValue = settingsR?.data?.value;
   monthlyGoal = Number((typeof goalValue === "object" ? goalValue?.amount : goalValue) || 0);
-  return { items: itemsR.data || [], sales: salesR.data || [], expenses: expensesR.data || [] };
+  if (capitalR.error) console.warn("capital_entries", capitalR.error); // ไม่มีตารางนี้ก็ยังโชว์หน้าแรกได้
+  return { items: itemsR.data || [], sales: salesR.data || [], expenses: expensesR.data || [], capital: capitalR.data || [] };
 }
 
 async function saveMonthlyGoal(amount) {
@@ -355,7 +357,11 @@ function renderV11Charts(periodSales, items, range, revenue, grossProfit, margin
 const PAID_FROM_LABELS = { drawer: "หยิบจากลิ้นชัก", transfer: "โอน", other: "อื่นๆ" };
 const MONEY_LIST_LIMIT = 200; // shortcut: แสดงแค่ 200 รายการล่าสุดของช่วง (โหมดรายปีอาจมีหลายพัน) — ถ้าต้องดูครบให้ทำแบ่งหน้า
 
-function buildMoneyEntries(periodSales, periodExpenses) {
+// capital_entries: "opening" คือยอดที่นับได้ (จุดตั้งต้น) ไม่ใช่เงินเข้า-ออก → ไม่แสดง
+const CAP_LIST = { capital_in: ["in", "เติมทุน"], old_stock_income: ["in", "ขายของเก่า"], adjust_up: ["in", "ปรับยอด (+)"], withdraw: ["out", "ถอนเงิน"], adjust_down: ["out", "ปรับยอด (−)"] };
+let moneyExpenseById = new Map(); // id → แถวค่าใช้จ่าย สำหรับเปิดแผ่นแก้ (shift.js → ExpenseSheet.edit)
+
+function buildMoneyEntries(periodSales, periodExpenses, periodCapital = []) {
   const bills = new Map();
   periodSales.forEach(s => {
     const key = s.bill_id || s.id; // การขายเก่าก่อน V19 ไม่มี bill_id → นับเป็นบิลละชิ้น
@@ -366,13 +372,15 @@ function buildMoneyEntries(periodSales, periodExpenses) {
     bills.set(key, b);
   });
   const outs = periodExpenses.map(e => ({ kind: "out", at: e.expense_at || `${e.expense_date}T12:00:00`, amount: Number(e.amount || 0), e }));
-  return [...bills.values(), ...outs].sort((a, b) => new Date(b.at) - new Date(a.at));
+  const caps = periodCapital.filter(c => CAP_LIST[c.entry_type]).map(c => ({ kind: CAP_LIST[c.entry_type][0], at: c.created_at || `${c.entry_date}T12:00:00`, amount: Number(c.amount || 0), c }));
+  return [...bills.values(), ...outs, ...caps].sort((a, b) => new Date(b.at) - new Date(a.at));
 }
 
 // คืน {title, sub}: บิล → ชื่อสินค้า / "ขาย N ชิ้น · ทำเล · วิธีจ่าย · เวลา"; ค่าใช้จ่าย → หมวด / "จ่ายจาก · เวลา · โน้ต"
 function moneyEntryText(x) {
   const time = new Intl.DateTimeFormat("th-TH", { hour: "2-digit", minute: "2-digit" }).format(new Date(x.at));
-  if (x.kind === "in") {
+  if (x.c) return { title: CAP_LIST[x.c.entry_type][1], sub: [x.c.reason, time].filter(Boolean).join(" · ") };
+  if (x.lines) {
     const names = x.lines.map(s => s.items?.item_name || "สินค้า").join(", ");
     return { title: names, sub: [`ขาย ${x.lines.length} ชิ้น`, CHANNEL_LABELS[x.channel] || x.channel, PAYMENT_LABELS[x.pay] || x.pay, time].filter(Boolean).join(" · ") };
   }
@@ -380,9 +388,10 @@ function moneyEntryText(x) {
   return { title: e.category || "ค่าใช้จ่าย", sub: [PAID_FROM_LABELS[e.paid_from], e.expense_at ? time : "", e.note].filter(Boolean).join(" · ") };
 }
 
-function renderMoneyList(periodSales, periodExpenses) {
+function renderMoneyList(periodSales, periodExpenses, periodCapital) {
   const box = document.getElementById("moneyList"); if (!box) return;
-  const all = buildMoneyEntries(periodSales, periodExpenses);
+  moneyExpenseById = new Map(periodExpenses.map(e => [e.id, e]));
+  const all = buildMoneyEntries(periodSales, periodExpenses, periodCapital);
   const entries = all.slice(0, MONEY_LIST_LIMIT);
   $("moneyListMeta").textContent = all.length > entries.length ? `${entries.length} จาก ${all.length} รายการล่าสุด` : `${all.length} รายการ`;
   if (!entries.length) { box.innerHTML = `<div class="empty-state">ยังไม่มีรายรับหรือรายจ่ายในช่วงนี้</div>`; return; }
@@ -392,11 +401,12 @@ function renderMoneyList(periodSales, periodExpenses) {
   const dayFmt = new Intl.DateTimeFormat("th-TH", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
   box.innerHTML = [...days.entries()].map(([k, list]) => {
     const net = sum(list, x => x.kind === "in" ? x.amount : -x.amount);
-    const rows = list.map(x => { const t = moneyEntryText(x); return `<div class="money-row ${x.kind}">
+    // ค่าใช้จ่ายเป็น <button> แตะเพื่อแก้/ลบ · บิลยกเลิก/คืนที่หน้าขาย · เงินทุนแก้ด้วยการปรับยอดที่หน้าบัญชี
+    const rows = list.map(x => { const t = moneyEntryText(x); const tag = x.e ? "button" : "div"; return `<${tag} class="money-row ${x.kind}"${x.e ? ` type="button" data-exp="${escapeHtml(x.e.id)}"` : ""}>
         <span class="money-ic" role="img" aria-label="${x.kind === "in" ? "รายรับ" : "รายจ่าย"}">${x.kind === "in" ? ICONS.moneyIn : ICONS.moneyOut}</span>
         <span class="money-text"><b>${escapeHtml(t.title)}</b><small>${escapeHtml(t.sub)}</small></span>
         <b class="money-amt">${x.kind === "in" ? "+" : "−"}${formatBaht(x.amount)}</b>
-      </div>`; }).join("");
+      </${tag}>`; }).join("");
     return `<div class="money-day"><div class="money-day-head"><span>${dayFmt.format(new Date(`${k}T00:00:00`))}</span><b class="${net >= 0 ? "positive" : "negative"}">${net >= 0 ? "+" : "−"}${formatBaht(Math.abs(net))}</b></div>${rows}</div>`;
   }).join("");
 }
@@ -424,7 +434,7 @@ function renderDashboard(data, range) {
   $("statExpenses").textContent = formatBaht(expensesTotal);
   $("statNetProfit").textContent = formatBaht(netProfit);
   $("statNetProfit").className = `value ${netProfit >= 0 ? "positive" : "negative"}`;
-  renderMoneyList(periodSales, periodExpenses);
+  renderMoneyList(periodSales, periodExpenses, (data.capital || []).filter(c => inRange(`${c.entry_date}T12:00:00`, range)));
 
   // Period-over-period: เทียบกับช่วงก่อนหน้าที่มีความยาวเท่ากันเสมอ (วันก่อนหน้า/เดือนก่อนหน้า/ปีก่อนหน้า)
   const prevRange = previousRange(range);
@@ -563,10 +573,15 @@ function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(
 
 // Realtime: Dashboard ต้องดึงข้อมูลใหม่เมื่อ Lot / Item / Sale / Expense เปลี่ยนจาก Device อื่น
 // debounce: Bulk save ยิง event เป็นร้อยครั้ง — โหลด Dashboard ใหม่ครั้งเดียวหลังนิ่งแล้ว
+document.getElementById("moneyList")?.addEventListener("click", (e) => {
+  const row = e.target.closest("[data-exp]");
+  const x = row && moneyExpenseById.get(row.dataset.exp);
+  if (x && window.ExpenseSheet) ExpenseSheet.edit(x);
+});
 const reloadDashboardDebounced = debounce(() => loadDashboard(currentRange()), 700);
 window.addEventListener('vims:realtime', (event) => {
   const table = event.detail?.table;
-  if (table === 'page_refresh' || ['lots', 'lot_groups', 'items', 'sales', 'expenses'].includes(table)) {
+  if (table === 'page_refresh' || ['lots', 'lot_groups', 'items', 'sales', 'expenses', 'capital_entries'].includes(table)) {
     dashboardRows = null;
     reloadDashboardDebounced();
   }

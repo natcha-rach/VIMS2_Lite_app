@@ -65,3 +65,9 @@
   #closeShiftModal, #expenseSheet { align-items: end; padding: 0; }
   .shift-modal { border-radius: 20px 20px 0 0; width: 100%; padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px)); }
 }
+/* V21: แผ่นเพิ่มรายการ — แท็บ จ่าย/รับ, ช่องกว้างเต็มแถว, ปุ่มลบ */
+#expenseSheet .ex-type { margin-bottom: 12px; }
+#expenseSheet .ex-type button.active.out { background: var(--bad, #e5483a); color: #fff; }
+#expenseSheet .ex-type button.active.in { background: var(--ok, #12a15e); color: #fff; }
+#expenseSheet .ex-wide { grid-column: 1 / -1; }
+#expenseSheet .ex-del { color: var(--bad, #e5483a); margin-right: auto; }

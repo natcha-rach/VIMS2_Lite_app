@@ -99,45 +99,86 @@
       <div class="shift-quick">${quickChips()}</div>`;
   }
 
-  // V21: ฟอร์มค่าใช้จ่ายย้ายไปอยู่ในแผ่นล่าง (#expenseSheet) — เปิดได้ทั้งจากปุ่มด่วนในการ์ด และปุ่ม + ลอยบนหน้าแรก
+  // V21: แผ่นล่าง (#expenseSheet) ใช้ร่วมกัน 3 ทาง: ปุ่มด่วนในการ์ด · ปุ่ม + ลอย · แตะแถวค่าใช้จ่ายในการ์ดรายการ (แก้/ลบ)
+  // form = { mode: "new"|"edit", type: "out"|"in", cat, paid, id?, amount?, note? }
+  // type "in" = เงินเข้าที่ไม่ใช่การขาย → capital_entries (เติมทุน/ขายของเก่า) ไม่นับเป็นยอดขายหรือกำไร
+  const QUICK_IN = [
+    { cat: "capital_in", label: "เติมทุน" },
+    { cat: "old_stock_income", label: "ขายของเก่า" },
+  ];
   const sheet = document.getElementById("expenseSheet");
-  const quickChips = () => QUICK.map((q) => `<button type="button" class="pos-chip${expenseForm?.cat === q.cat ? " active" : ""}" data-quick="${esc(q.cat)}">+ ${esc(q.label)}</button>`).join("");
+  const quickChips = (list = QUICK) => list.map((q) => `<button type="button" class="pos-chip${expenseForm?.cat === q.cat ? " active" : ""}" data-quick="${esc(q.cat)}">+ ${esc(q.label)}</button>`).join("");
 
   function renderSheet() {
-    sheet.querySelector("#exBody").innerHTML = `
+    const f = expenseForm;
+    sheet.querySelector("#exTitle").textContent = f.mode === "edit" ? "แก้ค่าใช้จ่าย" : "เพิ่มรายการ";
+    const typeTabs = f.mode === "new" ? `<div class="seg seg-2 ex-type">
+        <button type="button" data-type="out" class="${f.type === "out" ? "active out" : ""}">− จ่าย</button>
+        <button type="button" data-type="in" class="${f.type === "in" ? "active in" : ""}">+ รับ (เติมทุน)</button>
+      </div>` : "";
+    const lastAmt = f.mode === "edit" ? f.amount : get("vims_exp_last_" + f.cat) || "";
+    const actions = `<div class="shift-expense-actions">${f.mode === "edit" ? `<button type="button" class="btn btn-ghost ex-del" data-act="del-exp">ลบ</button>` : ""}<button type="button" class="btn btn-ghost" data-act="cancel-exp">ยกเลิก</button><button type="submit" class="btn btn-primary">บันทึก</button></div>`;
+    sheet.querySelector("#exBody").innerHTML = f.type === "in" ? `${typeTabs}
+      <div class="shift-quick">${quickChips(QUICK_IN)}</div>
+      <form class="shift-expense" data-form="income">
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="บาท" aria-label="จำนวนเงิน" required class="ex-wide">
+        <input type="text" name="reason" minlength="3" placeholder="รายละเอียด เช่น โอนเงินเก็บมาซื้อล็อตใหม่" aria-label="รายละเอียด" required class="ex-wide">
+        ${actions}
+      </form>` : `${typeTabs}
       <div class="shift-quick">${quickChips()}</div>
       <form class="shift-expense" data-form="expense">
-        <input type="text" name="category" value="${esc(expenseForm.cat)}" aria-label="หมวด" required>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="บาท" value="${esc(get("vims_exp_last_" + expenseForm.cat) || "")}" aria-label="จำนวนเงิน" required>
+        <input type="text" name="category" value="${esc(f.cat)}" aria-label="หมวด" required>
+        <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="บาท" value="${esc(lastAmt)}" aria-label="จำนวนเงิน" required>
         <div class="seg seg-2">
-          <button type="button" data-paid="drawer" class="${expenseForm.paid === "drawer" ? "active" : ""}">หยิบจากลิ้นชัก</button>
-          <button type="button" data-paid="transfer" class="${expenseForm.paid === "transfer" ? "active" : ""}">โอน/อื่นๆ</button>
+          <button type="button" data-paid="drawer" class="${f.paid === "drawer" ? "active" : ""}">หยิบจากลิ้นชัก</button>
+          <button type="button" data-paid="transfer" class="${f.paid === "transfer" ? "active" : ""}">โอน/อื่นๆ</button>
         </div>
-        <input type="text" name="note" placeholder="หมายเหตุ (ไม่บังคับ)" aria-label="หมายเหตุ">
-        <div class="shift-expense-actions"><button type="button" class="btn btn-ghost" data-act="cancel-exp">ยกเลิก</button><button type="submit" class="btn btn-primary">บันทึก</button></div>
+        <input type="text" name="note" value="${esc(f.note || "")}" placeholder="หมายเหตุ (ไม่บังคับ)" aria-label="หมายเหตุ">
+        ${actions}
       </form>`;
     const amt = sheet.querySelector('[name="amount"]');
     amt.focus(); amt.select?.();
   }
 
   function openExpense(cat) {
-    expenseForm = { cat, paid: shift ? "drawer" : "transfer" };
+    expenseForm = { mode: "new", type: "out", cat, paid: shift ? "drawer" : "transfer" };
     renderSheet();
     sheet.classList.remove("hidden");
   }
   function closeExpense() { expenseForm = null; sheet.classList.add("hidden"); render(); }
+  // ให้ dashboard.js เรียกตอนแตะแถวค่าใช้จ่ายในการ์ดรายการ
+  window.ExpenseSheet = {
+    edit(x) {
+      expenseForm = { mode: "edit", type: "out", id: x.id, cat: x.category, amount: x.amount, note: x.note, paid: x.paid_from };
+      renderSheet();
+      sheet.classList.remove("hidden");
+    },
+  };
+  const refreshAll = (table) => { load(); window.dispatchEvent(new CustomEvent("vims:realtime", { detail: { table } })); }; // PULSE + การ์ดรายการ (dashboard.js) โหลดใหม่ทันที
 
   document.getElementById("addExpenseFab")?.addEventListener("click", () => openExpense(get("vims_exp_last_cat") || QUICK[0].cat));
 
   // ---------- events (delegation: การ์ดถูก render ใหม่ทั้งก้อน) ----------
-  sheet.addEventListener("click", (e) => {
+  sheet.addEventListener("click", async (e) => {
     if (e.target === sheet || e.target.closest('[data-act="cancel-exp"]')) return closeExpense(); // แตะพื้นหลังมืด = ปิด
+    const type = e.target.closest("[data-type]");
+    if (type) { expenseForm.type = type.dataset.type; expenseForm.cat = type.dataset.type === "in" ? QUICK_IN[0].cat : get("vims_exp_last_cat") || QUICK[0].cat; renderSheet(); return; }
     const q = e.target.closest("[data-quick]");
     if (q) { expenseForm.cat = q.dataset.quick; renderSheet(); return; }
     const paid = e.target.closest("[data-paid]");
     if (paid) {
       expenseForm.paid = paid.dataset.paid;
       sheet.querySelectorAll("[data-paid]").forEach((b) => b.classList.toggle("active", b === paid));
+      return;
+    }
+    if (e.target.closest('[data-act="del-exp"]')) {
+      const f = expenseForm;
+      if (!(await Notify.confirm({ title: `ลบค่าใช้จ่าย "${f.cat}"?`, message: `${thb(S(f.amount))}${f.note ? " · " + f.note : ""}\nยอดเหลือวันนี้และเงินในลิ้นชักจะคำนวณใหม่`, confirmText: "ลบ", danger: true }))) return;
+      const { error } = await ShiftRepo.deleteExpense(f.id);
+      if (error) return Notify.error(`ลบ "${f.cat}" ไม่สำเร็จ`, error);
+      Notify.success(`ลบ "${f.cat}" แล้ว`, `คืนยอด ${thb(S(f.amount))}`);
+      closeExpense();
+      refreshAll("expenses");
     }
   });
 
@@ -175,10 +216,31 @@
   sheet.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;
+    if (form.dataset.form === "income") {
+      const amount = Number(form.amount.value);
+      const reason = form.reason.value.trim();
+      if (!(amount > 0)) return Notify.warning("ยังไม่ได้ใส่จำนวนเงิน", "ใส่ยอดเป็นบาท (มากกว่า 0)");
+      if (reason.length < 3) return Notify.warning("ใส่รายละเอียดอย่างน้อย 3 ตัวอักษร", "เช่น โอนเงินเก็บมาซื้อล็อตใหม่");
+      const label = QUICK_IN.find((q) => q.cat === expenseForm.cat)?.label || "เงินเข้า";
+      const { error } = await ShiftRepo.addCapital({ entry_type: expenseForm.cat, amount, reason, entry_date: todayStr() });
+      if (error) return Notify.error(`บันทึก${label}ไม่สำเร็จ`, error);
+      Notify.success(`${label} ${thb(S(amount))} แล้ว`, "ไม่นับเป็นยอดขายหรือกำไร — นับรวมในเงินจริงหน้าบัญชี");
+      closeExpense();
+      refreshAll("capital_entries");
+      return;
+    }
     if (form.dataset.form === "expense") {
       const amount = Number(form.amount.value);
       const category = form.category.value.trim();
       if (!(amount > 0) || !category) return Notify.warning("ยังไม่ได้ใส่จำนวนเงิน", "ใส่ยอดค่าใช้จ่ายเป็นบาท (มากกว่า 0)");
+      if (expenseForm.mode === "edit") {
+        const { error } = await ShiftRepo.updateExpense(expenseForm.id, { category, amount, note: form.note.value.trim() || null, paid_from: expenseForm.paid || "other" });
+        if (error) return Notify.error(`แก้ ${category} ไม่สำเร็จ`, error);
+        Notify.success(`แก้ ${category} แล้ว`, `ยอดใหม่ ${thb(S(amount))}`);
+        closeExpense();
+        refreshAll("expenses");
+        return;
+      }
       const now = new Date();
       const row = {
         expense_date: todayStr(),
@@ -195,8 +257,7 @@
       set("vims_exp_last_cat", expenseForm.cat); // ปุ่ม + เปิดมาที่หมวดล่าสุด
       Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, row.paid_from === "drawer" ? "หักจากเงินในลิ้นชักที่ควรมีแล้ว" : row.paid_from === "transfer" ? "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)" : "นับเป็นค่าใช้จ่ายของวันนี้");
       closeExpense();
-      load();
-      window.dispatchEvent(new CustomEvent("vims:realtime", { detail: { table: "expenses" } })); // ให้ PULSE + การ์ดรายการ (dashboard.js) โหลดใหม่ทันที
+      refreshAll("expenses");
     }
   });
 

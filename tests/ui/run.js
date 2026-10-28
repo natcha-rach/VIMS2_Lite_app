@@ -147,6 +147,23 @@ const server = http.createServer((req, res) => {
   await m.screenshot({ path: path.join(OUT, "08d-fab-sheet.png") });
   await m.mouse.click(5, 5);
   console.log("fab sheet closed:", !(await m.isVisible("#expenseSheet [data-form=expense]")));
+  // V21: แท็บ "รับ (เติมทุน)" → capital_entries แล้วโผล่ในการ์ดรายการ (สีเขียว)
+  await m.click("#addExpenseFab");
+  await m.click('#expenseSheet [data-type="in"]');
+  await m.fill("#expenseSheet [data-form=income] [name=amount]", "1000");
+  await m.fill("#expenseSheet [data-form=income] [name=reason]", "โอนเงินเก็บมาซื้อล็อต");
+  await m.click("#expenseSheet [data-form=income] button[type=submit]");
+  await m.waitForTimeout(1200);
+  console.log("capital rows:", await m.evaluate(() => window.__mockdb().capital_entries.map((c) => c.entry_type + ":" + c.amount)));
+  console.log("list has เติมทุน:", await m.$$eval("#moneyList .money-row.in", (r) => r.some((x) => x.textContent.includes("เติมทุน"))));
+  // V21: แตะแถวค่าใช้จ่าย → แผ่นแก้ (ยอดเดิม) → แก้หมายเหตุ → บันทึก
+  if (!(await m.isVisible("#moneyList .money-row"))) await m.click(".money-list-card summary");
+  await m.click("#moneyList button.money-row");
+  console.log("edit sheet:", await m.textContent("#exTitle"), "amount:", await m.inputValue("#expenseSheet [name=amount]"));
+  await m.fill("#expenseSheet [name=note]", "แก้ทดสอบ");
+  await m.click("#expenseSheet [data-form=expense] button[type=submit]");
+  await m.waitForTimeout(1200);
+  console.log("edited note:", await m.evaluate(() => window.__mockdb().expenses.map((e) => e.category + ":" + e.amount + ":" + e.note)));
   await m.click('[data-del]');
   await m.waitForSelector(".notify-dialog");
   await m.waitForTimeout(400);

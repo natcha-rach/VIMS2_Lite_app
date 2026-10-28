@@ -245,3 +245,6 @@
 .money-amt { font-size: 15px; white-space: nowrap; }
 .money-row.in .money-amt { color: var(--ok, #12a15e); }
 .money-row.out .money-amt { color: var(--bad, #e5483a); }
+/* V21: แถวค่าใช้จ่ายเป็นปุ่ม (แตะเพื่อแก้/ลบ) — ล้างหน้าตาปุ่มให้เหมือนแถวอื่น */
+button.money-row { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--v11-border, #e7e9f2); border-radius: 0; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+button.money-row:hover { background: var(--v11-surface-2, #f6f7fb); }

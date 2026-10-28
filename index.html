@@ -7,10 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=22" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=23" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/pos.css?v=21" />
-    <link rel="stylesheet" href="assets/css/shift.css?v=20" />
+    <link rel="stylesheet" href="assets/css/shift.css?v=21" />
     <link rel="stylesheet" href="assets/css/polish.css?v=200" />
   </head>
   <body>
@@ -143,10 +143,10 @@
       </div>
     </div>
     <!-- V21: ปุ่ม + ลอย และแผ่นเพิ่มค่าใช้จ่าย (shift.js) — อยู่นอก #mainWrap เพื่อลอยเหนือเมนูล่างมือถือ -->
-    <button type="button" class="money-fab" id="addExpenseFab" aria-label="เพิ่มค่าใช้จ่าย"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button type="button" class="money-fab" id="addExpenseFab" aria-label="เพิ่มรายการ"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
     <div class="modal-backdrop hidden" id="expenseSheet">
       <div class="modal-sheet shift-modal" role="dialog" aria-labelledby="exTitle">
-        <h2 id="exTitle">เพิ่มค่าใช้จ่าย</h2>
+        <h2 id="exTitle">เพิ่มรายการ</h2>
         <div id="exBody"></div>
       </div>
     </div>
@@ -157,14 +157,14 @@
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="assets/js/dashboard.js?v=196"></script>
+    <script src="assets/js/dashboard.js?v=198"></script>
     <script src="assets/js/money.js?v=19"></script>
     <!-- Clean Architecture: Domain → Data → Infra → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/shiftCalc.js?v=1"></script>
-    <script src="assets/js/data/shiftRepo.js?v=1"></script>
+    <script src="assets/js/data/shiftRepo.js?v=2"></script>
     <script src="assets/js/data/salesRepo.js?v=1"></script>
     <script src="assets/js/offline.js?v=21"></script>
-    <script src="assets/js/shift.js?v=202"></script>
+    <script src="assets/js/shift.js?v=203"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>
