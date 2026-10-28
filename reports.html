@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/reports.css" />
+    <link rel="stylesheet" href="assets/css/reports.css?v=21" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/polish.css?v=200" />
   </head>
@@ -56,7 +56,7 @@
       </div>
 
       <div class="page">
-        <h1>สรุปยอด <a href="tax.html" class="btn btn-ghost btn-sm" style="margin-left:8px;vertical-align:middle">สรุปภาษี →</a></h1>
+        <h1>รายงาน <a href="tax.html" class="btn btn-ghost btn-sm" style="margin-left:8px;vertical-align:middle">สรุปภาษี →</a></h1>
 
         <div class="period-tabs">
           <button class="period-tab active" data-period="day">รายวัน</button>
@@ -79,33 +79,51 @@
           </div>
         </div>
 
-        <div class="stat-grid">
-          <div class="stat-card">
-            <div class="label">ยอดขาย</div>
-            <div class="value" id="repRevenue">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">กำไร/ขาดทุน</div>
-            <div class="value" id="repProfit">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">จำนวนที่ขายได้</div>
-            <div class="value" id="repCount">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">ต้นทุนของที่ขายไป</div>
-            <div class="value" id="repCost">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">ค่าใช้จ่าย</div>
-            <div class="value" id="repExpenses">-</div>
-          </div>
-          <div class="stat-card">
-            <div class="label">กำไรสุทธิ</div>
-            <div class="value" id="repNetProfit">-</div>
-          </div>
+        <!-- V21: 4 แท็บ ไม่โชว์ยอดรวมซ้ำ (ยอดขาย/กำไรของช่วงไหนก็ได้ ดูที่ PULSE หน้าแรก) — สลับแท็บใน reports.js -->
+        <div class="rep-tabs" role="tablist" aria-label="หัวข้อรายงาน">
+          <button type="button" role="tab" data-tab="best">ขายดี</button>
+          <button type="button" role="tab" data-tab="lot">ล็อต</button>
+          <button type="button" role="tab" data-tab="place">ทำเล</button>
+          <button type="button" role="tab" data-tab="trend">แนวโน้ม</button>
         </div>
 
+        <section data-panel="best">
+        <!-- V20: อะไรขายดี (insights.js) — ช่วงเวลาแยกจากตัวเลือกด้านบน -->
+        <div class="tag-card">
+          <h2>อะไรขายดี</h2>
+          <p class="muted">ไว้ตัดสินใจซื้อกระสอบ/คัดของรอบหน้า · "กี่วันขายออก" = ครึ่งหนึ่งของที่ขายได้ ขายภายในกี่วันหลังลงของ</p>
+          <div id="insights"></div>
+        </div>
+        <div class="tag-card">
+          <h2>ตัวทำกำไรสูงสุด</h2>
+          <p class="muted">สินค้า 10 ตัวที่สร้างกำไรจริงสูงสุดในช่วงที่เลือก</p>
+          <div id="repTopProfitItems" class="rank-list"></div>
+        </div>
+        </section>
+
+        <section data-panel="lot" class="hidden">
+        <div class="tag-card">
+          <h2>Performance ตาม Lot</h2>
+          <p class="muted">ยอดสะสมตลอดอายุของแต่ละ Lot (ไม่ขึ้นกับช่วงเวลาที่เลือก)</p>
+          <div class="table-scroll"><table><thead><tr><th>Lot</th><th style="text-align:right">ทุนทั้งหมด</th><th style="text-align:right">ทั้งหมด</th><th style="text-align:right">ขายแล้ว</th><th style="text-align:right">เหลือ</th><th style="text-align:right">ยอดขายสะสม</th><th style="text-align:right">ต้นทุนที่ขาย</th><th style="text-align:right">ทุนคงเหลือ</th><th style="text-align:right">กำไร</th><th style="text-align:right">คืนทุน</th></tr></thead><tbody id="repLotBreakdown"><tr><td colspan="10">กำลังโหลด...</td></tr></tbody></table></div>
+        </div>
+        <div class="tag-card">
+          <h2>ประสิทธิภาพตามกลุ่มราคา</h2>
+          <p class="muted">งานหัว/ปกติ/ฯลฯ รวมทุก Lot — อัตราขาย (sell-through) และกำไรสะสมตลอดอายุกลุ่ม</p>
+          <div class="table-scroll"><table><thead><tr><th>กลุ่ม</th><th>Lot</th><th style="text-align:right">ลงแล้ว</th><th style="text-align:right">ขายแล้ว</th><th style="text-align:right">อัตราขาย</th><th style="text-align:right">ยอดขาย</th><th style="text-align:right">กำไร</th></tr></thead><tbody id="repGroupPerformance"><tr><td colspan="7">กำลังโหลด...</td></tr></tbody></table></div>
+        </div>
+        <div class="tag-card">
+          <h2>คุณภาพแหล่งรับของ</h2>
+          <p class="muted">สรุปตาม "แหล่งที่มา" ของ Lot — อัตราคัดออก/เสีย และกำไรสะสม ช่วยตัดสินใจว่าจะรับของแหล่งไหนต่อ</p>
+          <div class="table-scroll"><table><thead><tr><th>แหล่งที่มา</th><th style="text-align:right">จำนวน Lot</th><th style="text-align:right">รับเข้ารวม</th><th style="text-align:right">อัตราคัดออก/เสีย</th><th style="text-align:right">ทุนรวม</th><th style="text-align:right">ยอดขาย</th><th style="text-align:right">กำไร</th></tr></thead><tbody id="repSourceQuality"><tr><td colspan="7">กำลังโหลด...</td></tr></tbody></table></div>
+        </div>
+        </section>
+
+        <section data-panel="place" class="hidden">
+        <div class="tag-card">
+          <h2>ถนนคนเดิน: เสาร์ vs อาทิตย์</h2>
+          <div id="repWeekendBreakdown" class="weekend-report-grid"></div>
+        </div>
         <div class="dashboard-two-col">
           <div class="tag-card">
             <h2>แยกตามช่องทางขาย</h2>
@@ -137,45 +155,13 @@
           </div>
         </div>
 
-        <!-- V20: อะไรขายดี (insights.js) — ช่วงเวลาแยกจากตัวเลือกด้านบน -->
-        <div class="tag-card">
-          <h2>อะไรขายดี</h2>
-          <p class="muted">ไว้ตัดสินใจซื้อกระสอบ/คัดของรอบหน้า · "กี่วันขายออก" = ครึ่งหนึ่งของที่ขายได้ ขายภายในกี่วันหลังลงของ</p>
-          <div id="insights"></div>
-        </div>
-        <div class="tag-card">
-          <h2>Performance ตาม Lot</h2>
-          <p class="muted">ยอดขายและกำไรด้านบนเป็นตามช่วงเวลาที่เลือก ส่วนตารางนี้เป็นยอดสะสมตลอดอายุของแต่ละ Lot</p>
-          <div class="table-scroll"><table><thead><tr><th>Lot</th><th style="text-align:right">ทุนทั้งหมด</th><th style="text-align:right">ทั้งหมด</th><th style="text-align:right">ขายแล้ว</th><th style="text-align:right">เหลือ</th><th style="text-align:right">ยอดขายสะสม</th><th style="text-align:right">ต้นทุนที่ขาย</th><th style="text-align:right">ทุนคงเหลือ</th><th style="text-align:right">กำไร</th><th style="text-align:right">คืนทุน</th></tr></thead><tbody id="repLotBreakdown"><tr><td colspan="10">กำลังโหลด...</td></tr></tbody></table></div>
+        </section>
 
-        <div class="tag-card">
-          <h2>ประสิทธิภาพตามกลุ่มราคา</h2>
-          <p class="muted">งานหัว/ปกติ/ฯลฯ รวมทุก Lot — อัตราขาย (sell-through) และกำไรสะสมตลอดอายุกลุ่ม</p>
-          <div class="table-scroll"><table><thead><tr><th>กลุ่ม</th><th>Lot</th><th style="text-align:right">ลงแล้ว</th><th style="text-align:right">ขายแล้ว</th><th style="text-align:right">อัตราขาย</th><th style="text-align:right">ยอดขาย</th><th style="text-align:right">กำไร</th></tr></thead><tbody id="repGroupPerformance"><tr><td colspan="7">กำลังโหลด...</td></tr></tbody></table></div>
-        </div>
-
-        <div class="tag-card">
-          <h2>คุณภาพแหล่งรับของ</h2>
-          <p class="muted">สรุปตาม "แหล่งที่มา" ของ Lot — อัตราคัดออก/เสีย และกำไรสะสม ช่วยตัดสินใจว่าจะรับของแหล่งไหนต่อ</p>
-          <div class="table-scroll"><table><thead><tr><th>แหล่งที่มา</th><th style="text-align:right">จำนวน Lot</th><th style="text-align:right">รับเข้ารวม</th><th style="text-align:right">อัตราคัดออก/เสีย</th><th style="text-align:right">ทุนรวม</th><th style="text-align:right">ยอดขาย</th><th style="text-align:right">กำไร</th></tr></thead><tbody id="repSourceQuality"><tr><td colspan="7">กำลังโหลด...</td></tr></tbody></table></div>
-        </div>
-        </div>
-        <div class="tag-card">
-          <h2>ถนนคนเดิน: เสาร์ vs อาทิตย์</h2>
-          <div id="repWeekendBreakdown" class="weekend-report-grid"></div>
-        </div>
-
-        <div class="tag-card">
-          <h2>ตัวทำกำไรสูงสุด</h2>
-          <p class="muted">สินค้า 10 ตัวที่สร้างกำไรจริงสูงสุดในช่วงที่เลือก</p>
-          <div id="repTopProfitItems" class="rank-list"></div>
-        </div>
-
+        <section data-panel="trend" class="hidden">
         <div class="tag-card v11-chart-card">
           <div class="v11-chart-header"><div><h2 id="repTrendTitle">แนวโน้ม</h2><p>กราฟช่วยให้เห็นจังหวะขายและกำไรได้เร็วกว่าอ่านตาราง</p></div></div>
           <div class="v11-chart-wrap"><canvas id="reportTrendChart"></canvas></div>
         </div>
-
         <div class="tag-card">
           <h2 id="repTrendTitleTable">รายละเอียดแนวโน้ม</h2>
           <div class="table-scroll">
@@ -196,13 +182,13 @@
             </table>
           </div>
         </div>
-
         <div class="tag-card">
           <h2>รายการที่ขายในช่วงนี้</h2>
           <div id="repSaleList">
             <div class="empty-state">เลือกช่วงเวลาด้านบน</div>
           </div>
         </div>
+        </section>
       </div>
     </div>
 
@@ -217,7 +203,7 @@
     <!-- Clean Architecture: Domain → Data → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/insightsCalc.js?v=1"></script>
     <script src="assets/js/data/reportsRepo.js?v=1"></script>
-    <script src="assets/js/reports.js?v=21"></script>
+    <script src="assets/js/reports.js?v=22"></script>
     <script src="assets/js/insights.js?v=21"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>

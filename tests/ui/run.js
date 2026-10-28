@@ -240,6 +240,12 @@ const server = http.createServer((req, res) => {
   console.log("insights rows:", await m.$$eval("#insights .ins-table tbody tr", (t) => t.length));
   await shot(m, "10c-insights");
   await m.locator("#insights").screenshot({ path: path.join(OUT, "10f-insights-card.png") });
+  // V21: รายงาน 4 แท็บ — เปิดมาที่ "ขายดี", แตะ "ล็อต" แล้วตารางล็อตโผล่และขายดีซ่อน · ไม่มีการ์ดสรุปยอดซ้ำ
+  console.log("report tabs:", await m.$$eval("[data-tab]", (b) => b.map((x) => x.textContent + ":" + x.getAttribute("aria-selected"))), "| summary gone:", !(await m.$("#repRevenue")));
+  await m.click('[data-tab="lot"]');
+  console.log("lot tab:", await m.isVisible("#repLotBreakdown"), "best hidden:", !(await m.isVisible("#insights")));
+  await shot(m, "10h-report-lot-tab");
+  await m.click('[data-tab="best"]');
 
   // ---------- จอกว้าง ----------
   const d = await page(1280, 800);

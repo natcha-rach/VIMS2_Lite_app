@@ -57,16 +57,12 @@ async function loadReport() {
     ]);
     const err=salesR.error||expensesR.error; if(err) throw err;
     const allSales=salesR.data||[], sales=allSales.filter(s=>{const d=new Date(s.sale_date);return d>=start&&d<end;}), expenses=expensesR.data||[];
-    renderStats(sales,expenses); renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales); renderWeekendBreakdown(sales); renderTopProfitItems(sales); renderSaleList(sales);
+    renderPaymentBreakdown(sales); renderChannelBreakdown(sales); renderTierBreakdown(sales); renderWeekendBreakdown(sales); renderTopProfitItems(sales); renderSaleList(sales);
     await Promise.all([renderLotBreakdown(), renderGroupPerformance(), renderSourceQuality(), renderTrend(start,end)]);
   } catch(err) { console.error(err); Notify.error("โหลดรายงานไม่สำเร็จ", err, { actions: [{ label: "ลองใหม่", onClick: () => location.reload() }] }); }
 }
 
-function renderStats(sales,expenses) {
-  const revenue=sales.reduce((a,s)=>a+Number(s.sale_price||0),0); const cost=sales.reduce((a,s)=>a+Number(s.cost_price||0),0); const profit=revenue-cost; const expenseTotal=expenses.reduce((a,e)=>a+Number(e.amount||0),0); const net=profit-expenseTotal;
-  document.getElementById("repRevenue").textContent=formatBaht(revenue); document.getElementById("repCost").textContent=formatBaht(cost); document.getElementById("repCount").textContent=`${sales.length} ชิ้น`; document.getElementById("repProfit").textContent=formatBaht(profit); document.getElementById("repExpenses").textContent=formatBaht(expenseTotal); document.getElementById("repNetProfit").textContent=formatBaht(net);
-  ["repProfit","repNetProfit"].forEach(id=>{const el=document.getElementById(id);el.classList.remove("profit","loss");el.classList.add(Number(id==="repProfit"?profit:net)>=0?"profit":"loss");});
-}
+// V21: ตัดการ์ดสรุปยอด 6 ตัว (renderStats) — ซ้ำกับ PULSE หน้าแรกที่เลือกช่วงวัน/เดือน/ปีได้เหมือนกัน
 function renderPaymentBreakdown(sales) {
   const by={}; sales.forEach(s=>{by[s.payment_method] ||= {count:0,total:0};by[s.payment_method].count++;by[s.payment_method].total+=Number(s.sale_price||0);});
   const rows=Object.keys(by).length?Object.entries(by).map(([k,v])=>`<tr><td>${PAYMENT_LABELS[k]||k}</td><td style="text-align:right">${v.count}</td><td style="text-align:right">${formatBaht(v.total)}</td></tr>`).join(""):"<tr><td colspan=3 class=empty-state>ไม่มีรายการขาย</td></tr>";
@@ -189,3 +185,14 @@ const reloadReportDebounced = debounce(loadReport, 700);
 window.addEventListener('vims:realtime', (event) => {
   if (event.detail?.table === 'page_refresh' || ['sales', 'expenses', 'items', 'lots'].includes(event.detail?.table)) reloadReportDebounced();
 });
+
+// V21: แท็บรายงาน 4 หัวข้อ (ขายดี · ล็อต · ทำเล & ช่องทาง · แนวโน้ม) — แค่ซ่อน/แสดง ไม่โหลดข้อมูลใหม่
+function showReportTab(tab) {
+  document.querySelectorAll("[data-panel]").forEach((p) => p.classList.toggle("hidden", p.dataset.panel !== tab));
+  document.querySelectorAll("[data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
+  try { localStorage.setItem("vims_report_tab", tab); } catch (_) {}
+  window.dispatchEvent(new Event("resize")); // กราฟ Chart.js ที่วาดตอนแท็บซ่อนอยู่ต้องคำนวณขนาดใหม่
+}
+document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => showReportTab(b.dataset.tab)));
+let __lastTab = "best"; try { __lastTab = localStorage.getItem("vims_report_tab") || "best"; } catch (_) {}
+showReportTab(document.querySelector(`[data-tab="${__lastTab}"]`) ? __lastTab : "best");

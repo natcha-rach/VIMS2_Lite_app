@@ -57,3 +57,8 @@
 .rank-item b { display: block; }
 .rank-item small { display: block; color: var(--color-ink-soft); }
 .rank-value { text-align: right; font-weight: 700; }
+
+/* V21: แท็บรายงาน 4 หัวข้อ */
+.rep-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; padding: 4px; margin: 0 0 16px; border-radius: 14px; background: var(--v11-surface-3, #eef0f7); }
+.rep-tabs button { min-height: 44px; border: 0; border-radius: 10px; background: transparent; font: 500 14px var(--v11-thai, Prompt, sans-serif); color: var(--v11-muted, #5f6780); cursor: pointer; }
+.rep-tabs button[aria-selected="true"] { background: #fff; color: var(--v11-text, #161923); font-weight: 600; box-shadow: 0 1px 2px rgba(16,24,40,.08); }
