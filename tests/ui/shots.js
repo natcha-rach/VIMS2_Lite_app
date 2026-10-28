@@ -20,7 +20,10 @@ const server = http.createServer((req, res) => {
 (async () => {
   const browser = await chromium.launch();
   const errors = [];
-  for (const [w, h, tag] of [[390, 844, "m"], [1280, 820, "d"]]) {
+  // VP=devices → เครื่องที่เจ้าของใช้จริง (ขนาดจอ CSS px): iPhone 18 Pro, 12 Pro Max, Galaxy Z Flip 6 (จอใน), iPad Pro 11" ตั้ง/นอน, PC
+  const SETS = { default: [[390, 844, "m"], [1280, 820, "d"]],
+    devices: [[402, 874, "ip18"], [428, 926, "ip12pm"], [360, 880, "flip6"], [834, 1194, "ipad"], [1194, 834, "ipadL"], [1440, 900, "pc"]] };
+  for (const [w, h, tag] of SETS[process.env.VP || "default"]) {
     const ctx = await browser.newContext({ serviceWorkers: "block", viewport: { width: w, height: h } });
     const pg = await ctx.newPage();
     await pg.route("**/*", (r) => { const u = r.request().url();
@@ -35,7 +38,19 @@ const server = http.createServer((req, res) => {
     for (const p of (process.argv[3] || "index,sell,items,lots,accounting,reports,tax,login").split(",")) {
       await pg.goto(`http://localhost:8766/${p}.html`);
       await pg.waitForTimeout(700);
-      await pg.screenshot({ path: path.join(OUT, `${tag}-${p}.png`) });
+      // ล้นจอแนวนอน = มีอะไรกว้างเกินจอ (ต้องเลื่อนซ้าย-ขวาได้) → รายงานชื่อ element ที่ล้น
+      const over = await pg.evaluate(() => { const W = document.documentElement.clientWidth;
+        return document.documentElement.scrollWidth > W ? [...document.querySelectorAll("body *")].filter((e) => { const r = e.getBoundingClientRect(); return r.right > W + 1 && r.width > 0 && getComputedStyle(e).position !== "fixed"; }).slice(0, 4).map((e) => e.tagName + "." + [...e.classList].join(".") + "#" + e.id) : []; });
+      if (over.length) errors.push(`${tag} ${p} ล้นจอ: ${over.join(", ")}`);
+      await pg.screenshot({ path: path.join(OUT, `${tag}-${p}.png`), fullPage: true });
+      if (p === "index") { // ปุ่ม + ต้องไม่ทับปุ่มขายของตรงกลาง และแผ่นต้องอยู่ในจอ
+        const hit = await pg.evaluate(() => { const a = document.getElementById("addExpenseFab")?.getBoundingClientRect(), b = document.querySelector('a[href="sell.html"]')?.getBoundingClientRect();
+          return a && b && b.width ? !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom) : false; });
+        if (hit) errors.push(`${tag} ปุ่ม + ทับปุ่มขายของ`);
+        await pg.click("#addExpenseFab"); await pg.waitForTimeout(400);
+        await pg.screenshot({ path: path.join(OUT, `${tag}-index-sheet.png`) });
+        await pg.mouse.click(5, 5);
+      }
     }
     await ctx.close();
   }

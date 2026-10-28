@@ -24,3 +24,6 @@
 .cost-breakdown-details.cost-breakdown-details .field select{color:#1a1d29!important;background:#fff!important}
 .cost-breakdown-details.cost-breakdown-details .field input::placeholder{color:#8a8fa3!important}
 .field-hint{margin:2px 0 10px;font-size:12px;color:var(--color-ink-soft)}
+
+/* V21: ปุ่มท้ายการ์ด Lot ล้นจอบน Galaxy Z Flip 6 (360px) → ให้ขึ้นบรรทัดใหม่ */
+.item-actions{display:flex;flex-wrap:wrap;gap:8px}.item-actions .btn{min-height:44px}

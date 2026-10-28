@@ -120,3 +120,8 @@
 .bulk-action-controls{display:flex;flex-wrap:wrap;gap:8px}
 .bulk-action-group{display:inline-flex;gap:6px;align-items:center}
 .bulk-action-group input,.bulk-action-group select{padding:6px 8px;border-radius:7px;border:1px solid var(--color-line);font-size:12.5px}
+
+/* V21: แถบค้นหา/ตัวกรองหน้าสินค้าล้นจอบนมือถือ ≤402px (Flip 6, iPhone 18 Pro) → ช่องค้นหาเต็มแถว ตัวกรอง 2 ช่องแบ่งครึ่งแถวล่าง */
+@media(max-width:900px){.section-title{flex-wrap:wrap}.toolbar{flex-wrap:wrap}.toolbar input{flex:1 1 100
+/* V21: แถบค้นหา/ตัวกรองหน้าสินค้าล้นจอบนมือถือ ≤402px (Flip 6, iPhone 18 Pro) → ช่องค้นหาเต็มแถว ตัวกรอง 2 ช่องแบ่งครึ่งแถวล่าง */
+@media(max-width:900px){.section-title{flex-wrap:wrap}.toolbar{flex-wrap:wrap}.toolbar input{flex:1 1 100%}.toolbar select{flex:1 1 0;min-width:0}}
