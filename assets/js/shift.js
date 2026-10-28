@@ -117,12 +117,15 @@
         <button type="button" data-type="in" class="${f.type === "in" ? "active in" : ""}">+ รับ (เติมทุน)</button>
       </div>` : "";
     const lastAmt = f.mode === "edit" ? f.amount : get("vims_exp_last_" + f.cat) || "";
+    // V21: คืนความสามารถลงย้อนหลัง (เดิมอยู่ฟอร์มหน้าบัญชี) — ค่าเริ่มต้นวันนี้ ห้ามเลือกวันในอนาคต
+    const dateField = `<label class="ex-date ex-wide"><span>วันที่</span><input type="date" name="date" value="${esc(f.date || todayStr())}" max="${todayStr()}" required aria-label="วันที่"></label>`;
     const actions = `<div class="shift-expense-actions">${f.mode === "edit" ? `<button type="button" class="btn btn-ghost ex-del" data-act="del-exp">ลบ</button>` : ""}<button type="button" class="btn btn-ghost" data-act="cancel-exp">ยกเลิก</button><button type="submit" class="btn btn-primary">บันทึก</button></div>`;
     sheet.querySelector("#exBody").innerHTML = f.type === "in" ? `${typeTabs}
       <div class="shift-quick">${quickChips(QUICK_IN)}</div>
       <form class="shift-expense" data-form="income">
         <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="บาท" aria-label="จำนวนเงิน" required class="ex-wide">
         <input type="text" name="reason" minlength="3" placeholder="รายละเอียด เช่น โอนเงินเก็บมาซื้อล็อตใหม่" aria-label="รายละเอียด" required class="ex-wide">
+        ${dateField}
         ${actions}
       </form>` : `${typeTabs}
       <div class="shift-quick">${quickChips()}</div>
@@ -134,6 +137,7 @@
           <button type="button" data-paid="transfer" class="${f.paid === "transfer" ? "active" : ""}">โอน/อื่นๆ</button>
         </div>
         <input type="text" name="note" value="${esc(f.note || "")}" placeholder="หมายเหตุ (ไม่บังคับ)" aria-label="หมายเหตุ">
+        ${dateField}
         ${actions}
       </form>`;
     const amt = sheet.querySelector('[name="amount"]');
@@ -149,7 +153,7 @@
   // ให้ dashboard.js เรียกตอนแตะแถวค่าใช้จ่ายในการ์ดรายการ
   window.ExpenseSheet = {
     edit(x) {
-      expenseForm = { mode: "edit", type: "out", id: x.id, cat: x.category, amount: x.amount, note: x.note, paid: x.paid_from };
+      expenseForm = { mode: "edit", type: "out", id: x.id, cat: x.category, amount: x.amount, note: x.note, paid: x.paid_from, date: x.expense_date, origDate: x.expense_date };
       renderSheet();
       sheet.classList.remove("hidden");
     },
@@ -216,13 +220,18 @@
   sheet.addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;
+    const date = form.date?.value || todayStr();
+    if (date > todayStr()) return Notify.warning("เลือกวันในอนาคตไม่ได้", "ลงได้แค่วันนี้หรือย้อนหลัง");
+    const isToday = date === todayStr();
+    // ย้อนหลัง = ไม่ใช่เงินของรอบร้านที่เปิดอยู่ → ไม่ผูกรอบ และไม่หักลิ้นชักวันนี้
+    const atOf = (d) => (d === todayStr() ? new Date() : new Date(`${d}T12:00:00`)).toISOString();
     if (form.dataset.form === "income") {
       const amount = Number(form.amount.value);
       const reason = form.reason.value.trim();
       if (!(amount > 0)) return Notify.warning("ยังไม่ได้ใส่จำนวนเงิน", "ใส่ยอดเป็นบาท (มากกว่า 0)");
       if (reason.length < 3) return Notify.warning("ใส่รายละเอียดอย่างน้อย 3 ตัวอักษร", "เช่น โอนเงินเก็บมาซื้อล็อตใหม่");
       const label = QUICK_IN.find((q) => q.cat === expenseForm.cat)?.label || "เงินเข้า";
-      const { error } = await ShiftRepo.addCapital({ entry_type: expenseForm.cat, amount, reason, entry_date: todayStr() });
+      const { error } = await ShiftRepo.addCapital({ entry_type: expenseForm.cat, amount, reason, entry_date: date });
       if (error) return Notify.error(`บันทึก${label}ไม่สำเร็จ`, error);
       Notify.success(`${label} ${thb(S(amount))} แล้ว`, "ไม่นับเป็นยอดขายหรือกำไร — นับรวมในเงินจริงหน้าบัญชี");
       closeExpense();
@@ -234,28 +243,29 @@
       const category = form.category.value.trim();
       if (!(amount > 0) || !category) return Notify.warning("ยังไม่ได้ใส่จำนวนเงิน", "ใส่ยอดค่าใช้จ่ายเป็นบาท (มากกว่า 0)");
       if (expenseForm.mode === "edit") {
-        const { error } = await ShiftRepo.updateExpense(expenseForm.id, { category, amount, note: form.note.value.trim() || null, paid_from: expenseForm.paid || "other" });
+        const patch = { category, amount, note: form.note.value.trim() || null, paid_from: expenseForm.paid || "other" };
+        if (date !== expenseForm.origDate) Object.assign(patch, { expense_date: date, expense_at: atOf(date), shift_id: isToday ? shift?.id || null : null, paid_from: !isToday && patch.paid_from === "drawer" ? "other" : patch.paid_from });
+        const { error } = await ShiftRepo.updateExpense(expenseForm.id, patch);
         if (error) return Notify.error(`แก้ ${category} ไม่สำเร็จ`, error);
         Notify.success(`แก้ ${category} แล้ว`, `ยอดใหม่ ${thb(S(amount))}`);
         closeExpense();
         refreshAll("expenses");
         return;
       }
-      const now = new Date();
       const row = {
-        expense_date: todayStr(),
-        expense_at: now.toISOString(),
+        expense_date: date,
+        expense_at: atOf(date),
         category,
         amount,
         note: form.note.value.trim() || null,
-        shift_id: shift?.id || null,
-        paid_from: shift ? expenseForm.paid : "other",
+        shift_id: isToday ? shift?.id || null : null,
+        paid_from: shift && isToday ? expenseForm.paid : expenseForm.paid === "drawer" ? "other" : expenseForm.paid || "other",
       };
       const { error } = await ShiftRepo.addExpense(row);
       if (error) return Notify.error(`บันทึก ${category} ไม่สำเร็จ`, error);
       set("vims_exp_last_" + expenseForm.cat, String(amount)); // ครั้งหน้ากรอกยอดเดิมให้
       set("vims_exp_last_cat", expenseForm.cat); // ปุ่ม + เปิดมาที่หมวดล่าสุด
-      Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, row.paid_from === "drawer" ? "หักจากเงินในลิ้นชักที่ควรมีแล้ว" : row.paid_from === "transfer" ? "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)" : "นับเป็นค่าใช้จ่ายของวันนี้");
+      Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, row.paid_from === "drawer" ? "หักจากเงินในลิ้นชักที่ควรมีแล้ว" : row.paid_from === "transfer" ? "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)" : isToday ? "นับเป็นค่าใช้จ่ายของวันนี้" : `ลงย้อนหลังวันที่ ${date} (ไม่หักลิ้นชักวันนี้)`);
       closeExpense();
       refreshAll("expenses");
     }

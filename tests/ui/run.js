@@ -149,6 +149,20 @@ const server = http.createServer((req, res) => {
   await m.screenshot({ path: path.join(OUT, "08d-fab-sheet.png") });
   await m.mouse.click(5, 5);
   console.log("fab sheet closed:", !(await m.isVisible("#expenseSheet [data-form=expense]")));
+  // V21: ลงค่าใช้จ่ายย้อนหลัง — ไม่ผูกรอบร้าน ไม่หักลิ้นชัก · วันในอนาคตถูกปฏิเสธ
+  const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const nExp = await m.evaluate(() => window.__mockdb().expenses.length);
+  await m.click("#addExpenseFab");
+  await m.fill("#expenseSheet [data-form=expense] [name=amount]", "45");
+  await m.fill("#expenseSheet [data-form=expense] [name=date]", ymd(new Date(Date.now() + 2 * 86400000)));
+  await m.click("#expenseSheet [data-form=expense] button[type=submit]");
+  await m.waitForTimeout(400);
+  console.log("future date blocked:", (await m.evaluate(() => window.__mockdb().expenses.length)) === nExp);
+  const yday = ymd(new Date(Date.now() - 86400000));
+  await m.fill("#expenseSheet [data-form=expense] [name=date]", yday);
+  await m.click("#expenseSheet [data-form=expense] button[type=submit]");
+  await m.waitForTimeout(800);
+  console.log("backdated:", await m.evaluate((d) => { const e = window.__mockdb().expenses.at(-1); return [e.expense_date === d, e.shift_id, e.paid_from]; }, yday));
   // V21: แท็บ "รับ (เติมทุน)" → capital_entries แล้วโผล่ในการ์ดรายการ (สีเขียว)
   await m.click("#addExpenseFab");
   await m.click('#expenseSheet [data-type="in"]');

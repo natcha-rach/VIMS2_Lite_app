@@ -8,7 +8,7 @@ const DashboardRepo = {
   // fetchAllRows: PostgREST คืนสูงสุด 1000 แถว/ครั้ง ถ้าไม่ paginate ยอดจะตกหล่นแบบเงียบๆ
   listedItems() { return fetchAllRows(() => supabaseClient.from("items").select("id,lot_id,item_name,size,condition,tier,cost_price,current_price,status,created_at,listed_at,sold_at,group_id").eq("intake_status", "listed")); },
   sales() { return fetchAllRows(() => supabaseClient.from("sales").select("id,item_id,bill_id,sale_date,channel,sale_price,cost_price,payment_method,items(item_name,sku)").is("voided_at", null)); },
-  expenses() { return fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,expense_at,amount,category,note,paid_from")); },
+  expenses() { return fetchAllRows(() => supabaseClient.from("expenses").select("id,expense_date,expense_at,amount,category,note,paid_from,shift_id")); },
   capital() { return fetchAllRows(() => supabaseClient.from("capital_entries").select("id,entry_type,amount,reason,entry_date,created_at")); },
   goal() { return supabaseClient.from("app_settings").select("key,value").eq("key", "monthly_sales_goal").maybeSingle(); },
   saveGoal(amount) { return supabaseClient.from("app_settings").upsert({ key: "monthly_sales_goal", value: { amount }, updated_at: new Date().toISOString() }); },

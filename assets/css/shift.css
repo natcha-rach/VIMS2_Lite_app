@@ -70,4 +70,6 @@
 #expenseSheet .ex-type button.active.out { background: var(--bad, #e5483a); color: #fff; }
 #expenseSheet .ex-type button.active.in { background: var(--ok, #12a15e); color: #fff; }
 #expenseSheet .ex-wide { grid-column: 1 / -1; }
+#expenseSheet .ex-date { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--v11-muted, #5f6780); }
+#expenseSheet .ex-date input { flex: 1; min-width: 0; }
 #expenseSheet .ex-del { color: var(--bad, #e5483a); margin-right: auto; }
