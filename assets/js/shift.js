@@ -123,7 +123,7 @@
     sheet.querySelector("#exBody").innerHTML = f.type === "in" ? `${typeTabs}
       <div class="shift-quick">${quickChips(QUICK_IN)}</div>
       <form class="shift-expense" data-form="income">
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="บาท" aria-label="จำนวนเงิน" required class="ex-wide">
+        <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="บาท" aria-label="จำนวนเงิน" required class="ex-wide">
         <input type="text" name="reason" minlength="3" placeholder="รายละเอียด เช่น โอนเงินเก็บมาซื้อล็อตใหม่" aria-label="รายละเอียด" required class="ex-wide">
         ${dateField}
         ${actions}
@@ -131,7 +131,7 @@
       <div class="shift-quick">${quickChips()}</div>
       <form class="shift-expense" data-form="expense">
         <input type="text" name="category" value="${esc(f.cat)}" aria-label="หมวด" required>
-        <input type="number" name="amount" min="1" step="1" inputmode="numeric" placeholder="บาท" value="${esc(lastAmt)}" aria-label="จำนวนเงิน" required>
+        <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="บาท" value="${esc(lastAmt)}" aria-label="จำนวนเงิน" required>
         <div class="seg seg-2">
           <button type="button" data-paid="drawer" class="${f.paid === "drawer" ? "active" : ""}">หยิบจากลิ้นชัก</button>
           <button type="button" data-paid="transfer" class="${f.paid === "transfer" ? "active" : ""}">โอน/อื่นๆ</button>

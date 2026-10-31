@@ -153,7 +153,7 @@ const server = http.createServer((req, res) => {
   const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   const nExp = await m.evaluate(() => window.__mockdb().expenses.length);
   await m.click("#addExpenseFab");
-  await m.fill("#expenseSheet [data-form=expense] [name=amount]", "45");
+  await m.fill("#expenseSheet [data-form=expense] [name=amount]", "45.75"); // ทศนิยมต้องบันทึกได้ (เช่น ซื้อของ Makro)
   await m.fill("#expenseSheet [data-form=expense] [name=date]", ymd(new Date(Date.now() + 2 * 86400000)));
   await m.click("#expenseSheet [data-form=expense] button[type=submit]");
   await m.waitForTimeout(400);
@@ -162,7 +162,7 @@ const server = http.createServer((req, res) => {
   await m.fill("#expenseSheet [data-form=expense] [name=date]", yday);
   await m.click("#expenseSheet [data-form=expense] button[type=submit]");
   await m.waitForTimeout(800);
-  console.log("backdated:", await m.evaluate((d) => { const e = window.__mockdb().expenses.at(-1); return [e.expense_date === d, e.shift_id, e.paid_from]; }, yday));
+  console.log("backdated:", await m.evaluate((d) => { const e = window.__mockdb().expenses.at(-1); return [e.expense_date === d, e.shift_id, e.paid_from, e.amount]; }, yday));
   // V21: แท็บ "รับ (เติมทุน)" → capital_entries แล้วโผล่ในการ์ดรายการ (สีเขียว)
   await m.click("#addExpenseFab");
   await m.click('#expenseSheet [data-type="in"]');
