@@ -209,6 +209,9 @@
     if (form.dataset.form === "open") {
       const opening = Number(form.opening.value) || 0;
       const location = form.location.value.trim() || "ถนนคนเดิน";
+      // ยืนยันก่อนเปิด: เงินทอนผิดทำให้ลิ้นชักขาด/เกินตอนปิด · บิลที่ขายก่อนเปิดร้านไม่เข้ารอบนี้ (ต้นเหตุเงินเกินปลอม)
+      const soldBefore = today?.revenue > 0 ? `\n\n⚠️ วันนี้มียอดขายก่อนเปิดร้านแล้ว ${thb(today.revenue)}\nบิลเหล่านี้จะไม่นับเข้ารอบนี้ เงินจากบิลเหล่านี้ไม่ควรอยู่ในเงินทอนตั้งต้น` : "";
+      if (!(await Notify.confirm({ title: "ตรวจสอบก่อนเปิดร้าน", message: `เงินทอนตั้งต้น ${thb(S(opening))}\nที่ขาย ${location}${soldBefore}`, confirmText: "เปิดร้าน" }))) return;
       const { error } = await ShiftRepo.open(opening, location);
       if (error) return Notify.error("เปิดร้านไม่สำเร็จ", error);
       set("vims_shift_opening", String(opening));

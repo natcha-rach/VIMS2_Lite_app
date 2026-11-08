@@ -54,6 +54,15 @@ const server = http.createServer((req, res) => {
   await m.goto("http://localhost:8765/index.html");
   await m.waitForSelector(".shift-open");
   await m.click(".shift-open button[type=submit]");
+  // V21: ต้องยืนยันก่อนเปิดร้าน — กดยกเลิกแล้วร้านยังไม่เปิด
+  await m.waitForSelector(".notify-dialog");
+  console.log("open confirm:", (await m.$eval(".notify-dialog", (e) => e.textContent)).replace(/\s+/g, " ").trim());
+  await m.click(".nd-cancel");
+  await m.waitForTimeout(200);
+  console.log("cancel keeps closed:", await m.evaluate(() => window.__mockdb().shifts.length === 0));
+  await m.click(".shift-open button[type=submit]");
+  await m.waitForSelector(".notify-dialog");
+  await m.click(".nd-ok");
   await m.waitForSelector(".shift-pill.open");
   await m.click('[data-quick="ค่าเช่าแผง"]');
   await m.fill('[data-form="expense"] [name="amount"]', "200");
