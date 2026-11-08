@@ -1,6 +1,6 @@
 /* ==========================================================
    data/accountingRepo.js — ชั้น Data ของหน้าบัญชี (accounting.html)
-   ใครเรียก: accounting.js (สรุปเงิน/ค่าใช้จ่าย/เงินทุน/ถังเงิน), shift-history.js (ประวัติรอบร้าน),
+   ใครเรียก: accounting.js (สรุปเงิน/ค่าใช้จ่าย/เงินทุน/ถังเงิน), 
             storage-tools.js (รูปย่อ/ลบรูปเต็ม), สคริปต์การ์ดพื้นที่ใน accounting.html
    เรียกต่อ: supabaseClient → lots, expenses, sales, items, capital_entries, shifts, app_settings, item_images,
             Storage bucket item-images · RPC storage_usage
@@ -27,16 +27,6 @@ const AccountingRepo = {
   // ---------- app_settings (cash_count = ยอดนับล่าสุด, bucket_split = % ถังเงิน) ----------
   getSetting(key) { return supabaseClient.from("app_settings").select("value").eq("key", key).maybeSingle(); },
   saveSetting(key, value) { return supabaseClient.from("app_settings").upsert({ key, value, updated_at: new Date().toISOString() }, { onConflict: "key" }); },
-
-  // ---------- ประวัติรอบร้าน (shift-history.js) · sinceIso = null คือทั้งหมด ----------
-  closedShifts(sinceIso) {
-    return fetchAllRows(() => {
-      let q = supabaseClient.from("shifts").select("id,location,opened_at,closed_at,opening_cash,counted_cash,cash_diff,diff_reason,summary")
-        .not("closed_at", "is", null).order("opened_at", { ascending: false });
-      if (sinceIso) q = q.gte("opened_at", sinceIso);
-      return q;
-    });
-  },
 
   // ---------- พื้นที่ / รูป (การ์ดพื้นที่ + storage-tools.js) ----------
   storageUsage() { return supabaseClient.rpc("storage_usage"); },

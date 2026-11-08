@@ -8,9 +8,9 @@
 UI (page controller)   assets/js/sell.js …        อ่าน/เขียน DOM, ผูก event, แสดง Notify
    │ เรียก
    ├─ Domain (กฎธุรกิจล้วน) assets/js/domain/*.js   ไม่แตะ DOM / Supabase → เทสต์ด้วย node ได้
-   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · debtPlan.js · moneySplit.js · insightsCalc.js · lotCalc.js · taxCalc.js
+   │     money.js (เดิม) · cart.js · reservations.js · cashBalance.js · debtPlan.js · moneySplit.js · insightsCalc.js · lotCalc.js · taxCalc.js
    └─ Data (repository)   assets/js/data/*.js      ที่เดียวที่เรียก Supabase ของหน้านั้น
-         salesRepo.js · catalogRepo.js · shiftRepo.js · dashboardRepo.js · accountingRepo.js · reportsRepo.js · lotsRepo.js · taxRepo.js · itemsRepo.js   คืน { data, error } แบบ supabase-js เสมอ
+         salesRepo.js · catalogRepo.js · expenseRepo.js · dashboardRepo.js · accountingRepo.js · reportsRepo.js · lotsRepo.js · taxRepo.js · itemsRepo.js   คืน { data, error } แบบ supabase-js เสมอ
             │ ใช้
 Infra                    supabaseClient.js (client, fetchAllRows, debounce) · notify.js · offline.js · sw.js · realtime.js
 ```
@@ -33,17 +33,15 @@ Infra                    supabaseClient.js (client, fetchAllRows, debounce) · n
 | `offline.js` | Infra | คิวบิลตอนเน็ตหลุด → `SalesRepo.sellBill` | sell.js, shift.js |
 | `sell.js` | UI | กริด, ตะกร้า, ชำระเงิน, ใบเสร็จ, แท็บบิล/จอง/ขายแล้ว | sell.html |
 
-## แผนที่ร้านวันนี้ (index.html)
+## แผนที่หน้าแรก (index.html)
 
 | ไฟล์ | ชั้น | หน้าที่ | ใครเรียก |
 | --- | --- | --- | --- |
-| `domain/shiftCalc.js` | Domain | เหลือวันนี้/กำไรจริง, ลิ้นชักขาด-เกิน, ข้อความสรุปปิดร้าน | shift.js |
-| `data/shiftRepo.js` | Data | รอบร้านที่เปิด, shift_totals, เปิด/ปิดร้าน, เพิ่ม/แก้/ลบค่าใช้จ่าย, เติมทุน (capital_entries) | shift.js |
 | `domain/moneySplit.js` | Domain | แยกเงินสด/เงินโอน: ยอดขาย − ค่าใช้จ่ายของแต่ละฝั่ง + จ่ายแบบไม่ระบุ | dashboard.js |
 | `data/dashboardRepo.js` | Data | ข้อมูล PULSE + การ์ดรายการ (items/sales/expenses/capital), เป้ายอดขาย, RPC Lot | dashboard.js |
 | `dashboard.js` | UI | PULSE, ตัวเลือกช่วงเวลา, การ์ดรายการ (แตะแถวค่าใช้จ่าย → แผ่นแก้ของ shift.js) | index.html |
-| `data/salesRepo.js` | Data | ให้ offline.js ส่งบิลค้างจากหน้าภาพรวมได้ด้วย | offline.js |
-| `shift.js` | UI | การ์ดร้านวันนี้, ปุ่ม + และแผ่นเพิ่มรายการ (จ่าย/รับ-เติมทุน/แก้/ลบ), โมดอลนับเงิน & ปิดร้าน | index.html |
+| `data/expenseRepo.js` | Data | เพิ่ม/แก้/ลบค่าใช้จ่าย, เงินทุนเข้า-ออก | expense-sheet.js |
+| `expense-sheet.js` | UI | ปุ่ม + และแผ่นจดเงิน (จ่าย / เงินทุน / แก้ / ลบ) | index.html |
 
 ## แผนที่หน้าบัญชี (accounting.html)
 
@@ -53,7 +51,6 @@ Infra                    supabaseClient.js (client, fetchAllRows, debounce) · n
 | `data/accountingRepo.js` | Data | lots/expenses/sales/capital/shifts/app_settings, ประวัติรอบร้าน, storage_usage, รูป + Storage | accounting.js, shift-history.js, storage-tools.js, การ์ดพื้นที่ |
 | `domain/debtPlan.js` | Domain | การ์ดกันเงินหนี้: รอบวันที่ 6→28, กำไรจริงรอบนี้, เหลือวันตลาด → วันละเท่าไร | accounting.js |
 | `accounting.js` | UI | เงินจริงตอนนี้ (นับเงิน/เงินทุน), การ์ดกันเงินหนี้, ส่งออก CSV | accounting.html |
-| `shift-history.js` | UI | ประวัติรอบร้าน + สรุปตามทำเล | accounting.html |
 | `storage-tools.js` | UI | สร้างรูปย่อ / ลบรูปเต็มของที่ขายเกิน 6 เดือน | accounting.html |
 
 ## แผนที่หน้ารายงาน (reports.html)

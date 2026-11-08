@@ -7,7 +7,7 @@
      Data   AccountingRepo ← lots/expenses/sales/capital/shifts/app_settings  (data/accountingRepo.js)
      Domain CashBalance    ← "เงินสด + เงินโอน ที่มีจริงตอนนี้"              (domain/cashBalance.js)
      Domain DebtPlan       ← การ์ดกันเงินหนี้ รอบ 6→28                        (domain/debtPlan.js)
-   ไฟล์คู่กันบนหน้าเดียวกัน: shift-history.js (ประวัติรอบร้าน), storage-tools.js (ลดพื้นที่รูป)
+   ไฟล์คู่กันบนหน้าเดียวกัน: storage-tools.js (ลดพื้นที่รูป)
    ========================================================== */
 let debtTarget = 35000; // app_settings.debt_plan.target — หนี้รายเดือน (จ่ายวันที่ 29/1/5)
 

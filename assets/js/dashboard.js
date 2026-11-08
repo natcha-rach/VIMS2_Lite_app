@@ -359,7 +359,7 @@ const MONEY_LIST_LIMIT = 200; // shortcut: แสดงแค่ 200 ราย�
 
 // capital_entries: "opening" คือยอดที่นับได้ (จุดตั้งต้น) ไม่ใช่เงินเข้า-ออก → ไม่แสดง
 const CAP_LIST = { capital_in: ["in", "เติมทุน"], old_stock_income: ["in", "ขายของเก่า"], adjust_up: ["in", "ปรับยอด (+)"], withdraw: ["out", "ถอนเงิน"], adjust_down: ["out", "ปรับยอด (−)"] };
-let moneyExpenseById = new Map(); // id → แถวค่าใช้จ่าย สำหรับเปิดแผ่นแก้ (shift.js → ExpenseSheet.edit)
+let moneyExpenseById = new Map(); // id → แถวค่าใช้จ่าย สำหรับเปิดแผ่นแก้ (expense-sheet.js → ExpenseSheet.edit)
 
 function buildMoneyEntries(periodSales, periodExpenses, periodCapital = []) {
   const bills = new Map();

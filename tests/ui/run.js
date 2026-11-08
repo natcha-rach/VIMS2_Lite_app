@@ -52,19 +52,11 @@ const server = http.createServer((req, res) => {
   // ---------- มือถือ: หน้าหลัก เปิดกะ + ค่าใช้จ่าย ----------
   const m = await page(390, 844);
   await m.goto("http://localhost:8765/index.html");
-  await m.waitForSelector(".shift-open");
-  await m.click(".shift-open button[type=submit]");
-  // V21: ต้องยืนยันก่อนเปิดร้าน — กดยกเลิกแล้วร้านยังไม่เปิด
-  await m.waitForSelector(".notify-dialog");
-  console.log("open confirm:", (await m.$eval(".notify-dialog", (e) => e.textContent)).replace(/\s+/g, " ").trim());
-  await m.click(".nd-cancel");
-  await m.waitForTimeout(200);
-  console.log("cancel keeps closed:", await m.evaluate(() => window.__mockdb().shifts.length === 0));
-  await m.click(".shift-open button[type=submit]");
-  await m.waitForSelector(".notify-dialog");
-  await m.click(".nd-ok");
-  await m.waitForSelector(".shift-pill.open");
-  await m.click('[data-quick="ค่าเช่าแผง"]');
+  // ไม่มีระบบเปิด/ปิดร้านแล้ว — จดค่าใช้จ่ายด้วยปุ่ม + ได้เลย
+  await m.waitForSelector("#addExpenseFab");
+  console.log("no shift ui:", !(await m.$("#shiftCard")) && !(await m.$("#closeShiftModal")));
+  await m.click("#addExpenseFab");
+  await m.click('#expenseSheet [data-quick="ค่าเช่าแผง"]');
   await m.fill('[data-form="expense"] [name="amount"]', "200");
   await m.click('[data-form="expense"] button[type=submit]');
   await m.waitForTimeout(400);
@@ -143,7 +135,7 @@ const server = http.createServer((req, res) => {
 
   // ---------- ปิดกะ ----------
   await m.goto("http://localhost:8765/index.html");
-  await m.waitForSelector(".shift-close-btn");
+  await m.waitForSelector("#moneyList .money-row", { state: "attached" });
   await shot(m, "08-main-after-sale");
   // V21: การ์ดเงินเข้า-ออก — ขายสด 472 · ค่าแผง 200 → เหลือจริง 272
   console.log("pulse:", await m.evaluate(() => ["statCash", "statTransfer", "statCashOut", "statTransferOut", "statCashLeft", "statTransferLeft", "statLeft", "statNetProfit"].map((id) => document.getElementById(id).textContent)));
@@ -200,21 +192,15 @@ const server = http.createServer((req, res) => {
   await m.click("#expenseSheet [data-form=expense] button[type=submit]");
   await m.waitForTimeout(1200);
   console.log("edited note:", await m.evaluate(() => window.__mockdb().expenses.map((e) => e.category + ":" + e.amount + ":" + e.note)));
-  await m.click('[data-del]');
+  // ลบค่าใช้จ่าย: ต้องยืนยันก่อน (กดยกเลิกไว้)
+  await m.click("#moneyList button.money-row");
+  await m.click("#expenseSheet .ex-del");
   await m.waitForSelector(".notify-dialog");
   await m.waitForTimeout(400);
   await shot(m, "08b-confirm-delete");
   await m.click(".nd-cancel");
   await m.waitForTimeout(300);
-  await m.click(".shift-close-btn");
-  await m.fill("#csCounted", "1100");
-  await m.fill("#csReason", "ทอนผิด");
-  await m.click("#csSubmit");
-  await m.waitForSelector("#csResult:not(.hidden)");
-  console.log(await m.$eval(".cs-summary", (e) => e.textContent));
-  console.log("Z", await m.evaluate(() => { const n = document.querySelector('.notify'); if (!n) return 'no notify'; const r = n.getBoundingClientRect(); const e = document.elementFromPoint(r.x + 40, r.y + 12); return [getComputedStyle(document.getElementById('notifyStack')).zIndex, getComputedStyle(document.getElementById('closeShiftModal')).zIndex, e.id || e.className, document.getElementById('notifyStack').parentElement.tagName]; }));
-  await m.waitForTimeout(400);
-  await shot(m, "09-close-shift");
+  await m.click('#expenseSheet [data-act="cancel-exp"]');
 
   // ---------- สินค้า: ลงของ 1 ชิ้น → ตารางสต็อก (ItemsRepo) ----------
   await m.goto("http://localhost:8765/items.html");
@@ -281,12 +267,10 @@ const server = http.createServer((req, res) => {
   await shot(m, "10-tax");
   await m.goto("http://localhost:8765/accounting.html");
   await m.waitForTimeout(900);
-  console.log("shift history rows:", await m.$$eval(".sh-row", (t) => t.length), "| tools:", await m.$$eval(".st-tool", (t) => t.length));
   await shot(m, "10b-accounting");
   // V21: การ์ดกันเงินหนี้แทนถังเงิน · ฟอร์ม/รายการค่าใช้จ่าย + สมุดบัญชีถูกตัดออก
-  console.log("debt card:", await m.$eval("#debtBody", (e) => e.textContent.replace(/\s+/g, " ").trim()), "| old sections gone:", !(await m.$("#expenseForm")) && !(await m.$("#ledgerBody")) && !(await m.$("#bucketForm")) && !(await m.$("#capitalForm")));
+  console.log("debt card:", await m.$eval("#debtBody", (e) => e.textContent.replace(/\s+/g, " ").trim()), "| old sections gone:", !(await m.$("#expenseForm")) && !(await m.$("#ledgerBody")) && !(await m.$("#bucketForm")) && !(await m.$("#capitalForm")) && !(await m.$("#shiftHistory")));
   await m.locator(".debt-card").screenshot({ path: path.join(OUT, "10g-debt-card.png") });
-  await m.locator("#shiftHistory").screenshot({ path: path.join(OUT, "10d-shift-history.png") });
   await m.locator("#storageCard").screenshot({ path: path.join(OUT, "10e-storage-tools.png") });
   await m.goto("http://localhost:8765/reports.html");
   await m.waitForTimeout(900);

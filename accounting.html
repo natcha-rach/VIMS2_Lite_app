@@ -91,13 +91,6 @@
     <div id="debtBody"><div class="empty-state">กำลังโหลด...</div></div>
   </div>
 
-  <!-- V20: ประวัติรอบร้าน (shift-history.js) — ตัวเลขจาก snapshot ตอนปิดร้าน -->
-  <div class="tag-card">
-    <h2 style="margin:0 0 4px">ประวัติรอบร้าน</h2>
-    <p class="muted" style="margin:0 0 12px">ทุกครั้งที่ปิดร้าน · ดูว่าทำเลไหนขายดี และลิ้นชักขาด/เกินบ่อยแค่ไหน (ยอดขาด/เกินถูกรวมใน "เงินสด + เงินโอน ที่มีจริงตอนนี้" แล้ว)</p>
-    <div id="shiftHistory"><div class="empty-state">กำลังโหลด...</div></div>
-  </div>
-
   <!-- V21: สมุดบัญชีตัดออกแล้ว (ดูรายการที่หน้าแรก) เหลือปุ่มส่งออก CSV · ลิงก์ภาษีอยู่หัวหน้าแล้ว -->
   <div class="tag-card acc-tools">
     <button id="exportCsvBtn" class="btn btn-ghost">⬇ ส่งออกเงินเข้า-ออก (CSV)</button>
@@ -126,9 +119,8 @@
 <!-- Clean Architecture: Domain → Data → UI (docs/ARCHITECTURE.md) -->
 <script src="assets/js/domain/cashBalance.js?v=1"></script>
 <script src="assets/js/domain/debtPlan.js?v=3"></script>
-<script src="assets/js/data/accountingRepo.js?v=1"></script>
-<script src="assets/js/accounting.js?v=29"></script>
-<script src="assets/js/shift-history.js?v=21"></script>
+<script src="assets/js/data/accountingRepo.js?v=2"></script>
+<script src="assets/js/accounting.js?v=30"></script>
 <script src="assets/js/storage-tools.js?v=21"></script>
 <script>
   // V19: เรียก RPC storage_usage() — ถ้ายังไม่ได้รัน migration_v19 จะแจ้งไว้เฉยๆ

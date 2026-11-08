@@ -6,7 +6,6 @@
    เชื่อมต่อ:
      ส่งบิล    → SalesRepo.sellBill (data/salesRepo.js) — ต้องโหลด salesRepo.js ก่อนไฟล์นี้
      sell.js   → OfflineSales.enqueue() ตอนส่งบิลไม่ได้, saveSnapshot/loadSnapshot ของกริดสินค้า
-     shift.js  → OfflineSales.count() กันปิดร้านทั้งที่ยังมีบิลค้างส่ง
      RPC sell_bill(p_bill_id, …, p_sold_at)  ← UUID เดิม + เวลาขายจริง → ส่งซ้ำกี่ครั้งก็ไม่เกิดบิลซ้ำ
                                                (p_sold_at ต้องรัน sql/migration_v21_*.sql)
    ทำไม IndexedDB ไม่ใช่ localStorage: ข้อมูลกริด/คิวใหญ่ได้ และไม่บล็อกหน้าเว็บ
