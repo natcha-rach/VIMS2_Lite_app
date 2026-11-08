@@ -183,6 +183,8 @@ const server = http.createServer((req, res) => {
   await m.click("#expenseSheet [data-form=income] button[type=submit]");
   await m.waitForTimeout(1000);
   console.log("withdraw:", await m.evaluate(() => window.__mockdb().capital_entries.map((c) => c.entry_type + ":" + c.amount)), "| expenses unchanged:", await m.evaluate(() => window.__mockdb().expenses.every((e) => e.amount !== 300)));
+  // ถอน 300 เป็นรายการล่าสุด แต่รายจ่ายต้องอยู่ใต้รายรับทั้งหมด
+  console.log("in before out:", await m.$eval("#moneyList .money-day", (d) => !/out.*in/.test([...d.querySelectorAll(".money-row")].map((r) => (r.classList.contains("in") ? "in" : "out")).join(" "))));
   console.log("list has เติมทุน:", await m.$$eval("#moneyList .money-row.in", (r) => r.some((x) => x.textContent.includes("เติมทุน"))));
   // V21: แตะแถวค่าใช้จ่าย → แผ่นแก้ (ยอดเดิม) → แก้หมายเหตุ → บันทึก
   if (!(await m.isVisible("#moneyList .money-row"))) await m.click(".money-list-card summary");

@@ -402,7 +402,8 @@ function renderMoneyList(periodSales, periodExpenses, periodCapital) {
   box.innerHTML = [...days.entries()].map(([k, list]) => {
     const net = sum(list, x => x.kind === "in" ? x.amount : -x.amount);
     // ค่าใช้จ่ายเป็น <button> แตะเพื่อแก้/ลบ · บิลยกเลิก/คืนที่หน้าขาย · เงินทุนแก้ด้วยการปรับยอดที่หน้าบัญชี
-    const rows = list.map(x => { const t = moneyEntryText(x); const tag = x.e ? "button" : "div"; return `<${tag} class="money-row ${x.kind}"${x.e ? ` type="button" data-exp="${escapeHtml(x.e.id)}"` : ""}>
+    // รายรับขึ้นก่อนทั้งหมด รายจ่ายอยู่ด้านล่าง — ในแต่ละกลุ่มยังเรียงใหม่→เก่า
+    const rows = [...list.filter(x => x.kind === "in"), ...list.filter(x => x.kind === "out")].map(x => { const t = moneyEntryText(x); const tag = x.e ? "button" : "div"; return `<${tag} class="money-row ${x.kind}"${x.e ? ` type="button" data-exp="${escapeHtml(x.e.id)}"` : ""}>
         <span class="money-ic" role="img" aria-label="${x.kind === "in" ? "รายรับ" : "รายจ่าย"}">${x.kind === "in" ? ICONS.moneyIn : ICONS.moneyOut}</span>
         <span class="money-text"><b>${escapeHtml(t.title)}</b><small>${escapeHtml(t.sub)}</small></span>
         <b class="money-amt">${x.kind === "in" ? "+" : "−"}${formatBaht(x.amount)}</b>
