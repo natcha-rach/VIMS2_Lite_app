@@ -22,7 +22,6 @@ const CAP_LABELS = { opening: "ตั้งยอดเงินจริง", c
 let currentBalance = 0;
 let hasAnchor = false;
 let hasCapitalEntries = false;
-document.getElementById("capDate").valueAsDate = new Date();
 
 async function addCapitalEntry(entry_type, amount, reason, entry_date) {
   reason = (reason || "").trim();
@@ -35,24 +34,6 @@ async function addCapitalEntry(entry_type, amount, reason, entry_date) {
   return true;
 }
 
-document.getElementById("capitalForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  let type = document.getElementById("capType").value;
-  // ยังไม่เคยตั้งเงินตั้งต้น: เงินทุนที่ใส่ = เงินจริงที่มีอยู่ตอนนี้ ใช้เป็นจุดเริ่มต้นเลย (ไม่หักต้นทุน Lot ที่จ่ายไปก่อนหน้า)
-  if (!hasAnchor && !hasCapitalEntries && type === "capital_in") {
-    const amt = Number(document.getElementById("capAmount").value);
-    if (!(amt > 0)) return showToast("กรุณาใส่จำนวนเงินมากกว่า 0");
-    if (!(await Notify.confirm({ title: "ยังไม่ได้ตั้งเงินตั้งต้น", confirmText: "ใช้ยอดนี้", message: `ใช้ ${formatBaht(amt)} เป็นเงินจริงที่มีอยู่ตอนนี้ (เงินสด + เงินโอน) ใช่ไหม?` }))) return;
-    type = "opening";
-  }
-  const ok = await addCapitalEntry(
-    type,
-    Number(document.getElementById("capAmount").value),
-    document.getElementById("capReason").value,
-    document.getElementById("capDate").value
-  );
-  if (ok) { document.getElementById("capAmount").value = ""; document.getElementById("capReason").value = ""; }
-});
 
 function updateCountPreview() {
   const c = document.getElementById("realCashOnHand").value, t = document.getElementById("realTransfer").value;

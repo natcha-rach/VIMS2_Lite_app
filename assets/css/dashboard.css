@@ -263,3 +263,17 @@ button.money-row:hover { background: var(--v11-surface-2, #f6f7fb); }
   .dashboard-main-kpis .stat-card .value { font-size: 20px !important; margin: 2px 0 !important; }
   .dashboard-main-kpis .stat-meta-row small, .dashboard-main-kpis .stat-spark { display: none !important; }
 }
+
+/* ---------- V21: PULSE 2 การ์ด (เงินเข้า-ออก · กำไร) — แถวข้อความ + ตัวเลขชิดขวา ---------- */
+.money-pulse { display: grid !important; grid-template-columns: 1fr !important; gap: 12px !important; }
+@media (min-width: 640px) { .money-pulse { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+.money-pulse .pulse-card { min-height: 0 !important; padding: 14px 16px !important; display: block !important; }
+.money-pulse .pulse-card > .label { font-weight: 600; margin-bottom: 6px; }
+.pulse-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; font-size: 14px; }
+.pulse-row b { font-size: 16px; white-space: nowrap; }
+.pulse-row small { color: var(--color-ink-soft); font-size: 11px; }
+.pulse-row .positive { color: var(--ok, #12a15e); } .pulse-row .negative { color: var(--bad, #e5483a); }
+.pulse-sub { border-top: 1px dashed var(--v11-border, #e7e9f2); }
+.pulse-total { border-top: 1px solid var(--v11-border, #e7e9f2); margin-top: 2px; font-weight: 600; }
+.pulse-total b { font-size: 22px; }
+.pulse-note { margin: 8px 0 0; font-size: 11.5px; color: var(--color-ink-soft); }

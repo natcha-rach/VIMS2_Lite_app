@@ -136,6 +136,8 @@ const server = http.createServer((req, res) => {
   await m.goto("http://localhost:8765/index.html");
   await m.waitForSelector(".shift-close-btn");
   await shot(m, "08-main-after-sale");
+  // V21: การ์ดเงินเข้า-ออก — ขายสด 472 · ค่าแผง 200 → เหลือจริง 272
+  console.log("pulse:", await m.evaluate(() => ["statCash", "statTransfer", "statExpenses", "statLeft", "statNetProfit"].map((id) => document.getElementById(id).textContent)));
   // V21: การ์ด "รายการ" พับไว้ แตะแล้วเห็นแถว — แถวโชว์รายละเอียด (ชื่อสินค้า/หมวด) ไม่ใช่คำว่ารายรับ/รายจ่าย
   await m.waitForSelector("#moneyList .money-row", { state: "attached" });
   console.log("list hidden before tap:", !(await m.isVisible("#moneyList .money-row")));
@@ -171,6 +173,15 @@ const server = http.createServer((req, res) => {
   await m.click("#expenseSheet [data-form=income] button[type=submit]");
   await m.waitForTimeout(1200);
   console.log("capital rows:", await m.evaluate(() => window.__mockdb().capital_entries.map((c) => c.entry_type + ":" + c.amount)));
+  // V21: ถอนใช้ส่วนตัว (แท็บ เงินทุน) → capital_entries.withdraw · ไม่ใช่ค่าใช้จ่ายร้าน
+  await m.click("#addExpenseFab");
+  await m.click('#expenseSheet [data-type="in"]');
+  await m.click('#expenseSheet [data-quick="withdraw"]');
+  await m.fill("#expenseSheet [data-form=income] [name=amount]", "300");
+  await m.fill("#expenseSheet [data-form=income] [name=reason]", "เงินเดือนตัวเอง");
+  await m.click("#expenseSheet [data-form=income] button[type=submit]");
+  await m.waitForTimeout(1000);
+  console.log("withdraw:", await m.evaluate(() => window.__mockdb().capital_entries.map((c) => c.entry_type + ":" + c.amount)), "| expenses unchanged:", await m.evaluate(() => window.__mockdb().expenses.every((e) => e.amount !== 300)));
   console.log("list has เติมทุน:", await m.$$eval("#moneyList .money-row.in", (r) => r.some((x) => x.textContent.includes("เติมทุน"))));
   // V21: แตะแถวค่าใช้จ่าย → แผ่นแก้ (ยอดเดิม) → แก้หมายเหตุ → บันทึก
   if (!(await m.isVisible("#moneyList .money-row"))) await m.click(".money-list-card summary");
@@ -264,7 +275,7 @@ const server = http.createServer((req, res) => {
   console.log("shift history rows:", await m.$$eval(".sh-row", (t) => t.length), "| tools:", await m.$$eval(".st-tool", (t) => t.length));
   await shot(m, "10b-accounting");
   // V21: การ์ดกันเงินหนี้แทนถังเงิน · ฟอร์ม/รายการค่าใช้จ่าย + สมุดบัญชีถูกตัดออก
-  console.log("debt card:", await m.$eval("#debtBody", (e) => e.textContent.replace(/\s+/g, " ").trim()), "| old sections gone:", !(await m.$("#expenseForm")) && !(await m.$("#ledgerBody")) && !(await m.$("#bucketForm")));
+  console.log("debt card:", await m.$eval("#debtBody", (e) => e.textContent.replace(/\s+/g, " ").trim()), "| old sections gone:", !(await m.$("#expenseForm")) && !(await m.$("#ledgerBody")) && !(await m.$("#bucketForm")) && !(await m.$("#capitalForm")));
   await m.locator(".debt-card").screenshot({ path: path.join(OUT, "10g-debt-card.png") });
   await m.locator("#shiftHistory").screenshot({ path: path.join(OUT, "10d-shift-history.png") });
   await m.locator("#storageCard").screenshot({ path: path.join(OUT, "10e-storage-tools.png") });

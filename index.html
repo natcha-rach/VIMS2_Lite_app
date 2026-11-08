@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=25" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=26" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/pos.css?v=21" />
     <link rel="stylesheet" href="assets/css/shift.css?v=22" />
@@ -92,28 +92,22 @@
             </div>
             <div class="pulse-date" id="pulseDate">วันนี้</div>
           </div>
-          <div class="dashboard-kpi-grid dashboard-main-kpis" id="todayPulse">
-            <div class="stat-card">
-              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v3"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-4"/><path d="M17 12h3a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-3a2 2 0 0 1 0-4z"/></svg></span> ยอดขาย</div>
-              <div class="value" id="statRevenue">-</div>
-              <div class="stat-meta-row"><small id="statRevenueMeta"></small><span class="stat-delta" id="statRevenueDelta"></span></div>
-              <div class="stat-spark"><canvas id="statRevenueSpark"></canvas></div>
+          <!-- V21: 2 การ์ดตอบคนละคำถาม — "เงินเข้ามาทางไหน เหลือในมือเท่าไร" กับ "กำไรจริงเท่าไร" (dashboard.js → renderDashboard) -->
+          <div class="dashboard-kpi-grid money-pulse" id="todayPulse">
+            <div class="stat-card pulse-card">
+              <div class="label">เงินเข้า-ออก</div>
+              <div class="pulse-row"><span>เงินสด</span><b id="statCash">-</b></div>
+              <div class="pulse-row"><span>เงินโอน / พร้อมเพย์</span><b id="statTransfer">-</b></div>
+              <div class="pulse-row pulse-sub"><span>= ยอดขาย <small id="statRevenueMeta"></small></span><b id="statRevenue">-</b></div>
+              <div class="pulse-row"><span>− ค่าใช้จ่าย</span><b id="statExpenses" class="negative">-</b></div>
+              <div class="pulse-row pulse-total"><span>เหลือจริง <span class="stat-delta" id="statLeftDelta"></span></span><b id="statLeft">-</b></div>
             </div>
-            <div class="stat-card">
-              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 17 9 11 13 15 21 6"/><polyline points="14 6 21 6 21 13"/></svg></span> กำไรขั้นต้น</div>
-              <div class="value" id="statGrossProfit">-</div>
-              <div class="stat-meta-row"><small id="statMargin"></small><span class="stat-delta" id="statGrossProfitDelta"></span></div>
-              <div class="stat-spark"><canvas id="statGrossProfitSpark"></canvas></div>
-            </div>
-            <div class="stat-card">
-              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2h12v19l-3-2-3 2-3-2-3 2V2z"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="13" y2="15"/></svg></span> ค่าใช้จ่าย</div>
-              <div class="value" id="statExpenses">-</div>
-              <div class="stat-meta-row"><small>ค่าใช้จ่ายที่บันทึกในช่วงนี้</small><span class="stat-delta" id="statExpensesDelta"></span></div>
-            </div>
-            <div class="stat-card">
-              <div class="label"><span class="label-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg></span> กำไรสุทธิ</div>
-              <div class="value" id="statNetProfit">-</div>
-              <div class="stat-meta-row"><small>กำไรขั้นต้น - ค่าใช้จ่าย</small><span class="stat-delta" id="statNetProfitDelta"></span></div>
+            <div class="stat-card pulse-card">
+              <div class="label">กำไร</div>
+              <div class="pulse-row"><span>กำไรขั้นต้น <small>ยอดขาย − ต้นทุนเสื้อ</small></span><b id="statGrossProfit">-</b></div>
+              <div class="pulse-row"><span>อัตรากำไร</span><b id="statMargin">-</b></div>
+              <div class="pulse-row pulse-total"><span>กำไรสุทธิ <small>หักค่าใช้จ่ายแล้ว</small> <span class="stat-delta" id="statNetProfitDelta"></span></span><b id="statNetProfit">-</b></div>
+              <p class="pulse-note">เหลือจริง − กำไรสุทธิ = ทุนเสื้อที่ขายไป (ควรกันไว้ซื้อของเข้าใหม่)</p>
             </div>
           </div>
         </section>
@@ -163,14 +157,14 @@
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script src="assets/js/data/dashboardRepo.js?v=2"></script>
-    <script src="assets/js/dashboard.js?v=200"></script>
+    <script src="assets/js/dashboard.js?v=201"></script>
     <script src="assets/js/money.js?v=19"></script>
     <!-- Clean Architecture: Domain → Data → Infra → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/shiftCalc.js?v=1"></script>
     <script src="assets/js/data/shiftRepo.js?v=2"></script>
     <script src="assets/js/data/salesRepo.js?v=1"></script>
     <script src="assets/js/offline.js?v=21"></script>
-    <script src="assets/js/shift.js?v=205"></script>
+    <script src="assets/js/shift.js?v=206"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

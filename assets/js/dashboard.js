@@ -430,10 +430,17 @@ function renderDashboard(data, range) {
   $("statRevenue").textContent = formatBaht(revenue);
   $("statRevenueMeta").textContent = `${periodSales.length} รายการขาย`;
   $("statGrossProfit").textContent = formatBaht(grossProfit);
-  $("statMargin").textContent = `อัตรากำไร ${margin.toFixed(1)}%`;
+  $("statMargin").textContent = `${margin.toFixed(1)}%`;
+  // V21: เงินสด vs เงินโอน (ทุกอย่างที่ไม่ใช่เงินสด รวมพร้อมเพย์/โครงการรัฐ) · เหลือจริง = ยอดขาย − ค่าใช้จ่าย
+  const cash = sum(periodSales.filter(s => s.payment_method === "cash"), s => s.sale_price);
+  const left = revenue - expensesTotal;
+  $("statCash").textContent = formatBaht(cash);
+  $("statTransfer").textContent = formatBaht(revenue - cash);
+  $("statLeft").textContent = formatBaht(left);
+  $("statLeft").className = left >= 0 ? "positive" : "negative";
   $("statExpenses").textContent = formatBaht(expensesTotal);
   $("statNetProfit").textContent = formatBaht(netProfit);
-  $("statNetProfit").className = `value ${netProfit >= 0 ? "positive" : "negative"}`;
+  $("statNetProfit").className = netProfit >= 0 ? "positive" : "negative";
   renderMoneyList(periodSales, periodExpenses, (data.capital || []).filter(c => inRange(`${c.entry_date}T12:00:00`, range)));
 
   // Period-over-period: เทียบกับช่วงก่อนหน้าที่มีความยาวเท่ากันเสมอ (วันก่อนหน้า/เดือนก่อนหน้า/ปีก่อนหน้า)
@@ -444,9 +451,7 @@ function renderDashboard(data, range) {
   const prevGrossProfit = prevRevenue - sum(prevSales, s => s.cost_price);
   const prevExpensesTotal = sum(prevExpenses, e => e.amount);
   const prevNetProfit = prevGrossProfit - prevExpensesTotal;
-  renderDelta("statRevenueDelta", revenue, prevRevenue);
-  renderDelta("statGrossProfitDelta", grossProfit, prevGrossProfit);
-  renderDelta("statExpensesDelta", expensesTotal, prevExpensesTotal);
+  renderDelta("statLeftDelta", revenue - expensesTotal, prevRevenue - prevExpensesTotal);
   renderDelta("statNetProfitDelta", netProfit, prevNetProfit);
 
   const sold = items.filter(i => i.status === "sold");

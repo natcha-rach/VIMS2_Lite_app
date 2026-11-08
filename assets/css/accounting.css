@@ -122,3 +122,8 @@
 .cash-first .btn { width: 100%; min-height: 44px; }
 .cash-why { margin: 8px 0 12px; } .cash-why summary { cursor: pointer; color: var(--v11-purple, #4a5cf0); font-size: 13px; min-height: 32px; list-style: none; }
 .cash-why summary::-webkit-details-marker { display: none; }
+/* V21: นับเงินเป็นลิงก์เล็กใต้ยอด (ใช้เดือนละครั้ง / ตอนยอดไม่ตรง) */
+#countBox.count-link { border: 0 !important; background: none !important; padding: 0 !important; margin: 4px 0 0; }
+#countBox.count-link > summary { color: var(--v11-purple, #4a5cf0); font-size: 13px; min-height: 36px; display: flex; align-items: center; list-style: none; cursor: pointer; }
+#countBox.count-link > summary::-webkit-details-marker { display: none; }
+#countBox.count-link[open] { border-top: 1px solid var(--v11-border, #e7e9f2) !important; padding-top: 8px !important; }

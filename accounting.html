@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="assets/css/base.css" />
-<link rel="stylesheet" href="assets/css/accounting.css?v=22" />
+<link rel="stylesheet" href="assets/css/accounting.css?v=23" />
   <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/polish.css?v=201" />
   </head>
@@ -62,8 +62,8 @@
 
 
 
-    <details class="cost-breakdown-details" id="countBox">
-      <summary>นับเงินจริง / ตั้งยอดเริ่มต้น</summary>
+    <details class="cost-breakdown-details count-link" id="countBox">
+      <summary>นับเงิน / ปรับให้ตรงกับเงินจริง ›</summary>
       <div class="field-row">
         <div class="field">
           <label for="realCashOnHand">เงินสดที่มีจริง (บาท)</label>
@@ -82,34 +82,7 @@
       <button class="btn btn-primary" type="button" id="adjBtn" style="width:100%;">บันทึกยอดที่นับได้</button>
     </details>
 
-    <details class="cost-breakdown-details" style="margin-top:12px;">
-      <summary>เพิ่ม / ถอนเงินทุนระหว่างทาง</summary>
-    <form id="capitalForm" class="cash-form" style="margin-top:12px">
-      <div class="field">
-        <label for="capType">ประเภทรายการ</label>
-        <select id="capType">
-          <option value="capital_in">เพิ่มเงินทุน (เงินเก่า / เติมเงินเข้าร้าน)</option>
-          <option value="old_stock_income">เงินขายของเก่า (ที่ไม่ได้ลงในระบบ)</option>
-          <option value="withdraw">ถอนเงินออกไปใช้ส่วนตัว</option>
-        </select>
-      </div>
-      <div class="field-row">
-        <div class="field">
-          <label for="capDate">วันที่</label>
-          <input type="date" id="capDate" required />
-        </div>
-        <div class="field">
-          <label for="capAmount">จำนวนเงิน (บาท)</label>
-          <input type="number" id="capAmount" min="0.01" step="0.01" required />
-        </div>
-      </div>
-      <div class="field">
-        <label for="capReason">เหตุผล / รายละเอียด <span class="req">*จำเป็น</span></label>
-        <input type="text" id="capReason" minlength="3" placeholder="เช่น เงินทุนเก่าก่อนใช้ระบบ" required />
-      </div>
-      <button class="btn btn-primary" type="submit" style="width:100%;">บันทึกรายการ</button>
-    </form>
-    </details>
+    <!-- V21: เพิ่ม/ถอนเงินทุนย้ายไปแผ่น + หน้าแรก (แท็บ เงินทุน) -->
   </div>
 
   <!-- V21: กันเงินหนี้ (domain/debtPlan.js) — แทนระบบแบ่งถัง % · ค่าใช้จ่าย/รายการย้ายไปหน้าแรก (การ์ดรายการ + ปุ่ม +) · ทุนตาม Lot ดูที่หน้ารายงาน -->
@@ -154,7 +127,7 @@
 <script src="assets/js/domain/cashBalance.js?v=1"></script>
 <script src="assets/js/domain/debtPlan.js?v=3"></script>
 <script src="assets/js/data/accountingRepo.js?v=1"></script>
-<script src="assets/js/accounting.js?v=28"></script>
+<script src="assets/js/accounting.js?v=29"></script>
 <script src="assets/js/shift-history.js?v=21"></script>
 <script src="assets/js/storage-tools.js?v=21"></script>
 <script>

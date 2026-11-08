@@ -105,6 +105,7 @@
   const QUICK_IN = [
     { cat: "capital_in", label: "เติมทุน" },
     { cat: "old_stock_income", label: "ขายของเก่า" },
+    { cat: "withdraw", label: "ถอนใช้ส่วนตัว" }, // V21: จ่ายเงินเดือนตัวเอง — ไม่นับเป็นค่าใช้จ่ายร้าน
   ];
   const sheet = document.getElementById("expenseSheet");
   const quickChips = (list = QUICK) => list.map((q) => `<button type="button" class="pos-chip${expenseForm?.cat === q.cat ? " active" : ""}" data-quick="${esc(q.cat)}">+ ${esc(q.label)}</button>`).join("");
@@ -114,7 +115,7 @@
     sheet.querySelector("#exTitle").textContent = f.mode === "edit" ? "แก้ค่าใช้จ่าย" : "เพิ่มรายการ";
     const typeTabs = f.mode === "new" ? `<div class="seg seg-2 ex-type">
         <button type="button" data-type="out" class="${f.type === "out" ? "active out" : ""}">− จ่าย</button>
-        <button type="button" data-type="in" class="${f.type === "in" ? "active in" : ""}">+ รับ (เติมทุน)</button>
+        <button type="button" data-type="in" class="${f.type === "in" ? "active in" : ""}">⇄ เงินทุน</button>
       </div>` : "";
     const lastAmt = f.mode === "edit" ? f.amount : get("vims_exp_last_" + f.cat) || "";
     // V21: คืนความสามารถลงย้อนหลัง (เดิมอยู่ฟอร์มหน้าบัญชี) — ค่าเริ่มต้นวันนี้ ห้ามเลือกวันในอนาคต
@@ -124,7 +125,7 @@
       <div class="shift-quick">${quickChips(QUICK_IN)}</div>
       <form class="shift-expense" data-form="income">
         <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="บาท" aria-label="จำนวนเงิน" required class="ex-wide">
-        <input type="text" name="reason" minlength="3" placeholder="รายละเอียด เช่น โอนเงินเก็บมาซื้อล็อตใหม่" aria-label="รายละเอียด" required class="ex-wide">
+        <input type="text" name="reason" minlength="3" placeholder="${f.cat === "withdraw" ? "เช่น เงินเดือนตัวเอง สัปดาห์ที่ 1" : "เช่น โอนเงินเก็บมาซื้อล็อตใหม่"}" aria-label="รายละเอียด" required class="ex-wide">
         ${dateField}
         ${actions}
       </form>` : `${typeTabs}
@@ -233,7 +234,9 @@
       const label = QUICK_IN.find((q) => q.cat === expenseForm.cat)?.label || "เงินเข้า";
       const { error } = await ShiftRepo.addCapital({ entry_type: expenseForm.cat, amount, reason, entry_date: date });
       if (error) return Notify.error(`บันทึก${label}ไม่สำเร็จ`, error);
-      Notify.success(`${label} ${thb(S(amount))} แล้ว`, "ไม่นับเป็นยอดขายหรือกำไร — นับรวมในเงินจริงหน้าบัญชี");
+      Notify.success(`${label} ${thb(S(amount))} แล้ว`, expenseForm.cat === "withdraw"
+        ? "ไม่นับเป็นค่าใช้จ่ายร้าน (กำไรไม่ลด) — หักจากเงินจริงหน้าบัญชี · ถ้าหยิบจากลิ้นชักตอนเปิดร้าน ตอนปิดร้านยอดจะขาดเท่านี้"
+        : "ไม่นับเป็นยอดขายหรือกำไร — นับรวมในเงินจริงหน้าบัญชี");
       closeExpense();
       refreshAll("capital_entries");
       return;
