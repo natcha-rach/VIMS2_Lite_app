@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vims-mock",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["tests/ui/dev-server.js"],
+      "port": 8770
+    }
+  ]
+}
