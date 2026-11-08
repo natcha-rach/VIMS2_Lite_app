@@ -8,7 +8,7 @@
 UI (page controller)   assets/js/sell.js …        อ่าน/เขียน DOM, ผูก event, แสดง Notify
    │ เรียก
    ├─ Domain (กฎธุรกิจล้วน) assets/js/domain/*.js   ไม่แตะ DOM / Supabase → เทสต์ด้วย node ได้
-   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · debtPlan.js · insightsCalc.js · lotCalc.js · taxCalc.js
+   │     money.js (เดิม) · cart.js · reservations.js · shiftCalc.js · cashBalance.js · debtPlan.js · moneySplit.js · insightsCalc.js · lotCalc.js · taxCalc.js
    └─ Data (repository)   assets/js/data/*.js      ที่เดียวที่เรียก Supabase ของหน้านั้น
          salesRepo.js · catalogRepo.js · shiftRepo.js · dashboardRepo.js · accountingRepo.js · reportsRepo.js · lotsRepo.js · taxRepo.js · itemsRepo.js   คืน { data, error } แบบ supabase-js เสมอ
             │ ใช้
@@ -39,6 +39,7 @@ Infra                    supabaseClient.js (client, fetchAllRows, debounce) · n
 | --- | --- | --- | --- |
 | `domain/shiftCalc.js` | Domain | เหลือวันนี้/กำไรจริง, ลิ้นชักขาด-เกิน, ข้อความสรุปปิดร้าน | shift.js |
 | `data/shiftRepo.js` | Data | รอบร้านที่เปิด, shift_totals, เปิด/ปิดร้าน, เพิ่ม/แก้/ลบค่าใช้จ่าย, เติมทุน (capital_entries) | shift.js |
+| `domain/moneySplit.js` | Domain | แยกเงินสด/เงินโอน: ยอดขาย − ค่าใช้จ่ายของแต่ละฝั่ง + จ่ายแบบไม่ระบุ | dashboard.js |
 | `data/dashboardRepo.js` | Data | ข้อมูล PULSE + การ์ดรายการ (items/sales/expenses/capital), เป้ายอดขาย, RPC Lot | dashboard.js |
 | `dashboard.js` | UI | PULSE, ตัวเลือกช่วงเวลา, การ์ดรายการ (แตะแถวค่าใช้จ่าย → แผ่นแก้ของ shift.js) | index.html |
 | `data/salesRepo.js` | Data | ให้ offline.js ส่งบิลค้างจากหน้าภาพรวมได้ด้วย | offline.js |

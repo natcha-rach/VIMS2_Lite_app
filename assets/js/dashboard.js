@@ -354,7 +354,7 @@ function renderV11Charts(periodSales, items, range, revenue, grossProfit, margin
 // V21: รายการรายรับ/รายจ่ายแบบแอปจดเงิน — 1 บิล = 1 รายรับ (รวมหลายชิ้น), 1 ค่าใช้จ่าย = 1 รายจ่าย
 // การ์ดพับไว้ (<details> ใน index.html) แตะการ์ดแล้วแถวค่อยโผล่; แถวโชว์รายละเอียดเลย ไม่เขียนคำว่ารายรับ/รายจ่าย
 // เข้า/ออกดูจากสีไอคอน (เขียว/แดง) — ไอคอนมี aria-label ให้โปรแกรมอ่านหน้าจอ
-const PAID_FROM_LABELS = { drawer: "หยิบจากลิ้นชัก", transfer: "โอน", other: "อื่นๆ" };
+const PAID_FROM_LABELS = { drawer: "เงินสด", transfer: "เงินโอน", other: "ไม่ระบุว่าจ่ายทางไหน" };
 const MONEY_LIST_LIMIT = 200; // shortcut: แสดงแค่ 200 รายการล่าสุดของช่วง (โหมดรายปีอาจมีหลายพัน) — ถ้าต้องดูครบให้ทำแบ่งหน้า
 
 // capital_entries: "opening" คือยอดที่นับได้ (จุดตั้งต้น) ไม่ใช่เงินเข้า-ออก → ไม่แสดง
@@ -431,14 +431,12 @@ function renderDashboard(data, range) {
   $("statRevenueMeta").textContent = `${periodSales.length} รายการขาย`;
   $("statGrossProfit").textContent = formatBaht(grossProfit);
   $("statMargin").textContent = `${margin.toFixed(1)}%`;
-  // V21: เงินสด vs เงินโอน (ทุกอย่างที่ไม่ใช่เงินสด รวมพร้อมเพย์/โครงการรัฐ) · เหลือจริง = ยอดขาย − ค่าใช้จ่าย
-  const cash = sum(periodSales.filter(s => s.payment_method === "cash"), s => s.sale_price);
-  const left = revenue - expensesTotal;
-  $("statCash").textContent = formatBaht(cash);
-  $("statTransfer").textContent = formatBaht(revenue - cash);
-  $("statLeft").textContent = formatBaht(left);
-  $("statLeft").className = left >= 0 ? "positive" : "negative";
-  $("statExpenses").textContent = formatBaht(expensesTotal);
+  // V21: แยกเงินสด/เงินโอน แต่ละฝั่งหักค่าใช้จ่ายของตัวเอง (สูตรอยู่ domain/moneySplit.js)
+  const split = MoneySplit.compute({ sales: periodSales, expenses: periodExpenses });
+  [["statCash", split.cash.in], ["statTransfer", split.transfer.in], ["statCashOut", split.cash.out], ["statTransferOut", split.transfer.out], ["statCashLeft", split.cash.left], ["statTransferLeft", split.transfer.left], ["statUnknownOut", split.unknownOut], ["statLeft", split.left]]
+    .forEach(([id, v]) => { $(id).textContent = formatBaht(v); });
+  $("statUnknownRow").classList.toggle("hidden", !split.unknownOut);
+  ["statCashLeft", "statTransferLeft", "statLeft"].forEach((id, k) => { $(id).className = [split.cash.left, split.transfer.left, split.left][k] >= 0 ? "positive" : "negative"; });
   $("statNetProfit").textContent = formatBaht(netProfit);
   $("statNetProfit").className = netProfit >= 0 ? "positive" : "negative";
   renderMoneyList(periodSales, periodExpenses, (data.capital || []).filter(c => inRange(`${c.entry_date}T12:00:00`, range)));

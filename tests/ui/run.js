@@ -137,7 +137,7 @@ const server = http.createServer((req, res) => {
   await m.waitForSelector(".shift-close-btn");
   await shot(m, "08-main-after-sale");
   // V21: การ์ดเงินเข้า-ออก — ขายสด 472 · ค่าแผง 200 → เหลือจริง 272
-  console.log("pulse:", await m.evaluate(() => ["statCash", "statTransfer", "statExpenses", "statLeft", "statNetProfit"].map((id) => document.getElementById(id).textContent)));
+  console.log("pulse:", await m.evaluate(() => ["statCash", "statTransfer", "statCashOut", "statTransferOut", "statCashLeft", "statTransferLeft", "statLeft", "statNetProfit"].map((id) => document.getElementById(id).textContent)));
   // V21: การ์ด "รายการ" พับไว้ แตะแล้วเห็นแถว — แถวโชว์รายละเอียด (ชื่อสินค้า/หมวด) ไม่ใช่คำว่ารายรับ/รายจ่าย
   await m.waitForSelector("#moneyList .money-row", { state: "attached" });
   console.log("list hidden before tap:", !(await m.isVisible("#moneyList .money-row")));

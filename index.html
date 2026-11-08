@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Kanit:wght@300;400;500;600;700&family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="assets/css/base.css" />
-    <link rel="stylesheet" href="assets/css/dashboard.css?v=26" />
+    <link rel="stylesheet" href="assets/css/dashboard.css?v=27" />
     <link rel="stylesheet" href="assets/css/design-v12.css?v=20" />
     <link rel="stylesheet" href="assets/css/pos.css?v=21" />
     <link rel="stylesheet" href="assets/css/shift.css?v=22" />
@@ -96,11 +96,16 @@
           <div class="dashboard-kpi-grid money-pulse" id="todayPulse">
             <div class="stat-card pulse-card">
               <div class="label">เงินเข้า-ออก</div>
-              <div class="pulse-row"><span>เงินสด</span><b id="statCash">-</b></div>
-              <div class="pulse-row"><span>เงินโอน / พร้อมเพย์</span><b id="statTransfer">-</b></div>
-              <div class="pulse-row pulse-sub"><span>= ยอดขาย <small id="statRevenueMeta"></small></span><b id="statRevenue">-</b></div>
-              <div class="pulse-row"><span>− ค่าใช้จ่าย</span><b id="statExpenses" class="negative">-</b></div>
-              <div class="pulse-row pulse-total"><span>เหลือจริง <span class="stat-delta" id="statLeftDelta"></span></span><b id="statLeft">-</b></div>
+              <table class="pulse-split">
+                <thead><tr><th scope="col"><span class="sr-only">รายการ</span></th><th scope="col">เงินสด</th><th scope="col">เงินโอน</th></tr></thead>
+                <tbody>
+                  <tr><th scope="row">ยอดขาย</th><td id="statCash">-</td><td id="statTransfer">-</td></tr>
+                  <tr><th scope="row">− ค่าใช้จ่าย</th><td id="statCashOut" class="negative">-</td><td id="statTransferOut" class="negative">-</td></tr>
+                  <tr class="pulse-sub"><th scope="row">= เหลือ</th><td id="statCashLeft">-</td><td id="statTransferLeft">-</td></tr>
+                </tbody>
+              </table>
+              <div class="pulse-row pulse-unknown hidden" id="statUnknownRow"><span>− จ่ายแบบไม่ระบุ <small>แตะรายการเพื่อเลือกเงินสด/โอน</small></span><b id="statUnknownOut" class="negative">-</b></div>
+              <div class="pulse-row pulse-total"><span>เหลือจริงรวม <small>ยอดขาย <span id="statRevenue">-</span> · <span id="statRevenueMeta"></span></small> <span class="stat-delta" id="statLeftDelta"></span></span><b id="statLeft">-</b></div>
             </div>
             <div class="stat-card pulse-card">
               <div class="label">กำไร</div>
@@ -156,15 +161,16 @@
     <script src="assets/js/auth.js"></script>
     <script src="assets/js/nav.js?v=195"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="assets/js/domain/moneySplit.js?v=1"></script>
     <script src="assets/js/data/dashboardRepo.js?v=2"></script>
-    <script src="assets/js/dashboard.js?v=201"></script>
+    <script src="assets/js/dashboard.js?v=202"></script>
     <script src="assets/js/money.js?v=19"></script>
     <!-- Clean Architecture: Domain → Data → Infra → UI (docs/ARCHITECTURE.md) -->
     <script src="assets/js/domain/shiftCalc.js?v=1"></script>
     <script src="assets/js/data/shiftRepo.js?v=2"></script>
     <script src="assets/js/data/salesRepo.js?v=1"></script>
     <script src="assets/js/offline.js?v=21"></script>
-    <script src="assets/js/shift.js?v=206"></script>
+    <script src="assets/js/shift.js?v=207"></script>
     <script src="assets/js/realtime.js?v=192"></script>
   </body>
 </html>

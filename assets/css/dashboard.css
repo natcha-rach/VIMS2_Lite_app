@@ -277,3 +277,14 @@ button.money-row:hover { background: var(--v11-surface-2, #f6f7fb); }
 .pulse-total { border-top: 1px solid var(--v11-border, #e7e9f2); margin-top: 2px; font-weight: 600; }
 .pulse-total b { font-size: 22px; }
 .pulse-note { margin: 8px 0 0; font-size: 11.5px; color: var(--color-ink-soft); }
+
+/* V21: ตาราง เงินสด | เงินโอน ในการ์ดเงินเข้า-ออก — ตัวเลขชิดขวาเรียงตรงคอลัมน์ */
+.pulse-split { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.pulse-split th, .pulse-split td { padding: 6px 0 6px 8px; border: 0; background: none; text-align: right; font-weight: 400; white-space: nowrap; }
+.pulse-split th[scope="row"] { padding-left: 0; text-align: left; }
+.pulse-split thead th { color: var(--color-ink-soft); font-size: 12px; }
+.pulse-split td { font-size: 16px; font-weight: 600; }
+.pulse-split .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.pulse-split .pulse-sub th, .pulse-split .pulse-sub td { border-top: 1px dashed var(--v11-border, #e7e9f2); }
+.pulse-split .positive { color: var(--ok, #12a15e); } .pulse-split .negative { color: var(--bad, #e5483a); }
+.pulse-unknown.hidden { display: none; }

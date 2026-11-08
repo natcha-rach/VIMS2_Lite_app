@@ -134,8 +134,8 @@
         <input type="text" name="category" value="${esc(f.cat)}" aria-label="หมวด" required>
         <input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="บาท" value="${esc(lastAmt)}" aria-label="จำนวนเงิน" required>
         <div class="seg seg-2">
-          <button type="button" data-paid="drawer" class="${f.paid === "drawer" ? "active" : ""}">หยิบจากลิ้นชัก</button>
-          <button type="button" data-paid="transfer" class="${f.paid === "transfer" ? "active" : ""}">โอน/อื่นๆ</button>
+          <button type="button" data-paid="drawer" class="${f.paid === "drawer" ? "active" : ""}">เงินสด</button>
+          <button type="button" data-paid="transfer" class="${f.paid === "transfer" ? "active" : ""}">เงินโอน</button>
         </div>
         <input type="text" name="note" value="${esc(f.note || "")}" placeholder="หมายเหตุ (ไม่บังคับ)" aria-label="หมายเหตุ">
         ${dateField}
@@ -247,7 +247,7 @@
       if (!(amount > 0) || !category) return Notify.warning("ยังไม่ได้ใส่จำนวนเงิน", "ใส่ยอดค่าใช้จ่ายเป็นบาท (มากกว่า 0)");
       if (expenseForm.mode === "edit") {
         const patch = { category, amount, note: form.note.value.trim() || null, paid_from: expenseForm.paid || "other" };
-        if (date !== expenseForm.origDate) Object.assign(patch, { expense_date: date, expense_at: atOf(date), shift_id: isToday ? shift?.id || null : null, paid_from: !isToday && patch.paid_from === "drawer" ? "other" : patch.paid_from });
+        if (date !== expenseForm.origDate) Object.assign(patch, { expense_date: date, expense_at: atOf(date), shift_id: isToday ? shift?.id || null : null });
         const { error } = await ShiftRepo.updateExpense(expenseForm.id, patch);
         if (error) return Notify.error(`แก้ ${category} ไม่สำเร็จ`, error);
         Notify.success(`แก้ ${category} แล้ว`, `ยอดใหม่ ${thb(S(amount))}`);
@@ -262,13 +262,13 @@
         amount,
         note: form.note.value.trim() || null,
         shift_id: isToday ? shift?.id || null : null,
-        paid_from: shift && isToday ? expenseForm.paid : expenseForm.paid === "drawer" ? "other" : expenseForm.paid || "other",
+        paid_from: expenseForm.paid || "other", // ลิ้นชักคิดเฉพาะรายการที่ผูก shift_id → เงินสดย้อนหลังไม่กระทบลิ้นชักวันนี้
       };
       const { error } = await ShiftRepo.addExpense(row);
       if (error) return Notify.error(`บันทึก ${category} ไม่สำเร็จ`, error);
       set("vims_exp_last_" + expenseForm.cat, String(amount)); // ครั้งหน้ากรอกยอดเดิมให้
       set("vims_exp_last_cat", expenseForm.cat); // ปุ่ม + เปิดมาที่หมวดล่าสุด
-      Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, row.paid_from === "drawer" ? "หักจากเงินในลิ้นชักที่ควรมีแล้ว" : row.paid_from === "transfer" ? "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)" : isToday ? "นับเป็นค่าใช้จ่ายของวันนี้" : `ลงย้อนหลังวันที่ ${date} (ไม่หักลิ้นชักวันนี้)`);
+      Notify.success(`ลง ${category} ${thb(S(amount))} แล้ว`, !isToday ? `ลงย้อนหลังวันที่ ${date} (ไม่หักลิ้นชักวันนี้)` : row.paid_from === "drawer" ? (row.shift_id ? "จ่ายเงินสด · หักจากเงินในลิ้นชักที่ควรมีแล้ว" : "จ่ายเงินสด") : "จ่ายด้วยการโอน (ไม่หักเงินในลิ้นชัก)");
       closeExpense();
       refreshAll("expenses");
     }
