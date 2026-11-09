@@ -164,6 +164,8 @@ async function loadLots(preferredLotId = null) {
     }
   });
 
+  fillStockLotFilter();
+
   const selectedLotId = $('lotSelect')?.value || currentLotId || '';
   await loadGroups(selectedLotId);
   if (selectedLotId) await applyLotCostDefault(selectedLotId);
@@ -520,12 +522,24 @@ $('filterStatus')?.addEventListener('change',loadItems); $('searchBox')?.addEven
 // Item ที่เลือกไว้สำหรับ Bulk Action (SKU/checkbox filter — V15/V16)
 let selectedItemIds = new Set();
 
+// ตัวเลือก "แสดง Lot" ของรายการสต็อก — แยกจาก Lot ในฟอร์มลงของ (VimsContext จำไว้ลงของต่อ ไม่ใช้กรองรายการ)
+// ค่าเริ่มต้นคือทุก Lot · ถ้ากดมาจาก Lot Card (?lot=) จะเปิดเฉพาะ Lot นั้น
+let stockLotFilter = new URLSearchParams(location.search).get('lot') || '';
+function fillStockLotFilter(){
+  const el=$('filterLot'); if(!el) return;
+  el.innerHTML='<option value="">ทุก Lot</option>'+allLots.map(l=>`<option value="${escapeHtml(l.id)}">${escapeHtml(l.lot_name||'(ไม่มีชื่อ Lot)')}</option>`).join('');
+  // Lot ใน URL ไม่มีอยู่จริง/ถูกลบ → กลับไปแสดงทั้งหมด แทนที่จะขึ้นรายการว่าง
+  if(stockLotFilter && !allLots.some(l=>l.id===stockLotFilter)){ stockLotFilter=''; loadItems(); }
+  el.value=stockLotFilter;
+}
+$('filterLot')?.addEventListener('change',e=>{ stockLotFilter=e.target.value; selectedItemIds.clear(); loadItems(); });
+
 async function loadItems(){
   const status=$('filterStatus').value,q=($('searchBox').value||'').trim();
   const extra=$('filterExtra')?.value||'';
   // ใช้ v_items_list แทน items ตรงๆ เพื่อได้ image_count/age_days/ชื่อ Lot-Group มาในคำสั่งเดียว กรองฝั่ง server ได้ครบ
   // (ยังคง fetchAllRows กันตกหล่นเมื่อเกิน 1000 แถว)
-  const {data,error}=await ItemsRepo.list({ status, q, extra });
+  const {data,error}=await ItemsRepo.list({ status, q, extra, lotId: stockLotFilter });
   if(error){$('itemList').innerHTML='<div class="empty-state">โหลดข้อมูลไม่สำเร็จ: '+escapeHtml(error.message)+'</div>';return;}
   itemsCache=data||[];
   selectedItemIds = new Set([...selectedItemIds].filter(id => itemsCache.some(i => i.id === id)));
@@ -603,7 +617,7 @@ $('bulkApplyStorage')?.addEventListener('click', () => {
 });
 $('bulkApplyDamaged')?.addEventListener('click', () => callBulkUpdate({p_status:'damaged'}, 'ทำเครื่องหมายเสียแล้ว'));
 $('bulkApplyAvailable')?.addEventListener('click', () => callBulkUpdate({p_status:'available'}, 'คืนเป็นพร้อมขายแล้ว'));
-async function updateQuickStats(){ const {data,error}=await ItemsRepo.statsRows(); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`${rows.length} ชิ้น · พร้อมขาย <b>${available.length}</b> · ขายแล้ว ${sold.length} · ทุนค้าง <b>${formatBaht(value)}</b>`; } // V21: บรรทัดเดียวแทน 4 การ์ด
+async function updateQuickStats(){ const {data,error}=await ItemsRepo.statsRows(stockLotFilter); if(error)return; const rows=data||[]; const available=rows.filter(x=>x.status==='available'); const sold=rows.filter(x=>x.status==='sold'); const value=available.reduce((s,x)=>s+Number(x.cost_price||0),0); $('quickStats').innerHTML=`${rows.length} ชิ้น · พร้อมขาย <b>${available.length}</b> · ขายแล้ว ${sold.length} · ทุนค้าง <b>${formatBaht(value)}</b>`; } // V21: บรรทัดเดียวแทน 4 การ์ด
 function escapeHtml(v=''){return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 // V19.1: แจ้งเตือนทั้งหมดไปที่ระบบกลาง notify.js (แยกสำเร็จ/ผิดพลาด/เตือน + รายละเอียด + วิธีแก้)
 function showToast(msg) { return window.Notify ? Notify.auto(msg) : console.log(msg); }

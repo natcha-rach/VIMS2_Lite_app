@@ -21,10 +21,11 @@ const ItemsRepo = {
 
   // ตารางสต็อก: view v_items_list (มี image_count/age_days/ชื่อ Lot-Group) + ตัวกรองฝั่ง server
   //   status: available|sold|damaged|all · q: ค้นชื่อ/SKU · extra: no_photo|no_price|age30|age60|age90
-  list({ status, q, extra }) {
+  list({ status, q, extra, lotId }) {
     return fetchAllRows(() => {
       let query = supabaseClient.from("v_items_list").select("*").eq("intake_status", "listed").order("created_at", { ascending: false });
       if (status !== "all") query = query.eq("status", status);
+      if (lotId) query = query.eq("lot_id", lotId);
       // ตัด , ( ) * % \ ออก: เป็นตัวคั่น/wildcard ของ PostgREST .or() — ถ้าปล่อยไว้ ผู้ใช้พิมพ์แล้วเงื่อนไขกรองเพี้ยนได้
       const safe = String(q).replace(/[,()*%\\]/g, " ").trim();
       if (safe) query = query.or(`item_name.ilike.%${safe}%,sku.ilike.%${safe}%`);
@@ -39,7 +40,12 @@ const ItemsRepo = {
   imagesOfItems(ids) { return fetchAllRows(() => supabaseClient.from("item_images").select("*").in("item_id", ids).order("sort_order")); },
   imagesOfItem(id) { return supabaseClient.from("item_images").select("*").eq("item_id", id).order("sort_order"); },
   // การ์ดตัวเลขบนหัวตาราง
-  statsRows() { return fetchAllRows(() => supabaseClient.from("items").select("status,cost_price").eq("intake_status", "listed")); },
+  statsRows(lotId) {
+    return fetchAllRows(() => {
+      const query = supabaseClient.from("items").select("status,cost_price").eq("intake_status", "listed");
+      return lotId ? query.eq("lot_id", lotId) : query;
+    });
+  },
   // แก้หลายชิ้นพร้อมกัน (ราคา/กลุ่ม/สถานะ) — patch = { p_xxx: ค่า }
   bulkUpdate(ids, patch) { return supabaseClient.rpc("bulk_update_items", { p_ids: ids, ...patch }); },
 

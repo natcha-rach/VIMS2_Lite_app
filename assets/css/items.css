@@ -147,3 +147,7 @@
 #itemList.grid-view .stock-price { text-align: left; }
 @media (max-width: 639.98px) { .page-head p { display: none; } }
 #quickStats b { display: inline !important; font: 600 14px var(--v11-ui) !important; }
+
+/* ตัวเลือก Lot ของรายการสต็อก: ชื่อ Lot ยาวต้องไม่ดันแถวเครื่องมือจนล้นจอ */
+#filterLot { max-width: 200px; text-overflow: ellipsis; }
+@media (max-width: 760px) { .toolbar #filterLot { flex: 1 1 100%; width: 100%; max-width: none; } }
